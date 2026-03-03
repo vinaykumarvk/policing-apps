@@ -1,0 +1,22 @@
+{
+  "workflowId": "forensic_report",
+  "version": "1.0.0",
+  "states": [
+    { "stateId": "DRAFT", "type": "initial", "taskRequired": false },
+    { "stateId": "PENDING_APPROVAL", "type": "active", "taskRequired": true, "roleId": "SUPERVISOR", "slaDays": 3 },
+    { "stateId": "APPROVED", "type": "active", "taskRequired": true, "roleId": "SUPERVISOR" },
+    { "stateId": "REJECTED", "type": "active", "taskRequired": false },
+    { "stateId": "PUBLISHED", "type": "terminal", "taskRequired": false },
+    { "stateId": "SUPERSEDED", "type": "terminal", "taskRequired": false }
+  ],
+  "transitions": [
+    { "transitionId": "SUBMIT", "fromStateId": "DRAFT", "toStateId": "PENDING_APPROVAL", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["FORENSIC_ANALYST"] } }] },
+    { "transitionId": "APPROVE", "fromStateId": "PENDING_APPROVAL", "toStateId": "APPROVED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISOR"] } }] },
+    { "transitionId": "REJECT", "fromStateId": "PENDING_APPROVAL", "toStateId": "REJECTED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISOR"] } }] },
+    { "transitionId": "PUBLISH", "fromStateId": "APPROVED", "toStateId": "PUBLISHED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISOR"] } }] },
+    { "transitionId": "NEW_VERSION_PUB", "fromStateId": "PUBLISHED", "toStateId": "DRAFT", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["FORENSIC_ANALYST"] } }] },
+    { "transitionId": "NEW_VERSION_REJ", "fromStateId": "REJECTED", "toStateId": "DRAFT", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["FORENSIC_ANALYST"] } }] },
+    { "transitionId": "NEW_VERSION_DFT", "fromStateId": "DRAFT", "toStateId": "DRAFT", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["FORENSIC_ANALYST"] } }] },
+    { "transitionId": "SUPERSEDE", "fromStateId": "PUBLISHED", "toStateId": "SUPERSEDED", "trigger": "system" }
+  ]
+}

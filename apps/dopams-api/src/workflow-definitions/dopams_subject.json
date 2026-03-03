@@ -1,0 +1,16 @@
+{
+  "workflowId": "dopams_subject",
+  "version": "1.0.0",
+  "states": [
+    { "stateId": "DRAFT", "type": "initial", "taskRequired": false },
+    { "stateId": "PENDING_REVIEW", "type": "active", "taskRequired": true, "roleId": "SUPERVISORY_OFFICER", "slaDays": 3 },
+    { "stateId": "PUBLISHED", "type": "terminal", "taskRequired": false },
+    { "stateId": "CONFLICTING", "type": "active", "taskRequired": true, "roleId": "SUPERVISORY_OFFICER" }
+  ],
+  "transitions": [
+    { "transitionId": "SUBMIT_REVIEW", "fromStateId": "DRAFT", "toStateId": "PENDING_REVIEW", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["DISTRICT_OPERATOR", "INTELLIGENCE_ANALYST"] } }] },
+    { "transitionId": "APPROVE", "fromStateId": "PENDING_REVIEW", "toStateId": "PUBLISHED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISORY_OFFICER", "INTELLIGENCE_ANALYST"] } }] },
+    { "transitionId": "FLAG_CONFLICT", "fromStateId": "PENDING_REVIEW", "toStateId": "CONFLICTING", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["INTELLIGENCE_ANALYST"] } }] },
+    { "transitionId": "RESOLVE", "fromStateId": "CONFLICTING", "toStateId": "PUBLISHED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISORY_OFFICER"] } }] }
+  ]
+}

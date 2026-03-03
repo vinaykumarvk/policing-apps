@@ -1,0 +1,24 @@
+{
+  "workflowId": "forensic_import",
+  "version": "1.0.0",
+  "states": [
+    { "stateId": "QUEUED", "type": "initial", "taskRequired": false },
+    { "stateId": "PARSING", "type": "active", "taskRequired": false },
+    { "stateId": "NORMALIZED", "type": "active", "taskRequired": false },
+    { "stateId": "COMPLETED", "type": "terminal", "taskRequired": false },
+    { "stateId": "COMPLETED_WITH_WARNINGS", "type": "terminal", "taskRequired": false },
+    { "stateId": "FAILED", "type": "terminal", "taskRequired": false },
+    { "stateId": "CANCELLED", "type": "terminal", "taskRequired": false }
+  ],
+  "transitions": [
+    { "transitionId": "START_PARSE", "fromStateId": "QUEUED", "toStateId": "PARSING", "trigger": "system" },
+    { "transitionId": "NORMALIZE", "fromStateId": "PARSING", "toStateId": "NORMALIZED", "trigger": "system" },
+    { "transitionId": "COMPLETE", "fromStateId": "NORMALIZED", "toStateId": "COMPLETED", "trigger": "system" },
+    { "transitionId": "COMPLETE_WARN", "fromStateId": "NORMALIZED", "toStateId": "COMPLETED_WITH_WARNINGS", "trigger": "system" },
+    { "transitionId": "FAIL_QUEUED", "fromStateId": "QUEUED", "toStateId": "FAILED", "trigger": "system" },
+    { "transitionId": "FAIL_PARSING", "fromStateId": "PARSING", "toStateId": "FAILED", "trigger": "system" },
+    { "transitionId": "FAIL_NORMALIZED", "fromStateId": "NORMALIZED", "toStateId": "FAILED", "trigger": "system" },
+    { "transitionId": "CANCEL_QUEUED", "fromStateId": "QUEUED", "toStateId": "CANCELLED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["FORENSIC_ANALYST", "SUPERVISOR"] } }] },
+    { "transitionId": "CANCEL_PARSING", "fromStateId": "PARSING", "toStateId": "CANCELLED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["FORENSIC_ANALYST", "SUPERVISOR"] } }] }
+  ]
+}

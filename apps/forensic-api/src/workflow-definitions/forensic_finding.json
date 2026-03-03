@@ -1,0 +1,21 @@
+{
+  "workflowId": "forensic_finding",
+  "version": "1.0.0",
+  "states": [
+    { "stateId": "UNREVIEWED", "type": "initial", "taskRequired": false },
+    { "stateId": "NEEDS_REVIEW", "type": "active", "taskRequired": true, "roleId": "FORENSIC_ANALYST" },
+    { "stateId": "CONFIRMED", "type": "terminal", "taskRequired": false },
+    { "stateId": "FALSE_POSITIVE", "type": "terminal", "taskRequired": false },
+    { "stateId": "ESCALATED", "type": "active", "taskRequired": true, "roleId": "SUPERVISOR" }
+  ],
+  "transitions": [
+    { "transitionId": "MARK_REVIEW", "fromStateId": "UNREVIEWED", "toStateId": "NEEDS_REVIEW", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["FORENSIC_ANALYST"] } }] },
+    { "transitionId": "CONFIRM_UNREV", "fromStateId": "UNREVIEWED", "toStateId": "CONFIRMED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["FORENSIC_ANALYST"] } }] },
+    { "transitionId": "CONFIRM_REVIEW", "fromStateId": "NEEDS_REVIEW", "toStateId": "CONFIRMED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["FORENSIC_ANALYST"] } }] },
+    { "transitionId": "REJECT_FP_UNREV", "fromStateId": "UNREVIEWED", "toStateId": "FALSE_POSITIVE", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["FORENSIC_ANALYST"] } }] },
+    { "transitionId": "REJECT_FP_REVIEW", "fromStateId": "NEEDS_REVIEW", "toStateId": "FALSE_POSITIVE", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["FORENSIC_ANALYST"] } }] },
+    { "transitionId": "ESCALATE_UNREV", "fromStateId": "UNREVIEWED", "toStateId": "ESCALATED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["FORENSIC_ANALYST"] } }] },
+    { "transitionId": "ESCALATE_REVIEW", "fromStateId": "NEEDS_REVIEW", "toStateId": "ESCALATED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["FORENSIC_ANALYST"] } }] },
+    { "transitionId": "ESCALATE_CONFIRM", "fromStateId": "CONFIRMED", "toStateId": "ESCALATED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["FORENSIC_ANALYST"] } }] }
+  ]
+}

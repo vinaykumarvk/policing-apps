@@ -1,0 +1,23 @@
+{
+  "workflowId": "dopams_alert",
+  "version": "1.0.0",
+  "states": [
+    { "stateId": "OPEN", "type": "initial", "taskRequired": false },
+    { "stateId": "ACKNOWLEDGED", "type": "active", "taskRequired": true, "roleId": "INTELLIGENCE_ANALYST" },
+    { "stateId": "ASSIGNED", "type": "active", "taskRequired": true, "roleId": "INTELLIGENCE_ANALYST", "slaDays": 3 },
+    { "stateId": "ESCALATED", "type": "active", "taskRequired": true, "roleId": "ZONAL_OFFICER", "slaDays": 2 },
+    { "stateId": "RESOLVED", "type": "active", "taskRequired": true, "roleId": "SUPERVISORY_OFFICER" },
+    { "stateId": "CLOSED", "type": "terminal", "taskRequired": false },
+    { "stateId": "FALSE_POSITIVE", "type": "terminal", "taskRequired": false }
+  ],
+  "transitions": [
+    { "transitionId": "ACKNOWLEDGE", "fromStateId": "OPEN", "toStateId": "ACKNOWLEDGED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["INTELLIGENCE_ANALYST", "DISTRICT_OPERATOR"] } }] },
+    { "transitionId": "ASSIGN", "fromStateId": "ACKNOWLEDGED", "toStateId": "ASSIGNED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["INTELLIGENCE_ANALYST", "SUPERVISORY_OFFICER"] } }] },
+    { "transitionId": "ESCALATE", "fromStateId": "ASSIGNED", "toStateId": "ESCALATED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISORY_OFFICER"] } }] },
+    { "transitionId": "RESOLVE", "fromStateId": "ASSIGNED", "toStateId": "RESOLVED", "trigger": "manual" },
+    { "transitionId": "RESOLVE_ESC", "fromStateId": "ESCALATED", "toStateId": "RESOLVED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["ZONAL_OFFICER"] } }] },
+    { "transitionId": "CLOSE", "fromStateId": "RESOLVED", "toStateId": "CLOSED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISORY_OFFICER"] } }] },
+    { "transitionId": "FALSE_POS", "fromStateId": "ASSIGNED", "toStateId": "FALSE_POSITIVE", "trigger": "manual" },
+    { "transitionId": "AUTO_ESCALATE", "fromStateId": "ASSIGNED", "toStateId": "ESCALATED", "trigger": "system" }
+  ]
+}

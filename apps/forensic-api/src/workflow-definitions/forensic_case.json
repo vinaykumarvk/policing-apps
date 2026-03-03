@@ -1,0 +1,26 @@
+{
+  "workflowId": "forensic_case",
+  "version": "1.0.0",
+  "states": [
+    { "stateId": "DRAFT", "type": "initial", "taskRequired": false },
+    { "stateId": "ACTIVE", "type": "active", "taskRequired": true, "roleId": "FORENSIC_ANALYST" },
+    { "stateId": "INGESTION_IN_PROGRESS", "type": "active", "taskRequired": false },
+    { "stateId": "UNDER_REVIEW", "type": "active", "taskRequired": true, "roleId": "FORENSIC_ANALYST", "slaDays": 7 },
+    { "stateId": "REPORT_READY", "type": "active", "taskRequired": true, "roleId": "SUPERVISOR" },
+    { "stateId": "SUBMITTED", "type": "active", "taskRequired": false },
+    { "stateId": "CLOSED", "type": "terminal", "taskRequired": false },
+    { "stateId": "REOPENED", "type": "active", "taskRequired": true, "roleId": "FORENSIC_ANALYST" }
+  ],
+  "transitions": [
+    { "transitionId": "ACTIVATE", "fromStateId": "DRAFT", "toStateId": "ACTIVE", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["FORENSIC_ANALYST", "SUPERVISOR"] } }] },
+    { "transitionId": "START_IMPORT", "fromStateId": "ACTIVE", "toStateId": "INGESTION_IN_PROGRESS", "trigger": "system" },
+    { "transitionId": "IMPORT_DONE", "fromStateId": "INGESTION_IN_PROGRESS", "toStateId": "UNDER_REVIEW", "trigger": "system" },
+    { "transitionId": "REPORT_READY", "fromStateId": "UNDER_REVIEW", "toStateId": "REPORT_READY", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["FORENSIC_ANALYST"] } }] },
+    { "transitionId": "SUBMIT_EXT", "fromStateId": "REPORT_READY", "toStateId": "SUBMITTED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISOR"] } }] },
+    { "transitionId": "CLOSE_SUBMITTED", "fromStateId": "SUBMITTED", "toStateId": "CLOSED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISOR", "ADMINISTRATOR"] } }] },
+    { "transitionId": "CLOSE_REVIEW", "fromStateId": "UNDER_REVIEW", "toStateId": "CLOSED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISOR", "ADMINISTRATOR"] } }] },
+    { "transitionId": "CLOSE_REPORT", "fromStateId": "REPORT_READY", "toStateId": "CLOSED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISOR", "ADMINISTRATOR"] } }] },
+    { "transitionId": "REOPEN", "fromStateId": "CLOSED", "toStateId": "REOPENED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISOR", "ADMINISTRATOR"] } }] },
+    { "transitionId": "RESUME", "fromStateId": "REOPENED", "toStateId": "UNDER_REVIEW", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["FORENSIC_ANALYST"] } }] }
+  ]
+}

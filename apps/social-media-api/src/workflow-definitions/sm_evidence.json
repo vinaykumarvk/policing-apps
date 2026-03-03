@@ -1,0 +1,26 @@
+{
+  "workflowId": "sm_evidence",
+  "version": "1.0.0",
+  "states": [
+    { "stateId": "CAPTURE_REQUESTED", "type": "initial", "taskRequired": false },
+    { "stateId": "CAPTURED", "type": "active", "taskRequired": true, "roleId": "EVIDENCE_CUSTODIAN" },
+    { "stateId": "PARTIAL_CAPTURE", "type": "active", "taskRequired": true, "roleId": "EVIDENCE_CUSTODIAN" },
+    { "stateId": "VERIFIED", "type": "active", "taskRequired": false },
+    { "stateId": "INTEGRITY_EXCEPTION", "type": "active", "taskRequired": true, "roleId": "EVIDENCE_CUSTODIAN" },
+    { "stateId": "PACKAGED", "type": "active", "taskRequired": true, "roleId": "SUPERVISOR" },
+    { "stateId": "EXPORTED", "type": "terminal", "taskRequired": false },
+    { "stateId": "LEGAL_HOLD", "type": "active", "taskRequired": false },
+    { "stateId": "PURGED", "type": "terminal", "taskRequired": false }
+  ],
+  "transitions": [
+    { "transitionId": "CAPTURE_OK", "fromStateId": "CAPTURE_REQUESTED", "toStateId": "CAPTURED", "trigger": "system" },
+    { "transitionId": "CAPTURE_PARTIAL", "fromStateId": "CAPTURE_REQUESTED", "toStateId": "PARTIAL_CAPTURE", "trigger": "system" },
+    { "transitionId": "VERIFY", "fromStateId": "CAPTURED", "toStateId": "VERIFIED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["EVIDENCE_CUSTODIAN"] } }] },
+    { "transitionId": "INTEGRITY_FAIL", "fromStateId": "CAPTURED", "toStateId": "INTEGRITY_EXCEPTION", "trigger": "system" },
+    { "transitionId": "PACKAGE", "fromStateId": "VERIFIED", "toStateId": "PACKAGED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["INTELLIGENCE_ANALYST", "EVIDENCE_CUSTODIAN"] } }] },
+    { "transitionId": "EXPORT", "fromStateId": "PACKAGED", "toStateId": "EXPORTED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISOR"] } }] },
+    { "transitionId": "APPLY_HOLD", "fromStateId": "VERIFIED", "toStateId": "LEGAL_HOLD", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["EVIDENCE_CUSTODIAN", "LEGAL_REVIEWER"] } }] },
+    { "transitionId": "RELEASE_HOLD", "fromStateId": "LEGAL_HOLD", "toStateId": "VERIFIED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["EVIDENCE_CUSTODIAN", "LEGAL_REVIEWER"] } }] },
+    { "transitionId": "PURGE", "fromStateId": "VERIFIED", "toStateId": "PURGED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["PLATFORM_ADMINISTRATOR"] } }] }
+  ]
+}

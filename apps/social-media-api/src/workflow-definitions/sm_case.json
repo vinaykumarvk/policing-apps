@@ -1,0 +1,21 @@
+{
+  "workflowId": "sm_case",
+  "version": "1.0.0",
+  "states": [
+    { "stateId": "OPEN", "type": "initial", "taskRequired": false },
+    { "stateId": "ASSIGNED", "type": "active", "taskRequired": true, "roleId": "INVESTIGATOR", "slaDays": 5 },
+    { "stateId": "UNDER_INVESTIGATION", "type": "active", "taskRequired": true, "roleId": "INVESTIGATOR" },
+    { "stateId": "AWAITING_REVIEW", "type": "active", "taskRequired": true, "roleId": "SUPERVISOR", "slaDays": 3 },
+    { "stateId": "CLOSED", "type": "terminal", "taskRequired": false },
+    { "stateId": "REOPENED", "type": "active", "taskRequired": true, "roleId": "INVESTIGATOR" }
+  ],
+  "transitions": [
+    { "transitionId": "ASSIGN", "fromStateId": "OPEN", "toStateId": "ASSIGNED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISOR", "INTELLIGENCE_ANALYST"] } }] },
+    { "transitionId": "START_INVEST", "fromStateId": "ASSIGNED", "toStateId": "UNDER_INVESTIGATION", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["INVESTIGATOR"] } }] },
+    { "transitionId": "SUBMIT_REVIEW", "fromStateId": "UNDER_INVESTIGATION", "toStateId": "AWAITING_REVIEW", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["INVESTIGATOR"] } }] },
+    { "transitionId": "APPROVE_CLOSE", "fromStateId": "AWAITING_REVIEW", "toStateId": "CLOSED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISOR"] } }] },
+    { "transitionId": "RETURN_REWORK", "fromStateId": "AWAITING_REVIEW", "toStateId": "UNDER_INVESTIGATION", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISOR", "LEGAL_REVIEWER"] } }] },
+    { "transitionId": "REOPEN", "fromStateId": "CLOSED", "toStateId": "REOPENED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISOR"] } }] },
+    { "transitionId": "RESUME", "fromStateId": "REOPENED", "toStateId": "UNDER_INVESTIGATION", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["INVESTIGATOR"] } }] }
+  ]
+}

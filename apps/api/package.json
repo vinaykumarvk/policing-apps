@@ -45,6 +45,7 @@
     "@opentelemetry/instrumentation-fastify": "^0.56.0",
     "@opentelemetry/sdk-node": "^0.212.0",
     "@puda/shared": "^0.1.0",
+    "@puda/workflow-engine": "^0.1.0",
     "@types/qrcode": "^1.5.6",
     "argon2": "^0.44.0",
     "dotenv": "^16.4.5",

@@ -1,0 +1,20 @@
+{
+  "workflowId": "sm_report",
+  "version": "1.0.0",
+  "states": [
+    { "stateId": "DRAFT", "type": "initial", "taskRequired": false },
+    { "stateId": "IN_REVIEW", "type": "active", "taskRequired": true, "roleId": "LEGAL_REVIEWER", "slaDays": 3 },
+    { "stateId": "APPROVED", "type": "active", "taskRequired": true, "roleId": "SUPERVISOR" },
+    { "stateId": "EXPORTED", "type": "terminal", "taskRequired": false },
+    { "stateId": "SUPERSEDED", "type": "terminal", "taskRequired": false },
+    { "stateId": "GENERATION_FAILED", "type": "active", "taskRequired": false }
+  ],
+  "transitions": [
+    { "transitionId": "SUBMIT", "fromStateId": "DRAFT", "toStateId": "IN_REVIEW", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["INTELLIGENCE_ANALYST", "INVESTIGATOR"] } }] },
+    { "transitionId": "APPROVE", "fromStateId": "IN_REVIEW", "toStateId": "APPROVED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["LEGAL_REVIEWER", "SUPERVISOR"] } }] },
+    { "transitionId": "REJECT", "fromStateId": "IN_REVIEW", "toStateId": "DRAFT", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["LEGAL_REVIEWER", "SUPERVISOR"] } }] },
+    { "transitionId": "EXPORT", "fromStateId": "APPROVED", "toStateId": "EXPORTED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISOR"] } }] },
+    { "transitionId": "SUPERSEDE", "fromStateId": "EXPORTED", "toStateId": "SUPERSEDED", "trigger": "system" },
+    { "transitionId": "RETRY", "fromStateId": "GENERATION_FAILED", "toStateId": "DRAFT", "trigger": "manual" }
+  ]
+}

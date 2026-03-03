@@ -1,0 +1,29 @@
+{
+  "workflowId": "sm_alert",
+  "version": "1.0.0",
+  "states": [
+    { "stateId": "NEW", "type": "initial", "taskRequired": false },
+    { "stateId": "IN_REVIEW", "type": "active", "taskRequired": true, "roleId": "INTELLIGENCE_ANALYST", "slaDays": 1 },
+    { "stateId": "ESCALATED_SUPERVISOR", "type": "active", "taskRequired": true, "roleId": "SUPERVISOR", "slaDays": 1 },
+    { "stateId": "ESCALATED_CONTROL_ROOM", "type": "active", "taskRequired": true, "roleId": "CONTROL_ROOM_OPERATOR" },
+    { "stateId": "CONVERTED_TO_CASE", "type": "terminal", "taskRequired": false },
+    { "stateId": "FALSE_POSITIVE", "type": "terminal", "taskRequired": false },
+    { "stateId": "CLOSED_NO_ACTION", "type": "terminal", "taskRequired": false },
+    { "stateId": "CLOSED_ACTIONED", "type": "terminal", "taskRequired": false },
+    { "stateId": "REOPENED", "type": "active", "taskRequired": true, "roleId": "INTELLIGENCE_ANALYST" }
+  ],
+  "transitions": [
+    { "transitionId": "ACKNOWLEDGE", "fromStateId": "NEW", "toStateId": "IN_REVIEW", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["INTELLIGENCE_ANALYST", "CONTROL_ROOM_OPERATOR"] } }] },
+    { "transitionId": "AUTO_ESCALATE", "fromStateId": "NEW", "toStateId": "ESCALATED_CONTROL_ROOM", "trigger": "system" },
+    { "transitionId": "ESCALATE_SUP", "fromStateId": "IN_REVIEW", "toStateId": "ESCALATED_SUPERVISOR", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["INTELLIGENCE_ANALYST"] } }] },
+    { "transitionId": "ESCALATE_CR", "fromStateId": "IN_REVIEW", "toStateId": "ESCALATED_CONTROL_ROOM", "trigger": "manual" },
+    { "transitionId": "CONVERT_CASE", "fromStateId": "IN_REVIEW", "toStateId": "CONVERTED_TO_CASE", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["INTELLIGENCE_ANALYST"] } }] },
+    { "transitionId": "MARK_FP", "fromStateId": "IN_REVIEW", "toStateId": "FALSE_POSITIVE", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["INTELLIGENCE_ANALYST"] } }] },
+    { "transitionId": "SUP_ACTION", "fromStateId": "ESCALATED_SUPERVISOR", "toStateId": "IN_REVIEW", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISOR"] } }] },
+    { "transitionId": "CR_CLOSE", "fromStateId": "ESCALATED_CONTROL_ROOM", "toStateId": "CLOSED_ACTIONED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["CONTROL_ROOM_OPERATOR"] } }] },
+    { "transitionId": "CLOSE_NO_ACTION", "fromStateId": "IN_REVIEW", "toStateId": "CLOSED_NO_ACTION", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["INTELLIGENCE_ANALYST", "SUPERVISOR"] } }] },
+    { "transitionId": "REOPEN_CLOSED", "fromStateId": "CLOSED_NO_ACTION", "toStateId": "REOPENED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISOR"] } }] },
+    { "transitionId": "REOPEN_FP", "fromStateId": "FALSE_POSITIVE", "toStateId": "REOPENED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISOR"] } }] },
+    { "transitionId": "RESUME", "fromStateId": "REOPENED", "toStateId": "IN_REVIEW", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["INTELLIGENCE_ANALYST"] } }] }
+  ]
+}

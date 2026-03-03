@@ -1,0 +1,23 @@
+{
+  "workflowId": "dopams_lead",
+  "version": "1.0.0",
+  "states": [
+    { "stateId": "NEW", "type": "initial", "taskRequired": false },
+    { "stateId": "VALIDATED", "type": "active", "taskRequired": true, "roleId": "DISTRICT_OPERATOR" },
+    { "stateId": "MEMO_GENERATED", "type": "active", "taskRequired": true, "roleId": "DISTRICT_OPERATOR" },
+    { "stateId": "APPROVAL_PENDING", "type": "active", "taskRequired": true, "roleId": "SUPERVISORY_OFFICER", "slaDays": 2 },
+    { "stateId": "ROUTED", "type": "active", "taskRequired": true, "roleId": "INVESTIGATING_OFFICER", "slaDays": 5 },
+    { "stateId": "IN_ACTION", "type": "active", "taskRequired": true, "roleId": "INVESTIGATING_OFFICER" },
+    { "stateId": "CLOSED", "type": "terminal", "taskRequired": false },
+    { "stateId": "REJECTED", "type": "terminal", "taskRequired": false }
+  ],
+  "transitions": [
+    { "transitionId": "VALIDATE", "fromStateId": "NEW", "toStateId": "VALIDATED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["DISTRICT_OPERATOR", "TOLL_FREE_OPERATOR"] } }] },
+    { "transitionId": "GEN_MEMO", "fromStateId": "VALIDATED", "toStateId": "MEMO_GENERATED", "trigger": "system" },
+    { "transitionId": "SUBMIT_MEMO", "fromStateId": "MEMO_GENERATED", "toStateId": "APPROVAL_PENDING", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["DISTRICT_OPERATOR"] } }] },
+    { "transitionId": "APPROVE", "fromStateId": "APPROVAL_PENDING", "toStateId": "ROUTED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISORY_OFFICER", "ZONAL_OFFICER"] } }] },
+    { "transitionId": "REJECT", "fromStateId": "APPROVAL_PENDING", "toStateId": "REJECTED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISORY_OFFICER"] } }] },
+    { "transitionId": "ACK_ROUTE", "fromStateId": "ROUTED", "toStateId": "IN_ACTION", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["INVESTIGATING_OFFICER"] } }] },
+    { "transitionId": "CLOSE_LEAD", "fromStateId": "IN_ACTION", "toStateId": "CLOSED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["INVESTIGATING_OFFICER"] } }] }
+  ]
+}
