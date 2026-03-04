@@ -7,6 +7,7 @@ export interface AuthUser {
   full_name: string;
   user_type: string;
   roles: string[];
+  unit_id: string | null;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -34,25 +35,64 @@ export async function getUserRoles(userId: string): Promise<string[]> {
   return result.rows.map((row: { role_key: string }) => row.role_key);
 }
 
-export async function authenticate(username: string, password: string): Promise<AuthUser | null> {
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MINUTES = 15;
+
+export interface AuthResult {
+  user: AuthUser | null;
+  mfaRequired?: boolean;
+  mfaUserId?: string;
+}
+
+export async function authenticate(username: string, password: string): Promise<AuthResult> {
   const result = await query(
-    `SELECT user_id, username, full_name, password_hash, user_type FROM user_account WHERE username = $1 AND is_active = true`,
+    `SELECT user_id, username, full_name, password_hash, user_type, unit_id, locked_until, mfa_enabled FROM user_account WHERE username = $1 AND is_active = true`,
     [username],
   );
-  if (result.rows.length === 0) return null;
+  if (result.rows.length === 0) return { user: null };
 
   const user = result.rows[0];
+
+  // Check if the account is currently locked
+  if (user.locked_until && new Date(user.locked_until) > new Date()) {
+    return { user: null };
+  }
+
   const valid = await verifyPassword(password, user.password_hash);
-  if (!valid) return null;
+  if (!valid) {
+    // Increment failed attempts and lock if threshold reached
+    await query(
+      `UPDATE user_account SET
+        failed_login_attempts = failed_login_attempts + 1,
+        last_failed_login = NOW(),
+        locked_until = CASE WHEN failed_login_attempts + 1 >= $2 THEN NOW() + INTERVAL '1 minute' * $3 ELSE NULL END
+       WHERE user_id = $1`,
+      [user.user_id, MAX_FAILED_ATTEMPTS, LOCKOUT_DURATION_MINUTES],
+    );
+    return { user: null };
+  }
+
+  // Reset failed login attempts on successful authentication
+  await query(
+    `UPDATE user_account SET failed_login_attempts = 0, locked_until = NULL, last_failed_login = NULL WHERE user_id = $1`,
+    [user.user_id],
+  );
+
+  if (user.mfa_enabled) {
+    return { user: null, mfaRequired: true, mfaUserId: user.user_id };
+  }
 
   const roles = await getUserRoles(user.user_id);
 
   return {
-    user_id: user.user_id,
-    username: user.username,
-    full_name: user.full_name,
-    user_type: user.user_type,
-    roles,
+    user: {
+      user_id: user.user_id,
+      username: user.username,
+      full_name: user.full_name,
+      user_type: user.user_type,
+      roles,
+      unit_id: user.unit_id || null,
+    },
   };
 }
 
@@ -74,5 +114,6 @@ export async function createUser(input: {
     full_name: user.full_name,
     user_type: user.user_type,
     roles: [],
+    unit_id: null,
   };
 }

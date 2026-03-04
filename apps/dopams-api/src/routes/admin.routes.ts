@@ -1,9 +1,31 @@
-import { FastifyInstance } from "fastify";
+import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { query } from "../db";
 import { createUser } from "../auth";
-import { sendError, send400, send404 } from "../errors";
+import { sendError, send400, send403, send404 } from "../errors";
+
+function validatePasswordComplexity(pw: string): string | null {
+  if (pw.length < 12) return "Password must be at least 12 characters";
+  if (!/[A-Z]/.test(pw)) return "Password must contain an uppercase letter";
+  if (!/[a-z]/.test(pw)) return "Password must contain a lowercase letter";
+  if (!/[0-9]/.test(pw)) return "Password must contain a digit";
+  if (!/[^A-Za-z0-9]/.test(pw)) return "Password must contain a special character";
+  return null;
+}
+
+function requireAdmin(request: FastifyRequest, reply: FastifyReply): boolean {
+  const roles = request.authUser?.roles ?? [];
+  if (!roles.includes("ADMINISTRATOR") && !roles.includes("PLATFORM_ADMINISTRATOR")) {
+    send403(reply, "FORBIDDEN", "Administrator access required");
+    return false;
+  }
+  return true;
+}
 
 export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
+  app.addHook("onRequest", async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdmin(request, reply)) return;
+  });
+
   app.get("/api/v1/users", async () => {
     const result = await query(
       `SELECT u.user_id, u.username, u.full_name, u.user_type, u.is_active, u.created_at,
@@ -18,18 +40,22 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/api/v1/users", {
-    schema: { body: { type: "object", additionalProperties: false, required: ["username", "password", "fullName"], properties: { username: { type: "string" }, password: { type: "string" }, fullName: { type: "string" }, userType: { type: "string" } } } },
+    schema: { body: { type: "object", additionalProperties: false, required: ["username", "password", "fullName"], properties: { username: { type: "string", minLength: 3, maxLength: 100 }, password: { type: "string", minLength: 12, maxLength: 128 }, fullName: { type: "string", minLength: 1, maxLength: 200 }, userType: { type: "string" } } } },
   }, async (request, reply) => {
     const { username, password, fullName, userType } = request.body as { username: string; password: string; fullName: string; userType?: string };
+    const pwError = validatePasswordComplexity(password);
+    if (pwError) return send400(reply, "WEAK_PASSWORD", pwError);
     try {
       const user = await createUser({ username, password, fullName, userType });
       reply.code(201);
       return { user };
-    } catch (err: any) {
-      if (err.code === "23505") {
+    } catch (err: unknown) {
+      const pgCode = err instanceof Error && "code" in err ? (err as any).code : undefined;
+      if (pgCode === "23505") {
         return send400(reply, "USERNAME_EXISTS", "Username already taken");
       }
-      throw err;
+      request.log.error(err, "User creation failed");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
     }
   });
 
@@ -41,6 +67,10 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { roleId, action } = request.body as { roleId: string; action?: "assign" | "revoke" };
+
+    if (id === request.authUser?.userId) {
+      return send403(reply, "SELF_ROLE_CHANGE", "Cannot modify your own roles");
+    }
 
     const userCheck = await query(`SELECT 1 FROM user_account WHERE user_id = $1`, [id]);
     if (userCheck.rows.length === 0) {

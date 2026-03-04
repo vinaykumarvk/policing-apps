@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { validateField as runValidation, type ValidationType } from "./validation";
 import { PUNJAB_DISTRICTS, INDIAN_STATES } from "./india-data";
 
@@ -130,10 +130,16 @@ export function FormRenderer({
   const [discoveredProperties, setDiscoveredProperties] = useState<CitizenProperty[]>([]);
   /** Whether the user has toggled to manual UPN entry mode */
   const [upnManualMode, setUpnManualMode] = useState(false);
+  const pageHeadingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     setData(initialData);
   }, [initialData]);
+
+  // Focus the page heading when page changes for screen reader navigation
+  useEffect(() => {
+    pageHeadingRef.current?.focus();
+  }, [currentPage]);
 
   // Bilingual label helper: renders stacked English + secondary language
   const bilingualText = (primary: string, hi?: string, pa?: string): React.ReactNode => {
@@ -756,7 +762,7 @@ export function FormRenderer({
       )}
 
       <div className="form-page">
-        <h2>{bilingualText(currentPageConfig.title, currentPageConfig.title_hi, currentPageConfig.title_pa)}</h2>
+        <h2 ref={pageHeadingRef} tabIndex={-1}>{bilingualText(currentPageConfig.title, currentPageConfig.title_hi, currentPageConfig.title_pa)}</h2>
         {currentPageConfig.sections.map((section) => (
           <div key={section.sectionId} className="form-section">
             <h3>{bilingualText(section.title, section.title_hi, section.title_pa)}</h3>

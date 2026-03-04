@@ -1,0 +1,73 @@
+RFP Clause ID,Clause Summary,Clause Type,Disposition in Refined BRD,Refined BRD Reference(s),Implementation Note
+RFP-OBJ-01,Cross-platform monitoring capability,Solution,Implemented,"FR-03, FR-04, ENT-04, ENT-05, INT-01..INT-05","Source connector registry, dashboard, saved-search/watchlist model"
+RFP-OBJ-02,AI-based content categorization,Solution,Implemented,"FR-06, ENT-07, API-02, PRM-01..PRM-04",AI classification service and taxonomy
+RFP-OBJ-03,Risk scoring and prioritization,Solution,Implemented,"FR-07, ENT-08, WF-ALT-01, NFR-01..NFR-05",Risk engine and SLA-driven queueing
+RFP-OBJ-04,Legal section mapping,Solution,Implemented,"FR-08, ENT-13, ENT-14, API-10, WF-RPT-01",Legal rule engine and reviewer approval
+RFP-OBJ-05,Digital evidence preservation,Solution,Implemented,"FR-11, ENT-10, WF-EVD-01, AUD-03","Evidence service, hashing, custody"
+RFP-OBJ-06,Real-time alerts and escalation,Solution,Implemented,"FR-10, FR-12, API-05, WF-ALT-01",Alert escalation and workflow controls
+RFP-TEC-01,Licensed production-ready platform,Solution,Implemented,"FR-01, NFR-14, FR-18",Licensed production deployment baseline
+RFP-TEC-02,Scalable architecture for district-level expansion,Solution,Implemented,"FR-01, FR-18, NFR-06, NFR-14",Scale-out baseline and district rollout assumption
+RFP-TEC-03,Deployment in Telangana State Data Centre or Government-approved cloud,Solution,Implemented,"FR-01, FR-18, INT-09, CMP-09",Government hosting and infra BOM
+RFP-TEC-04,Separate Production and UAT environments,Solution,Implemented,"FR-01, FR-14",Environment separation and promotion control
+RFP-TEC-05,Secure domain and SSL setup,Solution,Implemented,"FR-01, FR-15, FR-17, NFR-09",TLS and certificate control
+RFP-TEC-06,Role-based access control,Solution,Implemented,"FR-02, ENT-01..ENT-03, UI-01, CMP-04",RBAC and org hierarchy
+RFP-MON-01,"Integration/workflows for X/Twitter, Instagram, Facebook, YouTube, Reddit",Solution,Implemented,"FR-03, INT-01..INT-05, API-01",Platform connector onboarding
+RFP-MON-02,Unified cross-platform monitoring dashboard,Solution,Implemented,"FR-04, UI-02, UI-03, API-02",Unified monitoring dashboard
+RFP-MON-03,Aggregated user activity tracking,Solution,Implemented,"FR-04, ENT-05, API-02",Aggregated actor timeline and content search
+RFP-MON-04,"Detect narcotics-related keywords, slang, and coded communication",Solution,Implemented,"FR-05, FR-14, ENT-05, ENT-06",Keyword/slang detection and config governance
+RFP-MON-05,Support multilingual content,Solution,Implemented,"FR-03, FR-05, FR-09, ENT-05, ENT-15",Multilingual ingestion and translation
+RFP-MON-06,Separate dashboards for Intelligence Wing and Control Room,Solution,Implemented,"FR-04, FR-02, UI-02",Role-specific dashboard views
+RFP-MON-07,Logical navigation and structured dashboard tabs,Solution,Implemented,"FR-04, UI-02..UI-12",Explicit screen/navigation catalog
+RFP-AI-01,Automatically classify content into predefined narcotics-related categories,Solution,Implemented,"FR-06, ENT-07",Category master and classifier
+RFP-AI-02,Contextual analysis of text and images,Solution,Implemented,"FR-05, FR-06, ENT-06",Text+image contextual pipeline
+RFP-AI-03,Consistent categorization for downstream legal mapping,Solution,Implemented,"FR-06, FR-08, ENT-07",Taxonomy versioning and downstream legal consistency
+RFP-AI-04,LLM-based intelligent classification,Solution,Implemented,"FR-06, INT-10, PRM-01..PRM-07",LLM-assisted classification
+RFP-RSK-01,"Dynamic risk scoring using severity, frequency, virality/engagement, historical behavior",Solution,Implemented,"FR-07, ENT-08, NFR-05",Score factors and priority bands
+RFP-RSK-02,Escalation-aware scoring,Solution,Implemented,"FR-07, WF-ALT-01",Escalation-aware thresholds
+RFP-RSK-03,Analyst-reviewable risk indicators,Solution,Implemented,"FR-07, UI-04",Explainable scorecard
+RFP-RSK-04,Learn from historical complaint data,Solution,Implemented,"FR-06, FR-07, CQ-11",Historical data feedback loop
+RFP-RSK-05,Background retraining of legal rule engine without modifying LLM core,Solution,Implemented,"FR-06, FR-08, FR-14, API-12",Rule-layer separation from LLM core
+RFP-LEG-01,Map categorized content to relevant provisions under Bharatiya Nyaya Sanhita,Solution,Implemented,"FR-08, ENT-13, ENT-14, CMP-01",BNS legal mapping
+RFP-LEG-02,Support rule-based and data-driven legal updates,Solution,Implemented,"FR-08, FR-14, API-12",Versioned legal rules
+RFP-LEG-03,Display legal references clearly in alert cards,Solution,Implemented,"FR-08, UI-04, ENT-14",Legal references on alert cards
+RFP-LEG-04,Generate legally structured investigation-ready reports,Solution,Implemented,"FR-08, FR-13, WF-RPT-01, UI-08",Investigation-ready drafts with approval
+RFP-LNG-01,Automatically detect language,Solution,Implemented,"FR-09, ENT-05, ENT-15",Language detection
+RFP-LNG-02,Single-click translation per alert,Solution,Implemented,"FR-09, API-06, UI-04/UI-08",Single-click translation
+RFP-LNG-03,Translation on user demand,Solution,Implemented,"FR-09, API-06",On-demand translation
+RFP-LNG-04,Preserve original content integrity,Solution,Implemented,"FR-09, ENT-15",Original/translation separation
+RFP-ALT-01,Generate alerts with source attribution,Solution,Implemented,"FR-10, ENT-08, API-03",Alert generation with source attribution
+RFP-ALT-02,Display risk score and category,Solution,Implemented,"FR-10, ENT-08, UI-04",Risk score and category display
+RFP-ALT-03,Provide simplified category filters,Solution,Implemented,"FR-10, UI-02/UI-03",Category and priority filters
+RFP-ALT-04,Enable WhatsApp sharing for rapid escalation,Solution,Implemented,"FR-10, FR-15, API-05, API-14, INT-07",Approved rapid sharing
+RFP-ALT-05,Maintain audit logs of alert actions,Solution,Implemented,"FR-10, FR-16, ENT-09, ENT-19, API-13",Alert action auditability
+RFP-EVD-01,"Enable download/capture of posts, retweets, images, and videos",Solution,Implemented,"FR-11, API-07, ENT-10",Evidence capture
+RFP-EVD-02,Support multiple media formats,Solution,Implemented,"FR-11, ENT-06, ENT-10, INT-09",Multi-format storage
+RFP-EVD-03,Preserve metadata and timestamps,Solution,Implemented,"FR-11, ENT-10",Metadata and timestamps
+RFP-EVD-04,Provide highlighted reference numbers,Solution,Implemented,"FR-11, ENT-08, ENT-10, FR-13",Reference numbering
+RFP-EVD-05,Maintain secure audit trail,Solution,Implemented,"FR-11, FR-16, AUD-03, ENT-19",Secure trail and custody
+RFP-EVD-06,Prevent accidental modifications via confirmation prompts,Solution,Implemented,"FR-11, UI-05",Confirmation and protected actions
+RFP-RPT-01,Dynamic report template creation,Solution,Implemented,"FR-13, API-11, ENT-16",Template creation
+RFP-RPT-02,Upload and version custom templates,Solution,Implemented,"FR-13, ENT-16, API-11",Template upload and versioning
+RFP-RPT-03,Provide structured narcotics investigation reports,Solution,Implemented,"FR-08, FR-13, ENT-17",Structured investigation reports
+RFP-RPT-04,Export in standard formats such as PDF and DOC,Solution,Implemented,"FR-13, API-10, ENT-17",PDF/DOCX export
+RFP-RPT-05,Ensure visibility of reference numbers,Solution,Implemented,"FR-13, ENT-17",Reference numbers in report outputs
+RFP-RPT-06,Provide MIS reports as per Department requirement,Solution,Implemented,"FR-13, RPT-01..RPT-10",MIS catalog
+RFP-RPT-07,Role-based access system,Solution,Implemented,"FR-02, FR-16, ENT-01..ENT-03",Role-based access
+RFP-RPT-08,Scalable and customizable as per Department needs,Solution,Implemented,"FR-14, FR-18, NFR-16",Scalable/customizable configuration
+RFP-NTE-01,Solution shall be owned by EAGLE Force Telangana,Contractual/Implementation,Implemented,"FR-18, NFR-19, CMP-08",Ownership and portability
+RFP-NTE-02,Bidder shall inform infrastructure required for hosting the solution,Contractual/Implementation,Implemented,"FR-18, CNI-03, CMP-09",Infrastructure specification artifact
+RFP-NTE-03,One-year warranty including maintenance and upgradations,Contractual/Implementation,Implemented,"FR-18, AUD-07, CMP-10",Warranty + maintenance/upgrades
+RFP-NTE-04,Training for Department officials,Contractual/Implementation,Implemented,FR-18,Training and handover
+RFP-NTE-05,Deploy 1-2 technical manpower for 2 weeks post deployment,Contractual/Implementation,Implemented,FR-18,Two-week hypercare staffing
+RFP-NTE-06,ATS may be obtained after one year if required,Contractual/Implementation,Implemented,"FR-18, CQ-15",ATS transition note
+RFP-DEL-01,Delivery within 6 weeks from Purchase Order,Contractual/Implementation,Implemented,FR-18,D+42 delivery milestone
+RFP-DEL-02,Installation within 1 week,Contractual/Implementation,Implemented,FR-18,D+49 installation milestone
+RFP-PAY-01,80 percent on delivery and successful installation; 20 percent after satisfactory performance report at 60 days,Contractual/Procurement,Tracked as contractual appendix,FR-18,Milestone evidence aligned to payment release
+RFP-PEN-01,Liquidated damages for delay up to 10 percent; cancellation if delay exceeds 30 days,Contractual/Procurement,Tracked as contractual appendix,FR-18,Delivery milestones aligned to LD risk control
+RFP-WAR-01,Minimum 1 year comprehensive onsite warranty on the entire solution,Contractual/Implementation,Implemented,"FR-18, CMP-10",Warranty baseline
+RFP-PROC-01,"Bid validity, fee, EMD, and document submission conditions",Procurement-only,Not a solution requirement,Traceability Appendix - procurement register,Retained as procurement governance input
+RFP-PROC-02,"Bidder legal eligibility, MAF, experience, turnover, certifications, local office, staffing",Procurement-only,Not a solution requirement,Traceability Appendix - procurement register,Retained as procurement governance input
+RFP-PROC-03,No consortium and no subcontracting,Procurement-only,Not a solution requirement,Traceability Appendix - procurement register,Retained as procurement governance input
+RFP-PROC-04,"Bid evaluation process, technical presentation, L1 commercial evaluation",Procurement-only,Not a solution requirement,Traceability Appendix - procurement register,Retained as procurement governance input
+RFP-PROC-05,Performance Bank Guarantee of 5 percent,Procurement-only,Not a solution requirement,Traceability Appendix - procurement register,Retained as procurement governance input
+RFP-PROC-06,"Contract execution, force majeure, notices, taxes, governing law",Procurement-only,Not a solution requirement,Traceability Appendix - procurement register,Retained as procurement governance input

@@ -1,9 +1,14 @@
 import Fastify, { FastifyInstance } from "fastify";
+import helmet from "@fastify/helmet";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import compress from "@fastify/compress";
 import rateLimit from "@fastify/rate-limit";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
 import { registerAuthMiddleware } from "./middleware/auth";
+import { registerAuditLogger } from "./middleware/audit-logger";
+import { setLogContext } from "./log-context";
 import { registerAuthRoutes } from "./routes/auth.routes";
 import { registerCaseRoutes } from "./routes/case.routes";
 import { registerEvidenceRoutes } from "./routes/evidence.routes";
@@ -13,16 +18,52 @@ import { registerFindingRoutes } from "./routes/finding.routes";
 import { registerReportRoutes } from "./routes/report.routes";
 import { registerTaskRoutes } from "./routes/task.routes";
 import { registerAdminRoutes } from "./routes/admin.routes";
-import { sendError } from "./errors";
+import { registerNotesRoutes } from "./routes/notes.routes";
+import { registerNotificationRoutes } from "./routes/notification.routes";
+import { registerConfigRoutes } from "./routes/config.routes";
+import { registerOcrRoutes } from "./routes/ocr.routes";
+import { registerClassifyRoutes } from "./routes/classify.routes";
+import { registerSearchRoutes } from "./routes/search.routes";
+import { registerExtractRoutes } from "./routes/extract.routes";
+import { registerLegalRoutes } from "./routes/legal.routes";
+import { registerTranslateRoutes } from "./routes/translate.routes";
+import { registerNlQueryRoutes } from "./routes/nl-query.routes";
+import { registerGraphRoutes } from "./routes/graph.routes";
+import { registerGeofenceRoutes } from "./routes/geofence.routes";
+import { registerDrugClassifyRoutes } from "./routes/drug-classify.routes";
+import { registerModelRoutes } from "./routes/model.routes";
+import { registerDashboardRoutes } from "./routes/dashboard.routes";
 
 export async function buildApp(logger = true): Promise<FastifyInstance> {
-  const app = Fastify({ logger });
+  const isTestRuntime = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+  const isProduction = process.env.NODE_ENV === "production";
 
   const rawAllowedOrigins = process.env.ALLOWED_ORIGINS;
+  if (isProduction && !rawAllowedOrigins) {
+    throw new Error("FATAL: ALLOWED_ORIGINS must be set in production (comma-separated list of allowed origins)");
+  }
   const allowedOrigins = rawAllowedOrigins
     ? rawAllowedOrigins.split(",").map((o) => o.trim()).filter(Boolean)
-    : true;
+    : isTestRuntime ? true : [];
 
+  const app = Fastify({ logger, bodyLimit: 10_485_760 }); // 10 MB
+
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'"],
+        imgSrc: ["'self'"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        frameSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+      },
+    },
+  });
   await app.register(compress, { global: true, threshold: 1024 });
   await app.register(cors, { origin: allowedOrigins, credentials: true });
   await app.register(cookie);
@@ -33,17 +74,100 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
     timeWindow: process.env.RATE_LIMIT_WINDOW || "1 minute",
   });
 
+  // Apply stricter rate limits to mutation endpoints (POST/PUT/PATCH/DELETE).
+  // Auth login has its own even stricter limit set in auth.routes.ts.
+  app.addHook("onRoute", (routeOptions) => {
+    if (
+      routeOptions.config?.rateLimit ||
+      routeOptions.url === "/health" ||
+      routeOptions.url === "/ready"
+    ) {
+      return;
+    }
+    const methods = Array.isArray(routeOptions.method)
+      ? routeOptions.method
+      : [routeOptions.method];
+    const isMutation = methods.some((m: string) =>
+      ["POST", "PUT", "PATCH", "DELETE"].includes(m),
+    );
+    if (isMutation) {
+      routeOptions.config = routeOptions.config || {};
+      (routeOptions.config as Record<string, unknown>).rateLimit = {
+        max: 30,
+        timeWindow: "1 minute",
+      };
+    }
+  });
+
+  const docsEnabled = process.env.NODE_ENV !== "production";
+  await app.register(swagger, {
+    openapi: {
+      info: {
+        title: "Forensic Lab API",
+        description: "Digital forensic laboratory case management and analysis API.",
+        version: "1.0.0",
+      },
+      tags: [
+        { name: "health", description: "Health check endpoints" },
+        { name: "auth", description: "Authentication and authorization" },
+        { name: "cases", description: "Case management" },
+        { name: "evidence", description: "Evidence management" },
+        { name: "findings", description: "Findings management" },
+        { name: "reports", description: "Report generation" },
+        { name: "imports", description: "Data import" },
+        { name: "tasks", description: "Task management" },
+        { name: "admin", description: "Administration" },
+        { name: "notes", description: "Notes management" },
+        { name: "notifications", description: "Notification management" },
+        { name: "config", description: "Configuration management" },
+        { name: "ocr", description: "Optical character recognition" },
+        { name: "classify", description: "Content classification" },
+        { name: "search", description: "Search operations" },
+        { name: "extract", description: "Entity extraction" },
+        { name: "legal", description: "Legal operations" },
+        { name: "translate", description: "Translation services" },
+        { name: "nl-query", description: "Natural language query" },
+        { name: "graph", description: "Graph analysis" },
+        { name: "geofence", description: "Geofence management" },
+        { name: "drug-classify", description: "Drug classification" },
+        { name: "models", description: "Model governance" },
+      ],
+      components: {
+        securitySchemes: {
+          bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+        },
+      },
+    },
+  });
+  if (docsEnabled) {
+    await app.register(swaggerUi, { routePrefix: "/docs" });
+  }
+
   app.setErrorHandler((error, _request, reply) => {
     const err = error as Error & { statusCode?: number; code?: string };
     const statusCode = err.statusCode || 500;
     if (statusCode >= 500) {
       app.log.error(err);
-      return reply.send(sendError(reply, 500, "INTERNAL_ERROR", "An unexpected error occurred"));
+      return reply.code(500).send({ error: "INTERNAL_ERROR", message: "An unexpected error occurred", statusCode: 500 });
     }
-    return reply.send(sendError(reply, statusCode, err.code || "ERROR", err.message));
+    return reply.code(statusCode).send({ error: err.code || "ERROR", message: err.message, statusCode });
   });
 
   registerAuthMiddleware(app);
+  registerAuditLogger(app);
+
+  app.addHook("onRequest", async (request) => {
+    setLogContext({ requestId: request.id });
+  });
+
+  app.addHook("onResponse", async (request, reply) => {
+    setLogContext({ requestId: request.id });
+    const duration = reply.elapsedTime;
+    if (duration > 1000) {
+      const { logWarn } = await import("./logger");
+      logWarn("SLOW_REQUEST", { method: request.method, url: request.url, statusCode: reply.statusCode, durationMs: Math.round(duration) });
+    }
+  });
 
   app.get("/health", async () => ({ status: "ok" }));
 
@@ -66,7 +190,22 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
   await registerFindingRoutes(app);
   await registerReportRoutes(app);
   await registerTaskRoutes(app);
-  await registerAdminRoutes(app);
+  await app.register(registerAdminRoutes);
+  await registerNotesRoutes(app);
+  await registerNotificationRoutes(app);
+  await registerConfigRoutes(app);
+  await registerOcrRoutes(app);
+  await registerClassifyRoutes(app);
+  await registerSearchRoutes(app);
+  await registerExtractRoutes(app);
+  await registerLegalRoutes(app);
+  await registerTranslateRoutes(app);
+  await registerNlQueryRoutes(app);
+  await registerGraphRoutes(app);
+  await registerGeofenceRoutes(app);
+  await registerDrugClassifyRoutes(app);
+  await registerModelRoutes(app);
+  await registerDashboardRoutes(app);
 
   return app;
 }

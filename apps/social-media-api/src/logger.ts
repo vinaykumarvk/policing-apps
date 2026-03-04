@@ -1,12 +1,17 @@
+import { getLogContext } from "./log-context";
+import { redactValue } from "./redact";
+
 type LogLevel = "info" | "warn" | "error";
 type LogFields = Record<string, unknown>;
 
 function write(level: LogLevel, message: string, fields?: LogFields): void {
+  const context = getLogContext();
   const payload = {
     timestamp: new Date().toISOString(),
     level,
     message,
-    ...(fields || {}),
+    requestId: context?.requestId ?? null,
+    ...(fields ? (redactValue(fields) as LogFields) : {}),
   };
   const line = JSON.stringify(payload);
   if (level === "error") { console.error(line); return; }

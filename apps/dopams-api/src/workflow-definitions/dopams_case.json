@@ -1,0 +1,19 @@
+{
+  "workflowId": "dopams_case",
+  "version": "1.0.0",
+  "states": [
+    { "stateId": "OPEN", "type": "initial", "taskRequired": false },
+    { "stateId": "UNDER_INVESTIGATION", "type": "active", "taskRequired": true, "roleId": "INVESTIGATING_OFFICER", "slaDays": 7 },
+    { "stateId": "AWAITING_REVIEW", "type": "active", "taskRequired": true, "roleId": "SUPERVISORY_OFFICER", "slaDays": 3 },
+    { "stateId": "CLOSED", "type": "terminal", "taskRequired": false },
+    { "stateId": "REOPENED", "type": "active", "taskRequired": true, "roleId": "INVESTIGATING_OFFICER" }
+  ],
+  "transitions": [
+    { "transitionId": "START_INVESTIGATION", "fromStateId": "OPEN", "toStateId": "UNDER_INVESTIGATION", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISORY_OFFICER", "INTELLIGENCE_ANALYST"] } }] },
+    { "transitionId": "SUBMIT_REVIEW", "fromStateId": "UNDER_INVESTIGATION", "toStateId": "AWAITING_REVIEW", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["INVESTIGATING_OFFICER"] } }] },
+    { "transitionId": "APPROVE_CLOSE", "fromStateId": "AWAITING_REVIEW", "toStateId": "CLOSED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISORY_OFFICER", "ZONAL_OFFICER"] } }] },
+    { "transitionId": "RETURN_REWORK", "fromStateId": "AWAITING_REVIEW", "toStateId": "UNDER_INVESTIGATION", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISORY_OFFICER"] } }] },
+    { "transitionId": "REOPEN", "fromStateId": "CLOSED", "toStateId": "REOPENED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISORY_OFFICER", "ZONAL_OFFICER"] } }] },
+    { "transitionId": "RESUME", "fromStateId": "REOPENED", "toStateId": "UNDER_INVESTIGATION", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["INVESTIGATING_OFFICER"] } }] }
+  ]
+}

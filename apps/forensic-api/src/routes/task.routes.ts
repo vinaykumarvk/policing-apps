@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { query } from "../db";
-import { sendError, send404 } from "../errors";
+import { sendError, send403, send404 } from "../errors";
 import { executeTransition } from "../workflow-bridge";
 
 export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
@@ -8,6 +8,7 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     schema: {
       querystring: {
         type: "object",
+        additionalProperties: false,
         properties: {
           limit: { type: "integer", minimum: 1, maximum: 200, default: 50 },
           offset: { type: "integer", minimum: 0, default: 0 },
@@ -27,7 +28,13 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     const total = parseInt(countResult.rows[0].total, 10);
 
     const result = await query(
-      `SELECT task_id, entity_type, entity_id, state_id, role_id, status, sla_due_at, created_at
+      `SELECT task_id, entity_type, entity_id, state_id, role_id, status, sla_due_at, created_at,
+              CASE
+                WHEN sla_due_at IS NULL THEN 'NO_SLA'
+                WHEN sla_due_at < NOW() THEN 'BREACHED'
+                WHEN sla_due_at < NOW() + INTERVAL '2 hours' THEN 'AT_RISK'
+                ELSE 'ON_TRACK'
+              END AS sla_status
        FROM task
        WHERE status IN ('PENDING', 'IN_PROGRESS') AND role_id = ANY($1)
        ORDER BY sla_due_at ASC NULLS LAST, created_at ASC
@@ -49,7 +56,7 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     const { userId, roles } = request.authUser!;
 
     const taskResult = await query(
-      `SELECT task_id, entity_type, entity_id, state_id FROM task WHERE task_id = $1 AND status IN ('PENDING', 'IN_PROGRESS')`,
+      `SELECT task_id, entity_type, entity_id, state_id, role_id, assigned_to FROM task WHERE task_id = $1 AND status IN ('PENDING', 'IN_PROGRESS')`,
       [id],
     );
     if (taskResult.rows.length === 0) {
@@ -57,6 +64,15 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const task = taskResult.rows[0];
+
+    // Verify the user is assigned to this task, has the required role, or is an admin/supervisor
+    const isAssigned = task.assigned_to === userId;
+    const hasTaskRole = task.role_id && roles.includes(task.role_id);
+    const isPrivileged = roles.includes("ADMINISTRATOR") || roles.includes("PLATFORM_ADMINISTRATOR");
+    if (!isAssigned && !hasTaskRole && !isPrivileged) {
+      return send403(reply, "FORBIDDEN", "You do not have permission to act on this task");
+    }
+
     const result = await executeTransition(
       task.entity_id, task.entity_type, action, userId, "OFFICER", roles, remarks,
     );

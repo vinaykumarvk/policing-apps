@@ -323,7 +323,7 @@ export default function Onboarding({
                 value={aadhaarInput}
                 onChange={(e) => setAadhaarInput(e.target.value.replace(/\D/g, "").slice(0, 12))}
                 onBlur={() => onFieldBlur("aadhaar", aadhaarInput, validateAadhaar)}
-                placeholder="Enter 12-digit Aadhaar"
+                placeholder={t("onboarding.placeholder_aadhaar")}
                 inputMode="numeric"
                 maxLength={12}
                 disabled={otpSent}
@@ -344,7 +344,7 @@ export default function Onboarding({
                     id="onb-otp"
                     value={otpInput}
                     onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                    placeholder="6-digit OTP"
+                    placeholder={t("onboarding.placeholder_otp")}
                     inputMode="numeric"
                     maxLength={6}
                   />
@@ -426,7 +426,7 @@ export default function Onboarding({
               value={panInput}
               onChange={(e) => setPanInput(e.target.value.toUpperCase().slice(0, 10))}
               onBlur={() => onFieldBlur("pan", panInput, validatePan)}
-              placeholder="AAAAA9999A"
+              placeholder={t("onboarding.placeholder_pan")}
               maxLength={10}
               style={{ textTransform: "uppercase" }}
             />
@@ -488,7 +488,7 @@ export default function Onboarding({
             value={manualFields.father_name}
             onChange={(e) => setManualFields((p) => ({ ...p, father_name: e.target.value }))}
             onBlur={() => onFieldBlur("father_name", manualFields.father_name, validateName)}
-            placeholder="Father's full name"
+            placeholder={t("onboarding.placeholder_father_name")}
           />
         </Field>
         <Field label="Marital Status" htmlFor="onb-marital" required>
@@ -509,7 +509,7 @@ export default function Onboarding({
             value={manualFields.email}
             onChange={(e) => setManualFields((p) => ({ ...p, email: e.target.value }))}
             onBlur={() => onFieldBlur("email", manualFields.email, validateEmail)}
-            placeholder="your@email.com"
+            placeholder={t("onboarding.placeholder_email")}
           />
         </Field>
         <Field label="Mobile Number" htmlFor="onb-mobile" required error={fieldErrors.mobile ? t(fieldErrors.mobile) : undefined}>
@@ -520,7 +520,7 @@ export default function Onboarding({
               value={manualFields.mobile}
               onChange={(e) => setManualFields((p) => ({ ...p, mobile: e.target.value.replace(/\D/g, "").slice(0, 10) }))}
               onBlur={() => onFieldBlur("mobile", manualFields.mobile, validateMobile)}
-              placeholder="10-digit mobile"
+              placeholder={t("onboarding.placeholder_mobile")}
               inputMode="numeric"
               maxLength={10}
             />

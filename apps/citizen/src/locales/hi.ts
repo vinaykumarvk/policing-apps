@@ -582,6 +582,12 @@ const hi: Record<string, string> = {
   "common.offline_cached": "{{time}} से कैश्ड डेटा दिखाया जा रहा है।",
   "common.stale_data": "कैश्ड डेटा दिखाया जा रहा है {{time}} जबकि नेटवर्क पुनर्प्राप्त हो रहा है।",
   "common.unsaved_confirm": "आपके पास सहेजे नहीं गए परिवर्तन हैं। क्या आप वाकई जाना चाहते हैं?",
+  "common.unsaved_title": "सहेजे नहीं गए परिवर्तन",
+  "common.leave": "छोड़ें",
+  "common.stay": "रुकें",
+  "idle.warning_title": "सत्र समाप्त हो रहा है",
+  "idle.warning_message": "निष्क्रियता के कारण आपका सत्र 1 मिनट में समाप्त हो जाएगा। लॉग इन रहने के लिए माउस हिलाएं या कोई कुंजी दबाएं।",
+  "idle.continue": "सत्र जारी रखें",
   "common.loading": "लोड हो रहा है...",
   "common.retry": "पुनः प्रयास करें",
   "common.view": "देखें",
@@ -686,6 +692,12 @@ const hi: Record<string, string> = {
   submitted: "जमा किया गया",
   disposed: "निपटान",
   language: "भाषा",
+  "onboarding.placeholder_aadhaar": "12 अंकों का आधार दर्ज करें",
+  "onboarding.placeholder_otp": "6 अंकों का OTP",
+  "onboarding.placeholder_pan": "AAAAA9999A",
+  "onboarding.placeholder_father_name": "पिता का पूरा नाम",
+  "onboarding.placeholder_email": "your@email.com",
+  "onboarding.placeholder_mobile": "10 अंकों का मोबाइल",
 };
 
 export default hi;

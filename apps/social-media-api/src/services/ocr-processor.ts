@@ -1,0 +1,76 @@
+import { query } from "../db";
+
+type DbRow = Record<string, unknown>;
+
+/**
+ * Submit a new OCR job for an evidence item.
+ * Processing runs asynchronously after the row is inserted.
+ */
+export async function submitOcrJob(
+  evidenceId: string,
+  createdBy: string,
+): Promise<{ jobId: string }> {
+  const result = await query(
+    `INSERT INTO ocr_job (evidence_id, status, created_by)
+     VALUES ($1, 'PENDING', $2)
+     RETURNING job_id`,
+    [evidenceId, createdBy],
+  );
+  const jobId = result.rows[0].job_id;
+
+  // Process asynchronously — fire-and-forget
+  processOcrJob(jobId).catch((err) =>
+    console.error("OCR processing error:", err),
+  );
+
+  return { jobId };
+}
+
+async function processOcrJob(jobId: string): Promise<void> {
+  await query(
+    `UPDATE ocr_job SET status = 'PROCESSING', updated_at = now() WHERE job_id = $1`,
+    [jobId],
+  );
+
+  try {
+    // Stub: In production, integrate tesseract.js or an external OCR service.
+    // For now, mark as completed with a placeholder result.
+    await query(
+      `UPDATE ocr_job
+       SET status = 'COMPLETED',
+           result_text = '[OCR processing placeholder - integrate tesseract.js]',
+           confidence = 0,
+           updated_at = now()
+       WHERE job_id = $1`,
+      [jobId],
+    );
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    await query(
+      `UPDATE ocr_job
+       SET status = 'FAILED',
+           error_message = $2,
+           updated_at = now()
+       WHERE job_id = $1`,
+      [jobId, errMsg || "Unknown error"],
+    );
+  }
+}
+
+/** Retrieve a single OCR job by its ID. */
+export async function getOcrJob(jobId: string): Promise<DbRow | null> {
+  const result = await query(
+    `SELECT * FROM ocr_job WHERE job_id = $1`,
+    [jobId],
+  );
+  return result.rows[0] || null;
+}
+
+/** Retrieve all OCR jobs associated with a given evidence item. */
+export async function getOcrJobsByEvidence(evidenceId: string): Promise<DbRow[]> {
+  const result = await query(
+    `SELECT * FROM ocr_job WHERE evidence_id = $1 ORDER BY created_at DESC`,
+    [evidenceId],
+  );
+  return result.rows;
+}

@@ -2,26 +2,57 @@ import { FastifyInstance } from "fastify";
 import { query } from "../db";
 import { sendError, send404 } from "../errors";
 import { executeTransition } from "../workflow-bridge";
+import { getAvailableTransitions } from "../workflow-bridge/transitions";
 
 export async function registerCaseRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/api/v1/cases", async () => {
+  app.get("/api/v1/cases", {
+    schema: {
+      querystring: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          state_id: { type: "string", maxLength: 100 },
+          priority: { type: "string", maxLength: 50 },
+          case_type: { type: "string", maxLength: 100 },
+          limit: { type: "integer", minimum: 1, maximum: 200, default: 50 },
+          offset: { type: "integer", minimum: 0, default: 0 },
+        },
+      },
+    },
+  }, async (request) => {
+    const { state_id, priority, case_type, limit: rawLimit, offset: rawOffset } = request.query as Record<string, string | undefined>;
+    const limit = Math.min(Math.max(parseInt(rawLimit || "50", 10) || 50, 1), 200);
+    const offset = Math.max(parseInt(rawOffset || "0", 10) || 0, 0);
+    const unitId = request.authUser?.unitId || null;
+
     const result = await query(
       `SELECT case_id, case_number, title, case_type, priority, state_id,
-              assigned_to, created_by, dopams_case_ref, created_at
-       FROM forensic_case ORDER BY created_at DESC`,
+              assigned_to, created_by, dopams_case_ref, created_at,
+              COUNT(*) OVER() AS total_count
+       FROM forensic_case
+       WHERE ($1::text IS NULL OR state_id = $1)
+         AND ($2::text IS NULL OR priority = $2)
+         AND ($3::text IS NULL OR case_type = $3)
+         AND ($6::text IS NULL OR unit_id = $6)
+       ORDER BY created_at DESC
+       LIMIT $4 OFFSET $5`,
+      [state_id || null, priority || null, case_type || null, limit, offset, unitId],
     );
-    return { cases: result.rows, total: result.rows.length };
+    const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
+    return { cases: result.rows.map(({ total_count, ...r }) => r), total };
   });
 
   app.post("/api/v1/cases", {
     schema: { body: { type: "object", additionalProperties: false, required: ["title"], properties: { title: { type: "string" }, description: { type: "string" }, caseType: { type: "string" } } } },
   }, async (request, reply) => {
     const { title, description, caseType } = request.body as { title: string; description?: string; caseType?: string };
-    const { userId } = request.authUser!;
+    const { userId, unitId } = request.authUser!;
+    const refResult = await query(`SELECT 'EF-CASE-' || EXTRACT(YEAR FROM NOW())::text || '-' || LPAD(nextval('forensic_case_ref_seq')::text, 6, '0') AS ref`);
+    const caseNumber = refResult.rows[0].ref;
     const result = await query(
-      `INSERT INTO forensic_case (title, description, case_type, created_by) VALUES ($1, $2, $3, $4)
-       RETURNING case_id, case_number, title, description, case_type, priority, state_id, created_by, created_at`,
-      [title, description || null, caseType || null, userId],
+      `INSERT INTO forensic_case (title, description, case_type, case_number, created_by, unit_id) VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING case_id, case_number, title, description, case_type, priority, state_id, created_by, unit_id, created_at`,
+      [title, description || null, caseType || null, caseNumber, userId, unitId],
     );
     reply.code(201);
     return { case: result.rows[0] };
@@ -31,16 +62,26 @@ export async function registerCaseRoutes(app: FastifyInstance): Promise<void> {
     schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const unitId = request.authUser?.unitId || null;
     const result = await query(
       `SELECT case_id, case_number, title, description, case_type, priority, state_id, row_version,
               assigned_to, created_by, dopams_case_ref, created_at, updated_at
-       FROM forensic_case WHERE case_id = $1`,
-      [id],
+       FROM forensic_case WHERE case_id = $1 AND ($2::text IS NULL OR unit_id = $2)`,
+      [id, unitId],
     );
     if (result.rows.length === 0) {
       return send404(reply, "CASE_NOT_FOUND", "Case not found");
     }
     return { case: result.rows[0] };
+  });
+
+  app.get("/api/v1/cases/:id/transitions", {
+    schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const result = await query(`SELECT state_id FROM forensic_case WHERE case_id = $1`, [id]);
+    if (result.rows.length === 0) return send404(reply, "CASE_NOT_FOUND", "Case not found");
+    return { transitions: getAvailableTransitions("forensic_case", result.rows[0].state_id) };
   });
 
   app.post("/api/v1/cases/:id/transition", {
@@ -52,6 +93,14 @@ export async function registerCaseRoutes(app: FastifyInstance): Promise<void> {
     const { id } = request.params as { id: string };
     const { transitionId, remarks } = request.body as { transitionId: string; remarks?: string };
     const { userId, roles } = request.authUser!;
+
+    // Validate transition is allowed from current state
+    const stateResult = await query(`SELECT state_id FROM forensic_case WHERE case_id = $1`, [id]);
+    if (stateResult.rows.length === 0) return send404(reply, "CASE_NOT_FOUND", "Case not found");
+    const available = getAvailableTransitions("forensic_case", stateResult.rows[0].state_id);
+    if (!available.some((t) => t.transitionId === transitionId)) {
+      return sendError(reply, 400, "INVALID_TRANSITION", "Transition not allowed from current state");
+    }
 
     const result = await executeTransition(
       id, "forensic_case", transitionId, userId, "OFFICER", roles, remarks,

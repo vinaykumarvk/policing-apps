@@ -38,7 +38,7 @@ export function useOfficerAuth() {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-    }).catch(() => {});
+    }).catch((err) => { console.warn("Logout request failed:", err instanceof Error ? err.message : "unknown"); });
     setAuth(null);
     setPostings([]);
     localStorage.removeItem("puda_officer_auth");
@@ -63,7 +63,7 @@ export function useOfficerAuth() {
           localStorage.removeItem("puda_officer_token");
         }
       })
-      .catch(() => {});
+      .catch((err) => { console.warn("Session verify failed:", err instanceof Error ? err.message : "unknown"); });
   }, []);
 
   // Load postings when auth changes
@@ -75,7 +75,7 @@ export function useOfficerAuth() {
     })
       .then((res) => (res.ok ? res.json() : { postings: [] }))
       .then((data) => setPostings(data.postings || []))
-      .catch(() => {});
+      .catch((err) => { console.warn("Postings fetch failed:", err instanceof Error ? err.message : "unknown"); });
   }, [auth?.user.user_id]);
 
   const roles = postings.flatMap((p) => p.system_role_ids);

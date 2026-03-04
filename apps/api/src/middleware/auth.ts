@@ -108,7 +108,7 @@ function parseAuthPayload(tokenPayload: string | JwtPayload): AuthPayload | null
 /** Verify a JWT token and return the payload */
 export function verifyToken(token: string): AuthPayload | null {
   try {
-    const tokenPayload = jwt.verify(token, JWT_SECRET) as string | JwtPayload;
+    const tokenPayload = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }) as string | JwtPayload;
     return parseAuthPayload(tokenPayload);
   } catch {
     return null;

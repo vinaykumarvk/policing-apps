@@ -582,6 +582,12 @@ const pa: Record<string, string> = {
   "common.offline_cached": "{{time}} ਤੋਂ ਕੈਸ਼ਡ ਡੇਟਾ ਦਿਖਾਇਆ ਜਾ ਰਿਹਾ ਹੈ।",
   "common.stale_data": "ਕੈਸ਼ਡ ਡੇਟਾ ਦਿਖਾਇਆ ਜਾ ਰਿਹਾ ਹੈ {{time}} ਜਦੋਂ ਕਿ ਨੈੱਟਵਰਕ ਮੁੜ ਪ੍ਰਾਪਤ ਹੋ ਰਿਹਾ ਹੈ।",
   "common.unsaved_confirm": "ਤੁਹਾਡੇ ਕੋਲ ਨਾ-ਸੰਭਾਲੇ ਬਦਲਾਅ ਹਨ। ਕੀ ਤੁਸੀਂ ਯਕੀਨਨ ਜਾਣਾ ਚਾਹੁੰਦੇ ਹੋ?",
+  "common.unsaved_title": "ਅਸੁਰੱਖਿਅਤ ਤਬਦੀਲੀਆਂ",
+  "common.leave": "ਛੱਡੋ",
+  "common.stay": "ਰਹੋ",
+  "idle.warning_title": "ਸੈਸ਼ਨ ਖਤਮ ਹੋ ਰਿਹਾ ਹੈ",
+  "idle.warning_message": "ਅਕਿਰਿਆਸ਼ੀਲਤਾ ਕਾਰਨ ਤੁਹਾਡਾ ਸੈਸ਼ਨ 1 ਮਿੰਟ ਵਿੱਚ ਖਤਮ ਹੋ ਜਾਵੇਗਾ। ਲੌਗ ਇਨ ਰਹਿਣ ਲਈ ਮਾਊਸ ਹਿਲਾਓ ਜਾਂ ਕੋਈ ਕੁੰਜੀ ਦਬਾਓ।",
+  "idle.continue": "ਸੈਸ਼ਨ ਜਾਰੀ ਰੱਖੋ",
   "common.loading": "ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ...",
   "common.retry": "ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ",
   "common.view": "ਦੇਖੋ",
@@ -686,6 +692,12 @@ const pa: Record<string, string> = {
   submitted: "ਜਮ੍ਹਾਂ",
   disposed: "ਨਿਪਟਾਰਾ",
   language: "ਭਾਸ਼ਾ",
+  "onboarding.placeholder_aadhaar": "12 ਅੰਕਾਂ ਦਾ ਆਧਾਰ ਦਾਖਲ ਕਰੋ",
+  "onboarding.placeholder_otp": "6 ਅੰਕਾਂ ਦਾ OTP",
+  "onboarding.placeholder_pan": "AAAAA9999A",
+  "onboarding.placeholder_father_name": "ਪਿਤਾ ਦਾ ਪੂਰਾ ਨਾਮ",
+  "onboarding.placeholder_email": "your@email.com",
+  "onboarding.placeholder_mobile": "10 ਅੰਕਾਂ ਦਾ ਮੋਬਾਈਲ",
 };
 
 export default pa;

@@ -135,7 +135,7 @@ export function PasswordInput({ className, ...props }: Omit<React.InputHTMLAttri
         className="ui-password-toggle"
         onClick={() => setVisible((v) => !v)}
         aria-label={visible ? "Hide password" : "Show password"}
-        tabIndex={-1}
+        tabIndex={0}
       >
         {visible ? (
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -615,6 +615,43 @@ export function Drawer({ open, onClose, children }: { open: boolean; onClose: ()
   );
 }
 
+type PaginationProps = {
+  page: number;
+  total: number;
+  limit: number;
+  onPageChange: (page: number) => void;
+};
+
+export function Pagination({ page, total, limit, onPageChange }: PaginationProps) {
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  if (totalPages <= 1) return null;
+  return (
+    <nav className="ui-pagination" aria-label="Pagination">
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={page <= 1}
+        onClick={() => onPageChange(page - 1)}
+        aria-label="Previous page"
+      >
+        ← Prev
+      </Button>
+      <span className="ui-pagination__info">
+        Page {page} of {totalPages} ({total} total)
+      </span>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={page >= totalPages}
+        onClick={() => onPageChange(page + 1)}
+        aria-label="Next page"
+      >
+        Next →
+      </Button>
+    </nav>
+  );
+}
+
 export function UploadConfirm({ file, onConfirm, onCancel, uploading = false, progress = 0 }: UploadConfirmProps) {
   const [thumbUrl, setThumbUrl] = useState<string | null>(null);
 
@@ -666,4 +703,276 @@ export function UploadConfirm({ file, onConfirm, onCancel, uploading = false, pr
       </div>
     </div>
   );
+}
+
+type TabItem = {
+  key: string;
+  label: string;
+  content: ReactNode;
+};
+
+type TabsProps = {
+  tabs: TabItem[];
+  defaultTab?: string;
+  className?: string;
+};
+
+export function Tabs({ tabs, defaultTab, className }: TabsProps) {
+  const [activeKey, setActiveKey] = useState(defaultTab || tabs[0]?.key || "");
+  const baseId = useId().replace(/[:]/g, "");
+  const activeTab = tabs.find((t) => t.key === activeKey) || tabs[0];
+  const tablistRef = useRef<HTMLDivElement>(null);
+
+  const handleTabKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const tabButtons = tablistRef.current?.querySelectorAll<HTMLElement>('[role="tab"]');
+    if (!tabButtons || tabButtons.length === 0) return;
+    const currentIdx = Array.from(tabButtons).findIndex((el) => el === document.activeElement);
+    let nextIdx = -1;
+    switch (e.key) {
+      case "ArrowRight": nextIdx = (currentIdx + 1) % tabButtons.length; break;
+      case "ArrowLeft": nextIdx = (currentIdx - 1 + tabButtons.length) % tabButtons.length; break;
+      case "Home": nextIdx = 0; break;
+      case "End": nextIdx = tabButtons.length - 1; break;
+      default: return;
+    }
+    e.preventDefault();
+    tabButtons[nextIdx].focus();
+    setActiveKey(tabs[nextIdx].key);
+  }, [tabs]);
+
+  return (
+    <div className={cx("ui-tabs", className)}>
+      <div className="ui-tabs__list" role="tablist" ref={tablistRef} onKeyDown={handleTabKeyDown}>
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            id={`tab-${baseId}-${tab.key}`}
+            aria-selected={tab.key === activeKey}
+            aria-controls={`tabpanel-${baseId}-${tab.key}`}
+            tabIndex={tab.key === activeKey ? 0 : -1}
+            className={cx("ui-tabs__tab", tab.key === activeKey && "ui-tabs__tab--active")}
+            onClick={() => setActiveKey(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {activeTab && (
+        <div
+          role="tabpanel"
+          id={`tabpanel-${baseId}-${activeTab.key}`}
+          aria-labelledby={`tab-${baseId}-${activeTab.key}`}
+          className="ui-tabs__panel"
+        >
+          {activeTab.content}
+        </div>
+      )}
+    </div>
+  );
+}
+
+type BadgeVariant = "success" | "warning" | "danger" | "info" | "neutral";
+
+type BadgeProps = React.HTMLAttributes<HTMLSpanElement> & {
+  variant?: BadgeVariant;
+};
+
+export function Badge({ variant = "neutral", className, ...props }: BadgeProps) {
+  return (
+    <span
+      className={cx("ui-badge", `ui-badge--${variant}`, className)}
+      {...props}
+    />
+  );
+}
+
+type MaskedFieldProps = {
+  value: string;
+  label: ReactNode;
+  maskChar?: string;
+  visibleChars?: number;
+  className?: string;
+};
+
+export function MaskedField({ value, label, maskChar = "•", visibleChars = 4, className }: MaskedFieldProps) {
+  const [revealed, setRevealed] = useState(false);
+  const masked = value.length > visibleChars
+    ? maskChar.repeat(value.length - visibleChars) + value.slice(-visibleChars)
+    : value;
+
+  return (
+    <div className={cx("ui-masked-field", className)}>
+      <span className="ui-masked-field__label">{label}</span>
+      <span className="ui-masked-field__value">{revealed ? value : masked}</span>
+      <button
+        type="button"
+        className="ui-masked-field__toggle"
+        onClick={() => setRevealed((r) => !r)}
+        aria-label={revealed ? "Hide value" : "Reveal value"}
+      >
+        {revealed ? (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+            <line x1="1" y1="1" x2="23" y2="23" />
+          </svg>
+        ) : (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        )}
+      </button>
+    </div>
+  );
+}
+
+type ConfirmDialogProps = {
+  open: boolean;
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  variant?: "danger" | "warning" | "primary";
+  onConfirm: () => void;
+  onCancel: () => void;
+};
+
+export function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+  variant = "primary",
+  onConfirm,
+  onCancel,
+}: ConfirmDialogProps) {
+  return (
+    <Modal
+      open={open}
+      title={title}
+      onClose={onCancel}
+      actions={
+        <>
+          <Button variant="ghost" onClick={onCancel}>{cancelLabel}</Button>
+          <Button variant={variant === "danger" ? "danger" : variant === "warning" ? "warning" : "primary"} onClick={onConfirm}>{confirmLabel}</Button>
+        </>
+      }
+    >
+      <p>{message}</p>
+    </Modal>
+  );
+}
+
+type DataFreshnessProps = {
+  updatedAt: string;
+  className?: string;
+};
+
+export function DataFreshness({ updatedAt, className }: DataFreshnessProps) {
+  const ago = timeAgo(updatedAt);
+  const date = new Date(updatedAt);
+  const isStale = Date.now() - date.getTime() > 5 * 60 * 1000;
+  return (
+    <span className={cx("ui-data-freshness", isStale && "ui-data-freshness--stale", className)} title={date.toLocaleString()}>
+      {ago}
+    </span>
+  );
+}
+
+type SlaCountdownProps = {
+  dueAt: string;
+  className?: string;
+};
+
+export function SlaCountdown({ dueAt, className }: SlaCountdownProps) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const due = new Date(dueAt).getTime();
+  const diff = due - now;
+  const isOverdue = diff < 0;
+  const absDiff = Math.abs(diff);
+  const hours = Math.floor(absDiff / 3_600_000);
+  const minutes = Math.floor((absDiff % 3_600_000) / 60_000);
+
+  const label = isOverdue
+    ? `Overdue by ${hours}h ${minutes}m`
+    : hours > 0
+    ? `${hours}h ${minutes}m remaining`
+    : `${minutes}m remaining`;
+
+  const variant = isOverdue ? "danger" : hours < 2 ? "warning" : "success";
+
+  return (
+    <span className={cx("ui-sla-countdown", `ui-sla-countdown--${variant}`, className)}>
+      {label}
+    </span>
+  );
+}
+
+type ConfidenceScoreProps = {
+  score: number;
+  label?: string;
+  className?: string;
+};
+
+export function ConfidenceScore({ score, label, className }: ConfidenceScoreProps) {
+  const pct = Math.max(0, Math.min(100, Math.round(score * 100)));
+  const variant = pct >= 80 ? "success" : pct >= 50 ? "warning" : "danger";
+
+  return (
+    <div className={cx("ui-confidence", className)}>
+      {label && <span className="ui-confidence__label">{label}</span>}
+      <div className="ui-confidence__bar">
+        <div className={cx("ui-confidence__fill", `ui-confidence__fill--${variant}`)} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="ui-confidence__value">{pct}%</span>
+    </div>
+  );
+}
+
+/* ── useIdleTimeout hook ── */
+
+type IdleTimeoutOptions = {
+  warningMs?: number;
+  timeoutMs?: number;
+};
+
+export function useIdleTimeout(
+  onTimeout: () => void,
+  { warningMs = 14 * 60 * 1000, timeoutMs = 15 * 60 * 1000 }: IdleTimeoutOptions = {},
+) {
+  const [showWarning, setShowWarning] = useState(false);
+  const warningRef = useRef<ReturnType<typeof setTimeout>>();
+  const logoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const onTimeoutRef = useRef(onTimeout);
+  onTimeoutRef.current = onTimeout;
+
+  useEffect(() => {
+    const resetTimers = () => {
+      clearTimeout(warningRef.current);
+      clearTimeout(logoutRef.current);
+      setShowWarning(false);
+      warningRef.current = setTimeout(() => setShowWarning(true), warningMs);
+      logoutRef.current = setTimeout(() => onTimeoutRef.current(), timeoutMs);
+    };
+    const events = ["mousedown", "keydown", "touchstart", "scroll"] as const;
+    events.forEach((e) => window.addEventListener(e, resetTimers, { passive: true }));
+    resetTimers();
+    return () => {
+      clearTimeout(warningRef.current);
+      clearTimeout(logoutRef.current);
+      events.forEach((e) => window.removeEventListener(e, resetTimers));
+    };
+  }, [warningMs, timeoutMs]);
+
+  return { showWarning, dismissWarning: useCallback(() => setShowWarning(false), []) };
 }

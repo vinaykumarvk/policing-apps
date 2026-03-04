@@ -1,0 +1,3 @@
+ALTER TABLE user_account ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE user_account ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+ALTER TABLE user_account ADD COLUMN IF NOT EXISTS last_failed_login TIMESTAMPTZ;

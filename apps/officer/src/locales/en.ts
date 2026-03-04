@@ -217,6 +217,12 @@ export default {
 
   // Common
   "common.unsaved_confirm": "You have unsaved changes. Are you sure you want to leave?",
+  "common.unsaved_title": "Unsaved Changes",
+  "common.leave": "Leave",
+  "common.stay": "Stay",
+  "idle.warning_title": "Session Expiring",
+  "idle.warning_message": "Your session will expire in 1 minute due to inactivity. Move the mouse or press a key to stay logged in.",
+  "idle.continue": "Continue Session",
   "common.status": "Status",
   "common.loading": "Loading...",
   "common.error": "An error occurred",

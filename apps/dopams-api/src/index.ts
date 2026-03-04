@@ -24,6 +24,8 @@ async function main() {
     forceExit.unref();
 
     try {
+      const { stopSlaScheduler } = await import("./sla-scheduler");
+      stopSlaScheduler();
       await app.close();
       const { pool } = await import("./db");
       await pool.end();
@@ -43,6 +45,9 @@ async function main() {
   try {
     await app.listen({ port, host });
     app.log.info(`DOPAMS API listening on ${host}:${port}`);
+
+    const { startSlaScheduler } = await import("./sla-scheduler");
+    startSlaScheduler();
   } catch (err) {
     app.log.error(err);
     process.exit(1);

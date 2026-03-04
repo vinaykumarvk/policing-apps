@@ -1,0 +1,16 @@
+{
+  "workflowId": "dopams_memo",
+  "version": "1.0.0",
+  "states": [
+    { "stateId": "DRAFTED", "type": "initial", "taskRequired": false },
+    { "stateId": "REVIEW_PENDING", "type": "active", "taskRequired": true, "roleId": "SUPERVISORY_OFFICER", "slaDays": 2 },
+    { "stateId": "APPROVED", "type": "active", "taskRequired": true, "roleId": "DISTRICT_OPERATOR" },
+    { "stateId": "DISPATCHED", "type": "terminal", "taskRequired": false }
+  ],
+  "transitions": [
+    { "transitionId": "SUBMIT_REVIEW", "fromStateId": "DRAFTED", "toStateId": "REVIEW_PENDING", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["DISTRICT_OPERATOR", "TOLL_FREE_OPERATOR"] } }] },
+    { "transitionId": "APPROVE", "fromStateId": "REVIEW_PENDING", "toStateId": "APPROVED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISORY_OFFICER", "ZONAL_OFFICER"] } }] },
+    { "transitionId": "REJECT", "fromStateId": "REVIEW_PENDING", "toStateId": "DRAFTED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["SUPERVISORY_OFFICER"] } }] },
+    { "transitionId": "DISPATCH", "fromStateId": "APPROVED", "toStateId": "DISPATCHED", "trigger": "manual", "guards": [{ "type": "ACTOR_ROLE", "params": { "roles": ["DISTRICT_OPERATOR"] } }] }
+  ]
+}

@@ -582,6 +582,12 @@ const en = {
   "common.offline_cached": "Showing cached data from {{time}}.",
   "common.stale_data": "Showing cached data {{time}} while the network is recovering.",
   "common.unsaved_confirm": "You have unsaved changes. Are you sure you want to leave?",
+  "common.unsaved_title": "Unsaved Changes",
+  "common.leave": "Leave",
+  "common.stay": "Stay",
+  "idle.warning_title": "Session Expiring",
+  "idle.warning_message": "Your session will expire in 1 minute due to inactivity. Move the mouse or press a key to stay logged in.",
+  "idle.continue": "Continue Session",
   "common.loading": "Loading...",
   "common.retry": "Retry",
   "common.view": "View",
@@ -686,6 +692,12 @@ const en = {
   submitted: "Submitted",
   disposed: "Disposed",
   language: "Language",
+  "onboarding.placeholder_aadhaar": "Enter 12-digit Aadhaar",
+  "onboarding.placeholder_otp": "6-digit OTP",
+  "onboarding.placeholder_pan": "AAAAA9999A",
+  "onboarding.placeholder_father_name": "Father's full name",
+  "onboarding.placeholder_email": "your@email.com",
+  "onboarding.placeholder_mobile": "10-digit mobile",
 } as const;
 
 export default en;

@@ -282,8 +282,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build citizen and officer portals
-        run: npm run build:citizen && npm run build:officer
+      - name: Build all frontend portals
+        run: npm run build:citizen && npm run build:officer && npm run build:dopams-ui && npm run build:forensic-ui && npm run build:social-media-ui
 
       - name: Enforce frontend performance budgets
         run: npm run check:frontend-budgets
@@ -568,6 +568,146 @@ jobs:
           name: playwright-e2e-report
           path: playwright-report
           if-no-files-found: ignore
+
+  # --- New API test suites ---
+
+  dopams-api-tests:
+    needs: [build-and-typecheck]
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      VITEST: "true"
+      JWT_SECRET: ci-test-secret
+      DOPAMS_DATABASE_URL: postgres://puda:puda@localhost:5432/dopams
+      ALLOWED_ORIGINS: http://localhost:5175
+      RATE_LIMIT_MAX: "10000"
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: dopams
+          POSTGRES_USER: puda
+          POSTGRES_PASSWORD: puda
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U puda -d dopams"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run DOPAMS migrations
+        run: npm --workspace apps/dopams-api run migrate
+
+      - name: Seed DOPAMS test data
+        run: npm --workspace apps/dopams-api run seed
+
+      - name: Run DOPAMS API tests
+        run: npm run test:dopams
+
+  forensic-api-tests:
+    needs: [build-and-typecheck]
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      VITEST: "true"
+      JWT_SECRET: ci-test-secret
+      FORENSIC_DATABASE_URL: postgres://puda:puda@localhost:5432/forensic
+      ALLOWED_ORIGINS: http://localhost:5176
+      RATE_LIMIT_MAX: "10000"
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: forensic
+          POSTGRES_USER: puda
+          POSTGRES_PASSWORD: puda
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U puda -d forensic"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Forensic migrations
+        run: npm --workspace apps/forensic-api run migrate
+
+      - name: Seed Forensic test data
+        run: npm --workspace apps/forensic-api run seed
+
+      - name: Run Forensic API tests
+        run: npm run test:forensic
+
+  social-media-api-tests:
+    needs: [build-and-typecheck]
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      VITEST: "true"
+      JWT_SECRET: ci-test-secret
+      SM_DATABASE_URL: postgres://puda:puda@localhost:5432/social_media
+      ALLOWED_ORIGINS: http://localhost:5177
+      RATE_LIMIT_MAX: "10000"
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: social_media
+          POSTGRES_USER: puda
+          POSTGRES_PASSWORD: puda
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U puda -d social_media"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Social Media migrations
+        run: npm --workspace apps/social-media-api run migrate
+
+      - name: Seed Social Media test data
+        run: npm --workspace apps/social-media-api run seed
+
+      - name: Run Social Media API tests
+        run: npm run test:social-media
 
   security-scan:
     runs-on: ubuntu-latest

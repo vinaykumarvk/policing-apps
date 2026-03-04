@@ -4,7 +4,7 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import "./app.css";
-import { Alert, Button, Drawer, useToast, SkeletonBlock, parseHash, buildHash, pushHash, replaceHash, isSuppressed, validateView } from "@puda/shared";
+import { Alert, Button, Modal, ConfirmDialog, Drawer, useToast, useIdleTimeout, SkeletonBlock, parseHash, buildHash, pushHash, replaceHash, isSuppressed, validateView } from "@puda/shared";
 import { Task, Application, apiBaseUrl } from "./types";
 import { useOfficerAuth } from "./useOfficerAuth";
 import OfficerLogin from "./OfficerLogin";
@@ -66,6 +66,8 @@ export default function App() {
   const hashInitializedRef = useRef(false);
   const formDirtyRef = useRef(false);
   const [formDirty, setFormDirty] = useState(false);
+  const [unsavedConfirmOpen, setUnsavedConfirmOpen] = useState(false);
+  const pendingNavRef = useRef<(() => void) | null>(null);
 
   // Inbox cache
   const INBOX_CACHE_KEY = "puda_officer_cache_inbox";
@@ -76,6 +78,8 @@ export default function App() {
     clearOfficerCachedState();
     logout();
   }, [logout]);
+
+  const { showWarning: idleWarning, dismissWarning } = useIdleTimeout(handleLogout);
 
   // PERF-026: Lazy-load secondary locale bundle when language preference changes
   useEffect(() => {
@@ -137,10 +141,24 @@ export default function App() {
   // Scroll to top on view change
   useEffect(() => { window.scrollTo(0, 0); }, [view]);
 
-  const confirmNavigation = useCallback((): boolean => {
-    if (!formDirty) return true;
-    return window.confirm(t("common.unsaved_confirm"));
-  }, [formDirty, t]);
+  /** Guard navigation — shows dialog if form is dirty. */
+  const guardNavigation = useCallback((action: () => void) => {
+    if (!formDirty) { action(); return; }
+    pendingNavRef.current = action;
+    setUnsavedConfirmOpen(true);
+  }, [formDirty]);
+
+  const handleConfirmNav = useCallback(() => {
+    setUnsavedConfirmOpen(false);
+    setFormDirty(false);
+    pendingNavRef.current?.();
+    pendingNavRef.current = null;
+  }, []);
+
+  const handleCancelNav = useCallback(() => {
+    setUnsavedConfirmOpen(false);
+    pendingNavRef.current = null;
+  }, []);
 
   const loadInbox = useCallback(async () => {
     if (!officerUserId) return;
@@ -262,20 +280,21 @@ export default function App() {
   }, [inboxFeedback]);
 
   const handleBack = () => {
-    if (!confirmNavigation()) return;
-    navDirectionRef.current = "push";
-    setFormDirty(false);
-    const prev = navStackRef.current.pop();
-    if (prev) {
-      setView(prev.view);
-      setFromSearch(prev.fromSearch);
-    } else {
-      setView("inbox");
-      setFromSearch(false);
-    }
-    setSelectedTask(null);
-    setApplication(null);
-    setServiceConfig(null);
+    guardNavigation(() => {
+      navDirectionRef.current = "push";
+      setFormDirty(false);
+      const prev = navStackRef.current.pop();
+      if (prev) {
+        setView(prev.view);
+        setFromSearch(prev.fromSearch);
+      } else {
+        setView("inbox");
+        setFromSearch(false);
+      }
+      setSelectedTask(null);
+      setApplication(null);
+      setServiceConfig(null);
+    });
   };
 
   useEffect(() => {
@@ -297,16 +316,17 @@ export default function App() {
 
   // Navigate via sidebar/bottom nav
   const navigate = (target: View) => {
-    if (!confirmNavigation()) return;
-    navDirectionRef.current = "push";
-    navStackRef.current.push({ view, fromSearch });
-    setFormDirty(false);
-    setSelectedTask(null);
-    setApplication(null);
-    setServiceConfig(null);
-    setFromSearch(false);
-    setView(target);
-    setDrawerOpen(false);
+    guardNavigation(() => {
+      navDirectionRef.current = "push";
+      navStackRef.current.push({ view, fromSearch });
+      setFormDirty(false);
+      setSelectedTask(null);
+      setApplication(null);
+      setServiceConfig(null);
+      setFromSearch(false);
+      setView(target);
+      setDrawerOpen(false);
+    });
   };
 
   // --- Hash-based routing ---
@@ -392,11 +412,18 @@ export default function App() {
     const handlePopState = () => {
       if (isSuppressed()) return;
       if (formDirtyRef.current) {
-        if (!window.confirm(t("common.unsaved_confirm"))) {
-          pushHash(officerViewToHash());
-          return;
-        }
-        setFormDirty(false);
+        const targetHash = window.location.hash;
+        pushHash(officerViewToHash());
+        pendingNavRef.current = () => {
+          setFormDirty(false);
+          const p = parseHash(targetHash);
+          const v = validateView(p.view, OFFICER_VALID_VIEWS, "");
+          navDirectionRef.current = "none";
+          navStackRef.current.pop();
+          replaceHash(targetHash);
+        };
+        setUnsavedConfirmOpen(true);
+        return;
       }
       const parsed = parseHash(window.location.hash);
       const validView = validateView(parsed.view, OFFICER_VALID_VIEWS, "");
@@ -748,6 +775,19 @@ export default function App() {
           </main>
         </div>
       </div>
+      <ConfirmDialog
+        open={unsavedConfirmOpen}
+        title={t("common.unsaved_title")}
+        description={t("common.unsaved_confirm")}
+        variant="warning"
+        confirmLabel={t("common.leave")}
+        cancelLabel={t("common.stay")}
+        onConfirm={handleConfirmNav}
+        onCancel={handleCancelNav}
+      />
+      <Modal open={idleWarning} title={t("idle.warning_title")} onClose={dismissWarning} actions={<Button onClick={dismissWarning}>{t("idle.continue")}</Button>}>
+        <p>{t("idle.warning_message")}</p>
+      </Modal>
     </SecondaryLanguageProvider>
   );
 }

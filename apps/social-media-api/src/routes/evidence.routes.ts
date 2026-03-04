@@ -1,39 +1,171 @@
 import { FastifyInstance } from "fastify";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { query } from "../db";
 import { sendError, send404 } from "../errors";
 import { executeTransition } from "../workflow-bridge";
+import { getAvailableTransitions } from "../workflow-bridge/transitions";
 
 export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void> {
   app.post("/api/v1/evidence/capture", {
-    schema: { body: { type: "object", additionalProperties: false, required: ["contentId"], properties: { contentId: { type: "string", format: "uuid" }, captureType: { type: "string" }, notes: { type: "string" } } } },
+    schema: { body: { type: "object", additionalProperties: false, required: ["contentId"], properties: { contentId: { type: "string", format: "uuid" }, captureType: { type: "string" }, notes: { type: "string" }, screenshotUrl: { type: "string" }, archiveUrl: { type: "string" }, fileContent: { type: "string", description: "Base64-encoded file content for hash computation" } } } },
   }, async (request, reply) => {
-    const { contentId, captureType, notes } = request.body as { contentId: string; captureType?: string; notes?: string };
-    const { userId } = request.authUser!;
-    const result = await query(
-      `INSERT INTO evidence_item (content_id, capture_type, captured_by)
-       VALUES ($1, $2, $3)
-       RETURNING evidence_id, content_id, capture_type, state_id, captured_by, created_at`,
-      [contentId, captureType || "MANUAL", userId],
-    );
-    reply.code(201);
-    return { evidence: result.rows[0] };
+    try {
+      const { contentId, captureType, notes, screenshotUrl, archiveUrl, fileContent } = request.body as { contentId: string; captureType?: string; notes?: string; screenshotUrl?: string; archiveUrl?: string; fileContent?: string };
+      const { userId } = request.authUser!;
+      const unitId = request.authUser?.unitId || null;
+
+      // Compute SHA-256 hash of the file content if provided
+      let fileHash: string | null = null;
+      if (fileContent) {
+        const buffer = Buffer.from(fileContent, "base64");
+        fileHash = createHash("sha256").update(buffer).digest("hex");
+      } else if (screenshotUrl) {
+        // If a screenshot path is provided without inline content, try to hash from disk
+        try {
+          const buffer = await readFile(screenshotUrl);
+          fileHash = createHash("sha256").update(buffer).digest("hex");
+        } catch (fsErr: unknown) {
+          request.log.warn(fsErr, "Could not read file for hash computation");
+        }
+      } else if (archiveUrl) {
+        try {
+          const buffer = await readFile(archiveUrl);
+          fileHash = createHash("sha256").update(buffer).digest("hex");
+        } catch (fsErr: unknown) {
+          request.log.warn(fsErr, "Could not read archive for hash computation");
+        }
+      }
+
+      const refResult = await query(`SELECT 'TEF-EVD-' || EXTRACT(YEAR FROM NOW())::text || '-' || LPAD(nextval('sm_evidence_ref_seq')::text, 6, '0') AS ref`);
+      const evidenceRef = refResult.rows[0].ref;
+      const result = await query(
+        `INSERT INTO evidence_item (content_id, capture_type, screenshot_url, archive_url, hash_sha256, captured_by, unit_id, evidence_ref)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING evidence_id, evidence_ref, content_id, capture_type, hash_sha256, state_id, captured_by, created_at`,
+        [contentId, captureType || "MANUAL", screenshotUrl || null, archiveUrl || null, fileHash, userId, unitId, evidenceRef],
+      );
+      reply.code(201);
+      return { evidence: result.rows[0] };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to capture evidence");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
   });
 
   app.get("/api/v1/evidence/:id", {
     schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
   }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const result = await query(
-      `SELECT evidence_id, content_id, alert_id, case_id, capture_type, screenshot_url,
-              archive_url, hash_sha256, chain_of_custody, state_id, row_version,
-              captured_by, created_at, updated_at
-       FROM evidence_item WHERE evidence_id = $1`,
-      [id],
-    );
-    if (result.rows.length === 0) {
-      return send404(reply, "EVIDENCE_NOT_FOUND", "Evidence not found");
+    try {
+      const { id } = request.params as { id: string };
+      const unitId = request.authUser?.unitId || null;
+      const result = await query(
+        `SELECT evidence_id, evidence_ref, content_id, alert_id, case_id, capture_type, screenshot_url,
+                archive_url, hash_sha256, chain_of_custody, state_id, row_version,
+                captured_by, created_at, updated_at
+         FROM evidence_item WHERE evidence_id = $1 AND ($2::text IS NULL OR unit_id = $2)`,
+        [id, unitId],
+      );
+      if (result.rows.length === 0) {
+        return send404(reply, "EVIDENCE_NOT_FOUND", "Evidence not found");
+      }
+      // Log access as custody event
+      const { userId } = request.authUser!;
+      await query(
+        `INSERT INTO custody_event (evidence_id, event_type, actor_id, details) VALUES ($1, 'VIEWED', $2, '{}')`,
+        [id, userId],
+      ).catch((err: unknown) => { app.log.warn(err, "Custody event write failed"); }); // non-blocking
+      return { evidence: result.rows[0] };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to get evidence");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
     }
-    return { evidence: result.rows[0] };
+  });
+
+  // Custody log
+  app.get("/api/v1/evidence/:id/custody-log", {
+    schema: { params: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const result = await query(
+        `SELECT ce.event_id, ce.evidence_id, ce.event_type, ce.actor_id, ce.details, ce.created_at, u.full_name AS actor_name
+         FROM custody_event ce LEFT JOIN user_account u ON u.user_id = ce.actor_id
+         WHERE ce.evidence_id = $1 ORDER BY ce.created_at DESC`,
+        [id],
+      );
+      return { events: result.rows };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to get custody log");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  // Verify hash — recomputes SHA-256 from file on disk and compares against stored hash
+  app.get("/api/v1/evidence/:id/verify", {
+    schema: { params: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const result = await query(`SELECT evidence_id, hash_sha256, screenshot_url, archive_url, state_id FROM evidence_item WHERE evidence_id = $1`, [id]);
+      if (result.rows.length === 0) return send404(reply, "EVIDENCE_NOT_FOUND", "Evidence not found");
+      const ev = result.rows[0];
+
+      if (!ev.hash_sha256) {
+        return { evidenceId: ev.evidence_id, hashSha256: null, verified: false, reason: "NO_HASH_STORED", stateId: ev.state_id };
+      }
+
+      // Attempt to recompute hash from file on disk (try screenshot first, then archive)
+      let recomputedHash: string | null = null;
+      let verificationError: string | null = null;
+      const fileUrl = ev.screenshot_url || ev.archive_url;
+      if (fileUrl) {
+        try {
+          const buffer = await readFile(fileUrl);
+          recomputedHash = createHash("sha256").update(buffer).digest("hex");
+        } catch (fsErr: unknown) {
+          verificationError = "FILE_NOT_ACCESSIBLE";
+          request.log.warn(fsErr, "Could not read evidence file for hash verification");
+        }
+      } else {
+        verificationError = "NO_FILE_PATH";
+      }
+
+      const verified = recomputedHash !== null && recomputedHash === ev.hash_sha256;
+
+      // Log verification attempt as custody event
+      const { userId } = request.authUser!;
+      await query(
+        `INSERT INTO custody_event (evidence_id, event_type, actor_id, details) VALUES ($1, 'HASH_VERIFIED', $2, $3)`,
+        [id, userId, JSON.stringify({ verified, storedHash: ev.hash_sha256, recomputedHash, verificationError })],
+      ).catch((custodyErr: unknown) => { app.log.warn(custodyErr, "Custody event write failed"); });
+
+      return {
+        evidenceId: ev.evidence_id,
+        hashSha256: ev.hash_sha256,
+        recomputedHash: recomputedHash || null,
+        verified,
+        ...(verificationError ? { reason: verificationError } : {}),
+        stateId: ev.state_id,
+      };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to verify evidence hash");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  app.get("/api/v1/evidence/:id/transitions", {
+    schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const result = await query(`SELECT state_id FROM evidence_item WHERE evidence_id = $1`, [id]);
+      if (result.rows.length === 0) return send404(reply, "EVIDENCE_NOT_FOUND", "Evidence not found");
+      return { transitions: getAvailableTransitions("sm_evidence", result.rows[0].state_id) };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to get evidence transitions");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
   });
 
   app.post("/api/v1/evidence/:id/transition", {
@@ -42,16 +174,29 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
       body: { type: "object", additionalProperties: false, required: ["transitionId"], properties: { transitionId: { type: "string" }, remarks: { type: "string" } } },
     },
   }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const { transitionId, remarks } = request.body as { transitionId: string; remarks?: string };
-    const { userId, roles } = request.authUser!;
+    try {
+      const { id } = request.params as { id: string };
+      const { transitionId, remarks } = request.body as { transitionId: string; remarks?: string };
+      const { userId, roles } = request.authUser!;
 
-    const result = await executeTransition(
-      id, "sm_evidence", transitionId, userId, "OFFICER", roles, remarks,
-    );
-    if (!result.success) {
-      return sendError(reply, 409, result.error || "TRANSITION_FAILED", "Evidence transition failed");
+      // Validate transition is allowed from current state
+      const stateResult = await query(`SELECT state_id FROM evidence_item WHERE evidence_id = $1`, [id]);
+      if (stateResult.rows.length === 0) return send404(reply, "EVIDENCE_NOT_FOUND", "Evidence not found");
+      const available = getAvailableTransitions("sm_evidence", stateResult.rows[0].state_id);
+      if (!available.some((t) => t.transitionId === transitionId)) {
+        return sendError(reply, 400, "INVALID_TRANSITION", "Transition not allowed from current state");
+      }
+
+      const result = await executeTransition(
+        id, "sm_evidence", transitionId, userId, "OFFICER", roles, remarks,
+      );
+      if (!result.success) {
+        return sendError(reply, 409, result.error || "TRANSITION_FAILED", "Evidence transition failed");
+      }
+      return { success: true, newStateId: result.newStateId };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to execute evidence transition");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
     }
-    return { success: true, newStateId: result.newStateId };
   });
 }

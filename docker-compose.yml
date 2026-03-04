@@ -17,6 +17,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - puda-backend
 
   # --- API Server ---
   api:
@@ -32,7 +34,7 @@ services:
       NODE_ENV: development
       DATABASE_URL: postgres://puda:puda@postgres:5432/puda
       DATABASE_SSL: "false"
-      JWT_SECRET: "${JWT_SECRET:-puda-local-dev-secret}"
+      JWT_SECRET: "${PUDA_JWT_SECRET:-puda-local-dev-secret}"
       ALLOWED_ORIGINS: "http://localhost:5173,http://localhost:5174,http://localhost:3002,http://localhost:3003"
       STORAGE_BASE_DIR: /app/uploads
       EMAIL_ENABLED: "false"
@@ -41,6 +43,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - puda-backend
+      - frontend
 
   # --- Citizen Portal ---
   citizen:
@@ -53,6 +58,8 @@ services:
     restart: unless-stopped
     ports:
       - "3002:8080"
+    networks:
+      - frontend
 
   # --- Officer Portal ---
   officer:
@@ -65,7 +72,215 @@ services:
     restart: unless-stopped
     ports:
       - "3003:8080"
+    networks:
+      - frontend
+
+  # ===========================================================================
+  # Social Media Intelligence
+  # ===========================================================================
+
+  social-media-db:
+    image: postgres:15-alpine
+    container_name: sm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: social_media
+      POSTGRES_USER: puda
+      POSTGRES_PASSWORD: puda
+    ports:
+      - "5434:5432"
+    volumes:
+      - sm_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U puda"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sm-backend
+
+  social-media-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.social-media-api
+    container_name: sm-api
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "3010:8080"
+    environment:
+      PORT: "8080"
+      NODE_ENV: development
+      SM_DATABASE_URL: postgres://puda:puda@social-media-db:5432/social_media
+      JWT_SECRET: "${SM_JWT_SECRET:-sm-local-dev-secret}"
+      ALLOWED_ORIGINS: "http://localhost:3020"
+    command: ["sh", "-c", "node apps/social-media-api/dist/migrate-runner.js && node apps/social-media-api/dist/index.js"]
+    depends_on:
+      social-media-db:
+        condition: service_healthy
+    networks:
+      - sm-backend
+      - frontend
+
+  social-media-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.social-media-ui
+      args:
+        VITE_API_BASE_URL: http://localhost:3010
+    container_name: sm-ui
+    restart: unless-stopped
+    ports:
+      - "3020:8080"
+    networks:
+      - frontend
+
+  # ===========================================================================
+  # DOPAMS (Drug Offence Prevention & Monitoring System)
+  # ===========================================================================
+
+  dopams-db:
+    image: postgres:15-alpine
+    container_name: dopams-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dopams
+      POSTGRES_USER: puda
+      POSTGRES_PASSWORD: puda
+    ports:
+      - "5435:5432"
+    volumes:
+      - dopams_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U puda"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dopams-backend
+
+  dopams-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dopams-api
+    container_name: dopams-api
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "3011:8080"
+    environment:
+      PORT: "8080"
+      NODE_ENV: development
+      DOPAMS_DATABASE_URL: postgres://puda:puda@dopams-db:5432/dopams
+      JWT_SECRET: "${DOPAMS_JWT_SECRET:-dopams-local-dev-secret}"
+      ALLOWED_ORIGINS: "http://localhost:3021"
+    command: ["sh", "-c", "node apps/dopams-api/dist/migrate-runner.js && node apps/dopams-api/dist/index.js"]
+    depends_on:
+      dopams-db:
+        condition: service_healthy
+    networks:
+      - dopams-backend
+      - frontend
+
+  dopams-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.dopams-ui
+      args:
+        VITE_API_BASE_URL: http://localhost:3011
+    container_name: dopams-ui
+    restart: unless-stopped
+    ports:
+      - "3021:8080"
+    networks:
+      - frontend
+
+  # ===========================================================================
+  # Forensic Science Lab
+  # ===========================================================================
+
+  forensic-db:
+    image: postgres:15-alpine
+    container_name: forensic-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: forensic
+      POSTGRES_USER: puda
+      POSTGRES_PASSWORD: puda
+    ports:
+      - "5436:5432"
+    volumes:
+      - forensic_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U puda"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - forensic-backend
+
+  forensic-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.forensic-api
+    container_name: forensic-api
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "3012:8080"
+    environment:
+      PORT: "8080"
+      NODE_ENV: development
+      FORENSIC_DATABASE_URL: postgres://puda:puda@forensic-db:5432/forensic
+      JWT_SECRET: "${FORENSIC_JWT_SECRET:-forensic-local-dev-secret}"
+      ALLOWED_ORIGINS: "http://localhost:3022"
+    command: ["sh", "-c", "node apps/forensic-api/dist/migrate-runner.js && node apps/forensic-api/dist/index.js"]
+    depends_on:
+      forensic-db:
+        condition: service_healthy
+    networks:
+      - forensic-backend
+      - frontend
+
+  forensic-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.forensic-ui
+      args:
+        VITE_API_BASE_URL: http://localhost:3012
+    container_name: forensic-ui
+    restart: unless-stopped
+    ports:
+      - "3022:8080"
+    networks:
+      - frontend
+
+networks:
+  puda-backend:
+    internal: true
+  sm-backend:
+    internal: true
+  dopams-backend:
+    internal: true
+  forensic-backend:
+    internal: true
+  frontend:
 
 volumes:
   puda_pg_data:
   puda_uploads:
+  sm_pg_data:
+  dopams_pg_data:
+  forensic_pg_data:
