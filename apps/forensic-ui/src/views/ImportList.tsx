@@ -5,7 +5,17 @@ import { apiBaseUrl, ImportJob } from "../types";
 
 const LIMIT = 20;
 
+type FacetEntry = { value: string; label?: string; count: number };
+type Facets = Record<string, FacetEntry[]>;
+
 type Props = { authHeaders: () => Record<string, string>; isOffline: boolean; onSelect: (id: string) => void };
+
+function facetOptions(entries: FacetEntry[] | undefined, fallback: string[]) {
+  if (entries && entries.length > 0) {
+    return entries.map((f) => <option key={f.value} value={f.value}>{f.label || f.value} ({f.count})</option>);
+  }
+  return fallback.map((v) => <option key={v} value={v}>{v}</option>);
+}
 
 export default function ImportList({ authHeaders, isOffline, onSelect }: Props) {
   const { t } = useTranslation();
@@ -15,6 +25,15 @@ export default function ImportList({ authHeaders, isOffline, onSelect }: Props) 
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [stateFilter, setStateFilter] = useState("");
+  const [facets, setFacets] = useState<Facets>({});
+
+  useEffect(() => {
+    if (isOffline) return;
+    fetch(`${apiBaseUrl}/api/v1/imports/facets`, { headers: authHeaders() })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setFacets(data.facets || {}); })
+      .catch(() => {});
+  }, [authHeaders, isOffline]);
 
   useEffect(() => {
     if (isOffline) { setLoading(false); return; }
@@ -42,13 +61,7 @@ export default function ImportList({ authHeaders, isOffline, onSelect }: Props) 
         <Field label={t("filter.state")} htmlFor="filter-state">
           <Select id="filter-state" value={stateFilter} onChange={(e) => { setStateFilter(e.target.value); setPage(1); }}>
             <option value="">{t("filter.all")}</option>
-            <option value="QUEUED">QUEUED</option>
-            <option value="PARSING">PARSING</option>
-            <option value="NORMALIZED">NORMALIZED</option>
-            <option value="COMPLETED">COMPLETED</option>
-            <option value="COMPLETED_WITH_WARNINGS">COMPLETED_WITH_WARNINGS</option>
-            <option value="FAILED">FAILED</option>
-            <option value="CANCELLED">CANCELLED</option>
+            {facetOptions(facets.state_id, ["QUEUED", "PARSING", "NORMALIZED", "COMPLETED", "COMPLETED_WITH_WARNINGS", "FAILED", "CANCELLED"])}
           </Select>
         </Field>
       </div>

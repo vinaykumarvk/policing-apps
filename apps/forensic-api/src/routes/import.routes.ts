@@ -39,6 +39,11 @@ export async function registerImportRoutes(app: FastifyInstance): Promise<void> 
     }
   });
 
+  app.get("/api/v1/imports/facets", async () => {
+    const stateRows = await query(`SELECT state_id AS value, COUNT(*)::int AS count FROM import_job GROUP BY state_id ORDER BY count DESC`, []);
+    return { facets: { state_id: stateRows.rows } };
+  });
+
   app.get("/api/v1/imports/:id", {
     schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
   }, async (request, reply) => {

@@ -33,7 +33,7 @@ export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
          WHERE ($1::text IS NULL OR state_id = $1)
            AND ($2::text IS NULL OR priority = $2)
            AND ($3::text IS NULL OR alert_type = $3)
-           AND ($4::text IS NULL OR unit_id = $4)
+           AND ($4::uuid IS NULL OR unit_id = $4::uuid)
          ORDER BY created_at DESC
          LIMIT $5 OFFSET $6`,
         [state_id || null, priority || null, alert_type || null, unitId, limit, offset],
@@ -44,6 +44,16 @@ export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
       request.log.error(err, "Failed to list alerts");
       return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
     }
+  });
+
+  app.get("/api/v1/alerts/facets", async (request) => {
+    const unitId = request.authUser?.unitId || null;
+    const [stateRows, priorityRows, typeRows] = await Promise.all([
+      query(`SELECT state_id AS value, COUNT(*)::int AS count FROM sm_alert WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY state_id ORDER BY count DESC`, [unitId]),
+      query(`SELECT priority AS value, COUNT(*)::int AS count FROM sm_alert WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY priority ORDER BY count DESC`, [unitId]),
+      query(`SELECT alert_type AS value, COUNT(*)::int AS count FROM sm_alert WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY alert_type ORDER BY count DESC`, [unitId]),
+    ]);
+    return { facets: { state_id: stateRows.rows, priority: priorityRows.rows, alert_type: typeRows.rows } };
   });
 
   app.get("/api/v1/alerts/:id", {

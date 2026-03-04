@@ -1,0 +1,20 @@
+# Generic Cloud Build config for any API Dockerfile.
+# Usage:
+#   gcloud builds submit --config=cloudbuild-api-generic.yaml \
+#     --substitutions=_SERVICE_NAME=social-media-api,_DOCKERFILE=Dockerfile.social-media-api
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "gcr.io/$PROJECT_ID/${_SERVICE_NAME}"
+      - "-f"
+      - "${_DOCKERFILE}"
+      - "."
+images:
+  - "gcr.io/$PROJECT_ID/${_SERVICE_NAME}"
+substitutions:
+  _SERVICE_NAME: ""
+  _DOCKERFILE: ""
+options:
+  logging: CLOUD_LOGGING_ONLY

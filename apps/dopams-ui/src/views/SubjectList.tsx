@@ -5,11 +5,21 @@ import { apiBaseUrl, SubjectProfile } from "../types";
 
 const LIMIT = 20;
 
+type FacetEntry = { value: string; label?: string; count: number };
+type Facets = Record<string, FacetEntry[]>;
+
 type Props = {
   authHeaders: () => Record<string, string>;
   isOffline: boolean;
   onSelect: (id: string) => void;
 };
+
+function facetOptions(entries: FacetEntry[] | undefined, fallback: string[]) {
+  if (entries && entries.length > 0) {
+    return entries.map((f) => <option key={f.value} value={f.value}>{f.label || f.value} ({f.count})</option>);
+  }
+  return fallback.map((v) => <option key={v} value={v}>{v}</option>);
+}
 
 export default function SubjectList({ authHeaders, isOffline, onSelect }: Props) {
   const { t } = useTranslation();
@@ -20,6 +30,15 @@ export default function SubjectList({ authHeaders, isOffline, onSelect }: Props)
   const [total, setTotal] = useState(0);
   const [stateFilter, setStateFilter] = useState("");
   const [genderFilter, setGenderFilter] = useState("");
+  const [facets, setFacets] = useState<Facets>({});
+
+  useEffect(() => {
+    if (isOffline) return;
+    fetch(`${apiBaseUrl}/api/v1/subjects/facets`, { headers: authHeaders() })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setFacets(data.facets || {}); })
+      .catch(() => {});
+  }, [authHeaders, isOffline]);
 
   useEffect(() => {
     if (isOffline) { setLoading(false); return; }
@@ -50,18 +69,13 @@ export default function SubjectList({ authHeaders, isOffline, onSelect }: Props)
         <Field label={t("filter.state")} htmlFor="filter-state">
           <Select id="filter-state" value={stateFilter} onChange={(e) => { setStateFilter(e.target.value); setPage(1); }}>
             <option value="">{t("filter.all")}</option>
-            <option value="DRAFT">DRAFT</option>
-            <option value="PENDING_REVIEW">PENDING_REVIEW</option>
-            <option value="PUBLISHED">PUBLISHED</option>
-            <option value="CONFLICTING">CONFLICTING</option>
+            {facetOptions(facets.state_id, ["DRAFT", "PENDING_REVIEW", "PUBLISHED", "CONFLICTING"])}
           </Select>
         </Field>
         <Field label={t("filter.gender")} htmlFor="filter-gender">
           <Select id="filter-gender" value={genderFilter} onChange={(e) => { setGenderFilter(e.target.value); setPage(1); }}>
             <option value="">{t("filter.all")}</option>
-            <option value="MALE">MALE</option>
-            <option value="FEMALE">FEMALE</option>
-            <option value="OTHER">OTHER</option>
+            {facetOptions(facets.gender, ["MALE", "FEMALE", "OTHER"])}
           </Select>
         </Field>
       </div>

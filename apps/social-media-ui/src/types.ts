@@ -28,6 +28,7 @@ export type ContentItem = {
   language: string;
   sentiment: string | null;
   category_id: string | null;
+  category_name: string | null;
   threat_score: number;
   metadata_jsonb: Record<string, unknown>;
   published_at: string;
@@ -125,4 +126,4 @@ export type Task = {
 };
 
 export const apiBaseUrl =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:3004";
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3010";

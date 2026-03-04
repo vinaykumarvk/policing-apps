@@ -93,7 +93,7 @@ export function registerAuditLogger(app: FastifyInstance): void {
         `INSERT INTO audit_log
            (entity_type, entity_id, event_type, actor_type, actor_id, payload_jsonb, ip_address, request_id, actor_role, response_status, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())`,
-        [entityType, entityId, eventType, "SYSTEM_AUDIT", actorId, payloadSummary, request.ip, request.id, actorRole, reply.statusCode]
+        [entityType || "unknown", entityId || "N/A", eventType, "SYSTEM_AUDIT", actorId, payloadSummary, request.ip, request.id, actorRole, reply.statusCode]
       );
 
       consecutiveAuditFailures = 0;

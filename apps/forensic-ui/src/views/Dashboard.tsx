@@ -24,7 +24,7 @@ type DashboardStats = {
   recentCases: RecentCase[];
 };
 
-type Props = { authHeaders: () => Record<string, string>; isOffline: boolean };
+type Props = { authHeaders: () => Record<string, string>; isOffline: boolean; onNavigate: (view: string) => void };
 
 const TYPE_COLORS: Record<string, string> = {
   MOBILE_FORENSICS: "var(--color-state-open)",
@@ -35,7 +35,7 @@ const TYPE_COLORS: Record<string, string> = {
   MEMORY_FORENSICS: "var(--color-success)",
 };
 
-export default function Dashboard({ authHeaders, isOffline }: Props) {
+export default function Dashboard({ authHeaders, isOffline, onNavigate }: Props) {
   const { t } = useTranslation();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,22 +70,22 @@ export default function Dashboard({ authHeaders, isOffline }: Props) {
       </div>
       {error && <Alert variant="error">{error}</Alert>}
       <div className="dashboard-grid">
-        <div className="stat-card">
+        <button type="button" className="stat-card stat-card--clickable" onClick={() => onNavigate("cases")}>
           <p className="stat-card__label">{t("dashboard.total_cases")}</p>
           <p className="stat-card__value">{totalCases}</p>
-        </div>
-        <div className="stat-card">
+        </button>
+        <button type="button" className="stat-card stat-card--clickable" onClick={() => onNavigate("cases")}>
           <p className="stat-card__label">{t("dashboard.total_evidence")}</p>
           <p className="stat-card__value">{stats?.totalEvidence ?? 0}</p>
-        </div>
-        <div className="stat-card">
+        </button>
+        <button type="button" className="stat-card stat-card--clickable" onClick={() => onNavigate("cases")}>
           <p className="stat-card__label">{t("dashboard.pending_findings")}</p>
           <p className="stat-card__value">{stats?.pendingFindings ?? 0}</p>
-        </div>
-        <div className="stat-card">
+        </button>
+        <button type="button" className="stat-card stat-card--clickable" onClick={() => onNavigate("cases")}>
           <p className="stat-card__label">{t("dashboard.draft_reports")}</p>
           <p className="stat-card__value">{stats?.draftReports ?? 0}</p>
-        </div>
+        </button>
       </div>
 
       {casesByType.length > 0 && (

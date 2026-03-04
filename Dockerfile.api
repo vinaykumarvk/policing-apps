@@ -14,9 +14,10 @@ COPY package.json package-lock.json ./
 # Copy workspace package.json files (needed for npm workspaces)
 COPY apps/api/package.json apps/api/package.json
 COPY packages/shared/package.json packages/shared/package.json
+COPY packages/workflow-engine/package.json packages/workflow-engine/package.json
 
 # Install ALL dependencies (including devDependencies for build step)
-RUN npm ci --workspace=apps/api --workspace=packages/shared --include-workspace-root
+RUN npm ci --workspace=apps/api --workspace=packages/shared --workspace=packages/workflow-engine --include-workspace-root
 
 # --- Stage 2: Build TypeScript ---
 FROM deps AS build
@@ -27,11 +28,13 @@ WORKDIR /app
 COPY tsconfig.base.json ./
 COPY packages/shared/tsconfig.json packages/shared/
 COPY packages/shared/src/ packages/shared/src/
+COPY packages/workflow-engine/tsconfig.json packages/workflow-engine/
+COPY packages/workflow-engine/src/ packages/workflow-engine/src/
 COPY apps/api/tsconfig.json apps/api/
 COPY apps/api/src/ apps/api/src/
 
-# Build shared package first, then the API
-RUN npm run build:shared && npm --workspace apps/api run build
+# Build shared + workflow-engine first, then the API
+RUN npm run build:shared && npm run build:workflow-engine && npm --workspace apps/api run build
 
 # --- Stage 3: Production image ---
 FROM node:20-alpine AS production
@@ -46,15 +49,19 @@ RUN addgroup -g 1001 -S appgroup && \
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY packages/shared/package.json packages/shared/package.json
+COPY packages/workflow-engine/package.json packages/workflow-engine/package.json
 
 # Install production dependencies only
-RUN npm ci --workspace=apps/api --workspace=packages/shared --include-workspace-root --omit=dev
+RUN npm ci --workspace=apps/api --workspace=packages/shared --workspace=packages/workflow-engine --include-workspace-root --omit=dev
 
 # Copy compiled API from build stage
 COPY --from=build /app/apps/api/dist/ apps/api/dist/
 
 # Copy compiled shared package (needed at runtime)
 COPY --from=build /app/packages/shared/dist/ packages/shared/dist/
+
+# Copy compiled workflow-engine package (needed at runtime)
+COPY --from=build /app/packages/workflow-engine/dist/ packages/workflow-engine/dist/
 
 # Copy service-packs (JSON/YAML configs needed at runtime)
 COPY service-packs/ service-packs/

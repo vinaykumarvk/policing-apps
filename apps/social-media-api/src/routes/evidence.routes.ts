@@ -63,7 +63,7 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
         `SELECT evidence_id, evidence_ref, content_id, alert_id, case_id, capture_type, screenshot_url,
                 archive_url, hash_sha256, chain_of_custody, state_id, row_version,
                 captured_by, created_at, updated_at
-         FROM evidence_item WHERE evidence_id = $1 AND ($2::text IS NULL OR unit_id = $2)`,
+         FROM evidence_item WHERE evidence_id = $1 AND ($2::uuid IS NULL OR unit_id = $2::uuid)`,
         [id, unitId],
       );
       if (result.rows.length === 0) {

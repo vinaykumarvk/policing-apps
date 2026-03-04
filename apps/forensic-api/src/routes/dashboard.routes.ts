@@ -7,12 +7,12 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
     try {
       const unitId = request.authUser?.unitId || null;
       const [casesByState, casesByType, evidenceTotal, pendingFindings, draftReports, recentCases] = await Promise.all([
-        query(`SELECT state_id, COUNT(*)::int AS count FROM forensic_case WHERE ($1::text IS NULL OR unit_id = $1) GROUP BY state_id`, [unitId]),
-        query(`SELECT case_type, COUNT(*)::int AS count FROM forensic_case WHERE ($1::text IS NULL OR unit_id = $1) GROUP BY case_type`, [unitId]),
-        query(`SELECT COUNT(*)::int AS total FROM evidence_source WHERE ($1::text IS NULL OR unit_id = $1)`, [unitId]),
-        query(`SELECT COUNT(*)::int AS total FROM ai_finding WHERE state_id = 'UNREVIEWED' AND ($1::text IS NULL OR unit_id = $1)`, [unitId]),
-        query(`SELECT COUNT(*)::int AS total FROM report WHERE state_id = 'DRAFT' AND ($1::text IS NULL OR unit_id = $1)`, [unitId]),
-        query(`SELECT case_id, case_number, title, case_type, state_id, priority, created_at FROM forensic_case WHERE ($1::text IS NULL OR unit_id = $1) ORDER BY created_at DESC LIMIT 5`, [unitId]),
+        query(`SELECT state_id, COUNT(*)::int AS count FROM forensic_case WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY state_id`, [unitId]),
+        query(`SELECT case_type, COUNT(*)::int AS count FROM forensic_case WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY case_type`, [unitId]),
+        query(`SELECT COUNT(*)::int AS total FROM evidence_source WHERE ($1::uuid IS NULL OR unit_id = $1::uuid)`, [unitId]),
+        query(`SELECT COUNT(*)::int AS total FROM ai_finding WHERE state_id = 'UNREVIEWED'`, []),
+        query(`SELECT COUNT(*)::int AS total FROM report WHERE state_id = 'DRAFT'`, []),
+        query(`SELECT case_id, case_number, title, case_type, state_id, priority, created_at FROM forensic_case WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) ORDER BY created_at DESC LIMIT 5`, [unitId]),
       ]);
 
       return {

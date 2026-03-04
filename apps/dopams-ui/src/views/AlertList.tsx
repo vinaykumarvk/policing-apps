@@ -5,11 +5,21 @@ import { apiBaseUrl, Alert } from "../types";
 
 const LIMIT = 20;
 
+type FacetEntry = { value: string; label?: string; count: number };
+type Facets = Record<string, FacetEntry[]>;
+
 type Props = {
   authHeaders: () => Record<string, string>;
   isOffline: boolean;
   onSelect: (id: string) => void;
 };
+
+function facetOptions(entries: FacetEntry[] | undefined, fallback: string[]) {
+  if (entries && entries.length > 0) {
+    return entries.map((f) => <option key={f.value} value={f.value}>{f.label || f.value} ({f.count})</option>);
+  }
+  return fallback.map((v) => <option key={v} value={v}>{v}</option>);
+}
 
 export default function AlertList({ authHeaders, isOffline, onSelect }: Props) {
   const { t } = useTranslation();
@@ -21,6 +31,15 @@ export default function AlertList({ authHeaders, isOffline, onSelect }: Props) {
   const [stateFilter, setStateFilter] = useState("");
   const [severityFilter, setSeverityFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+  const [facets, setFacets] = useState<Facets>({});
+
+  useEffect(() => {
+    if (isOffline) return;
+    fetch(`${apiBaseUrl}/api/v1/alerts/facets`, { headers: authHeaders() })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setFacets(data.facets || {}); })
+      .catch(() => {});
+  }, [authHeaders, isOffline]);
 
   useEffect(() => {
     if (isOffline) { setLoading(false); return; }
@@ -52,27 +71,19 @@ export default function AlertList({ authHeaders, isOffline, onSelect }: Props) {
         <Field label={t("filter.state")} htmlFor="filter-state">
           <Select id="filter-state" value={stateFilter} onChange={(e) => { setStateFilter(e.target.value); setPage(1); }}>
             <option value="">{t("filter.all")}</option>
-            <option value="OPEN">OPEN</option>
-            <option value="ACKNOWLEDGED">ACKNOWLEDGED</option>
-            <option value="ASSIGNED">ASSIGNED</option>
-            <option value="ESCALATED">ESCALATED</option>
-            <option value="RESOLVED">RESOLVED</option>
-            <option value="CLOSED">CLOSED</option>
-            <option value="FALSE_POSITIVE">FALSE_POSITIVE</option>
+            {facetOptions(facets.state_id, ["OPEN", "ACKNOWLEDGED", "ASSIGNED", "ESCALATED", "RESOLVED", "CLOSED", "FALSE_POSITIVE"])}
           </Select>
         </Field>
         <Field label={t("filter.severity")} htmlFor="filter-severity">
           <Select id="filter-severity" value={severityFilter} onChange={(e) => { setSeverityFilter(e.target.value); setPage(1); }}>
             <option value="">{t("filter.all")}</option>
-            <option value="CRITICAL">CRITICAL</option>
-            <option value="HIGH">HIGH</option>
-            <option value="MEDIUM">MEDIUM</option>
-            <option value="LOW">LOW</option>
+            {facetOptions(facets.severity, ["CRITICAL", "HIGH", "MEDIUM", "LOW"])}
           </Select>
         </Field>
         <Field label={t("filter.type")} htmlFor="filter-type">
           <Select id="filter-type" value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}>
             <option value="">{t("filter.all")}</option>
+            {facetOptions(facets.alert_type, [])}
           </Select>
         </Field>
       </div>

@@ -116,6 +116,7 @@ services:
       PORT: "8080"
       NODE_ENV: development
       SM_DATABASE_URL: postgres://puda:puda@social-media-db:5432/social_media
+      DATABASE_SSL: "false"
       JWT_SECRET: "${SM_JWT_SECRET:-sm-local-dev-secret}"
       ALLOWED_ORIGINS: "http://localhost:3020"
     command: ["sh", "-c", "node apps/social-media-api/dist/migrate-runner.js && node apps/social-media-api/dist/index.js"]
@@ -180,6 +181,7 @@ services:
       PORT: "8080"
       NODE_ENV: development
       DOPAMS_DATABASE_URL: postgres://puda:puda@dopams-db:5432/dopams
+      DATABASE_SSL: "false"
       JWT_SECRET: "${DOPAMS_JWT_SECRET:-dopams-local-dev-secret}"
       ALLOWED_ORIGINS: "http://localhost:3021"
     command: ["sh", "-c", "node apps/dopams-api/dist/migrate-runner.js && node apps/dopams-api/dist/index.js"]
@@ -244,6 +246,7 @@ services:
       PORT: "8080"
       NODE_ENV: development
       FORENSIC_DATABASE_URL: postgres://puda:puda@forensic-db:5432/forensic
+      DATABASE_SSL: "false"
       JWT_SECRET: "${FORENSIC_JWT_SECRET:-forensic-local-dev-secret}"
       ALLOWED_ORIGINS: "http://localhost:3022"
     command: ["sh", "-c", "node apps/forensic-api/dist/migrate-runner.js && node apps/forensic-api/dist/index.js"]

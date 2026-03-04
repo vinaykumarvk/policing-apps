@@ -1,11 +1,21 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Select, Field, Input, Pagination } from "@puda/shared";
+import { Alert, Select, Field, Pagination } from "@puda/shared";
 import { apiBaseUrl, ContentItem } from "../types";
 
 const LIMIT = 20;
 
+type FacetEntry = { value: string; label?: string; count: number };
+type Facets = Record<string, FacetEntry[]>;
+
 type Props = { authHeaders: () => Record<string, string>; isOffline: boolean; onSelect: (id: string) => void };
+
+function facetOptions(entries: FacetEntry[] | undefined, fallback: string[]) {
+  if (entries && entries.length > 0) {
+    return entries.map((f) => <option key={f.value} value={f.value}>{f.label || f.value} ({f.count})</option>);
+  }
+  return fallback.map((v) => <option key={v} value={v}>{v}</option>);
+}
 
 export default function ContentList({ authHeaders, isOffline, onSelect }: Props) {
   const { t } = useTranslation();
@@ -16,6 +26,15 @@ export default function ContentList({ authHeaders, isOffline, onSelect }: Props)
   const [total, setTotal] = useState(0);
   const [platformFilter, setPlatformFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [facets, setFacets] = useState<Facets>({});
+
+  useEffect(() => {
+    if (isOffline) return;
+    fetch(`${apiBaseUrl}/api/v1/content/facets`, { headers: authHeaders() })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setFacets(data.facets || {}); })
+      .catch(() => {});
+  }, [authHeaders, isOffline]);
 
   useEffect(() => {
     if (isOffline) { setLoading(false); return; }
@@ -45,16 +64,14 @@ export default function ContentList({ authHeaders, isOffline, onSelect }: Props)
         <Field label={t("filter.platform")} htmlFor="filter-platform">
           <Select id="filter-platform" value={platformFilter} onChange={(e) => { setPlatformFilter(e.target.value); setPage(1); }}>
             <option value="">{t("filter.all")}</option>
-            <option value="TWITTER">TWITTER</option>
-            <option value="FACEBOOK">FACEBOOK</option>
-            <option value="INSTAGRAM">INSTAGRAM</option>
-            <option value="YOUTUBE">YOUTUBE</option>
-            <option value="TELEGRAM">TELEGRAM</option>
-            <option value="WHATSAPP">WHATSAPP</option>
+            {facetOptions(facets.platform, ["TWITTER", "FACEBOOK", "INSTAGRAM", "YOUTUBE", "TELEGRAM", "WHATSAPP"])}
           </Select>
         </Field>
         <Field label={t("filter.category")} htmlFor="filter-category">
-          <Input id="filter-category" value={categoryFilter} onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }} placeholder={t("filter.category")} />
+          <Select id="filter-category" value={categoryFilter} onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}>
+            <option value="">{t("filter.all")}</option>
+            {facetOptions(facets.category_id, [])}
+          </Select>
         </Field>
       </div>
 
@@ -63,14 +80,15 @@ export default function ContentList({ authHeaders, isOffline, onSelect }: Props)
       ) : (
         <>
           <table className="entity-table">
-            <thead><tr><th>{t("content.platform")}</th><th>{t("content.author")}</th><th>{t("content.content_heading")}</th><th>{t("content.threat_score")}</th><th>{t("content.published")}</th></tr></thead>
+            <thead><tr><th>{t("content.platform")}</th><th>{t("content.author")}</th><th>{t("content.content_heading")}</th><th>{t("filter.category")}</th><th>{t("content.threat_score")}</th><th>{t("content.published")}</th></tr></thead>
             <tbody>
               {content.map((c) => (
                 <tr key={c.content_id} className="entity-table__clickable" onClick={() => onSelect(c.content_id)}>
                   <td data-label={t("content.platform")}>{c.platform}</td>
                   <td data-label={t("content.author")}>{c.author_handle}</td>
                   <td data-label={t("content.content_heading")}>{c.content_text?.slice(0, 80)}{c.content_text?.length > 80 ? "..." : ""}</td>
-                  <td data-label={t("content.threat_score")}><span className={`badge badge--${c.threat_score >= 7 ? "critical" : c.threat_score >= 4 ? "warning" : "low"}`}>{c.threat_score}</span></td>
+                  <td data-label={t("filter.category")}><span className="badge badge--default">{c.category_name || "—"}</span></td>
+                  <td data-label={t("content.threat_score")}><span className={`badge badge--${Number(c.threat_score) >= 70 ? "critical" : Number(c.threat_score) >= 40 ? "warning" : "low"}`}>{c.threat_score}</span></td>
                   <td data-label={t("content.published")}>{c.published_at ? new Date(c.published_at).toLocaleDateString() : "—"}</td>
                 </tr>
               ))}

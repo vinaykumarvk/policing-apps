@@ -7,11 +7,11 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
     try {
       const unitId = request.authUser?.unitId || null;
       const [alertsByState, casesTotal, contentTotal, watchlistsActive, recentAlerts] = await Promise.all([
-        query(`SELECT state_id, COUNT(*)::int AS count FROM sm_alert WHERE ($1::text IS NULL OR unit_id = $1) GROUP BY state_id`, [unitId]),
-        query(`SELECT COUNT(*)::int AS total FROM case_record WHERE ($1::text IS NULL OR unit_id = $1)`, [unitId]),
-        query(`SELECT COUNT(*)::int AS total FROM content_item WHERE ($1::text IS NULL OR unit_id = $1)`, [unitId]),
-        query(`SELECT COUNT(*)::int AS total FROM watchlist WHERE is_active = TRUE AND ($1::text IS NULL OR unit_id = $1)`, [unitId]),
-        query(`SELECT alert_id, title, priority, state_id, created_at FROM sm_alert WHERE ($1::text IS NULL OR unit_id = $1) ORDER BY created_at DESC LIMIT 5`, [unitId]),
+        query(`SELECT state_id, COUNT(*)::int AS count FROM sm_alert WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY state_id`, [unitId]),
+        query(`SELECT COUNT(*)::int AS total FROM case_record WHERE ($1::uuid IS NULL OR unit_id = $1::uuid)`, [unitId]),
+        query(`SELECT COUNT(*)::int AS total FROM content_item`, []),
+        query(`SELECT COUNT(*)::int AS total FROM watchlist WHERE is_active = TRUE`, []),
+        query(`SELECT alert_id, title, priority, state_id, created_at FROM sm_alert WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) ORDER BY created_at DESC LIMIT 5`, [unitId]),
       ]);
 
       return {

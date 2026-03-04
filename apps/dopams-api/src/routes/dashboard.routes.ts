@@ -7,11 +7,11 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
     try {
       const unitId = request.authUser?.unitId || null;
       const [alertsBySeverity, leadsByState, casesTotal, subjectsTotal, recentAlerts] = await Promise.all([
-        query(`SELECT severity, COUNT(*)::int AS count FROM alert WHERE ($1::text IS NULL OR unit_id = $1) GROUP BY severity`, [unitId]),
-        query(`SELECT state_id, COUNT(*)::int AS count FROM lead WHERE ($1::text IS NULL OR unit_id = $1) GROUP BY state_id`, [unitId]),
-        query(`SELECT COUNT(*)::int AS total FROM dopams_case WHERE ($1::text IS NULL OR unit_id = $1)`, [unitId]),
-        query(`SELECT COUNT(*)::int AS total FROM subject_profile WHERE ($1::text IS NULL OR unit_id = $1)`, [unitId]),
-        query(`SELECT alert_id, title, severity, state_id, created_at FROM alert WHERE ($1::text IS NULL OR unit_id = $1) ORDER BY created_at DESC LIMIT 5`, [unitId]),
+        query(`SELECT severity, COUNT(*)::int AS count FROM alert WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY severity`, [unitId]),
+        query(`SELECT state_id, COUNT(*)::int AS count FROM lead WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY state_id`, [unitId]),
+        query(`SELECT COUNT(*)::int AS total FROM dopams_case WHERE ($1::uuid IS NULL OR unit_id = $1::uuid)`, [unitId]),
+        query(`SELECT COUNT(*)::int AS total FROM subject_profile WHERE ($1::uuid IS NULL OR unit_id = $1::uuid)`, [unitId]),
+        query(`SELECT alert_id, title, severity, state_id, created_at FROM alert WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) ORDER BY created_at DESC LIMIT 5`, [unitId]),
       ]);
 
       return {

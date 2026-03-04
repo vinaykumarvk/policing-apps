@@ -41,13 +41,22 @@ export async function registerSubjectRoutes(app: FastifyInstance): Promise<void>
        FROM subject_profile
        WHERE ($1::text IS NULL OR state_id = $1)
          AND ($2::text IS NULL OR gender = $2)
-         AND ($3::text IS NULL OR unit_id = $3)
+         AND ($3::uuid IS NULL OR unit_id = $3::uuid)
        ORDER BY created_at DESC
        LIMIT $4 OFFSET $5`,
       [state_id || null, gender || null, unitId, limit, offset],
     );
     const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
     return { subjects: result.rows.map(({ total_count, ...r }) => r), total };
+  });
+
+  app.get("/api/v1/subjects/facets", async (request) => {
+    const unitId = request.authUser?.unitId || null;
+    const [stateRows, genderRows] = await Promise.all([
+      query(`SELECT state_id AS value, COUNT(*)::int AS count FROM subject_profile WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY state_id ORDER BY count DESC`, [unitId]),
+      query(`SELECT gender AS value, COUNT(*)::int AS count FROM subject_profile WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY gender ORDER BY count DESC`, [unitId]),
+    ]);
+    return { facets: { state_id: stateRows.rows, gender: genderRows.rows } };
   });
 
   app.get("/api/v1/subjects/:id", {
@@ -58,7 +67,7 @@ export async function registerSubjectRoutes(app: FastifyInstance): Promise<void>
     const result = await query(
       `SELECT subject_id, subject_ref, full_name, aliases, date_of_birth, gender, identifiers, addresses,
               photo_url, risk_score, state_id, row_version, created_by, created_at, updated_at
-       FROM subject_profile WHERE subject_id = $1 AND ($2::text IS NULL OR unit_id = $2)`,
+       FROM subject_profile WHERE subject_id = $1 AND ($2::uuid IS NULL OR unit_id = $2::uuid)`,
       [id, unitId],
     );
     if (result.rows.length === 0) {

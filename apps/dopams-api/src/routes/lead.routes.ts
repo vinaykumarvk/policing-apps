@@ -33,13 +33,23 @@ export async function registerLeadRoutes(app: FastifyInstance): Promise<void> {
        WHERE ($1::text IS NULL OR state_id = $1)
          AND ($2::text IS NULL OR priority = $2)
          AND ($3::text IS NULL OR source_type = $3)
-         AND ($4::text IS NULL OR unit_id = $4)
+         AND ($4::uuid IS NULL OR unit_id = $4::uuid)
        ORDER BY created_at DESC
        LIMIT $5 OFFSET $6`,
       [state_id || null, priority || null, source_type || null, unitId, limit, offset],
     );
     const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
     return { leads: result.rows.map(({ total_count, ...r }) => r), total };
+  });
+
+  app.get("/api/v1/leads/facets", async (request) => {
+    const unitId = request.authUser?.unitId || null;
+    const [stateRows, priorityRows, sourceRows] = await Promise.all([
+      query(`SELECT state_id AS value, COUNT(*)::int AS count FROM lead WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY state_id ORDER BY count DESC`, [unitId]),
+      query(`SELECT priority AS value, COUNT(*)::int AS count FROM lead WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY priority ORDER BY count DESC`, [unitId]),
+      query(`SELECT source_type AS value, COUNT(*)::int AS count FROM lead WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY source_type ORDER BY count DESC`, [unitId]),
+    ]);
+    return { facets: { state_id: stateRows.rows, priority: priorityRows.rows, source_type: sourceRows.rows } };
   });
 
   app.post("/api/v1/leads", {
@@ -67,7 +77,7 @@ export async function registerLeadRoutes(app: FastifyInstance): Promise<void> {
     const result = await query(
       `SELECT lead_id, lead_ref, source_type, summary, details, priority, state_id, row_version,
               subject_id, assigned_to, created_by, created_at, updated_at
-       FROM lead WHERE lead_id = $1 AND ($2::text IS NULL OR unit_id = $2)`,
+       FROM lead WHERE lead_id = $1 AND ($2::uuid IS NULL OR unit_id = $2::uuid)`,
       [id, unitId],
     );
     if (result.rows.length === 0) {

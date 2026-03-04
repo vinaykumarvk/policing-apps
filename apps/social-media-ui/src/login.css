@@ -1,0 +1,206 @@
+/* ── Login Page ── */
+.login-page {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-brand) 8%, var(--color-bg)) 0%, var(--color-bg) 100%);
+}
+
+.login-container {
+  width: min(100%, 28rem);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-7);
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: var(--space-6);
+}
+
+.login-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 4rem;
+  height: 4rem;
+  border-radius: var(--radius-lg);
+  background: var(--color-brand-soft);
+  color: var(--color-brand);
+  margin-bottom: var(--space-3);
+}
+
+.login-logo svg {
+  width: 2rem;
+  height: 2rem;
+}
+
+.login-header h1 {
+  font-size: clamp(1.25rem, 2.5vw, 1.5rem);
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--space-1) 0;
+}
+
+.login-header .login-subtitle {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.login-header-controls {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+}
+
+.login-control-select {
+  min-height: 2.75rem;
+  padding: 0 var(--space-3);
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.login-control-select:hover {
+  background: var(--color-bg-elevated);
+}
+
+.login-control-select:active {
+  background: var(--color-brand-soft);
+}
+
+.login-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.login-form-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.login-remember {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.login-remember input[type="checkbox"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: var(--color-brand);
+  cursor: pointer;
+}
+
+.login-forgot {
+  font-size: 0.85rem;
+  color: var(--color-brand);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  padding: var(--space-1) 0;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+.login-forgot:hover {
+  text-decoration: underline;
+  color: var(--color-brand-hover);
+}
+
+.login-forgot:active {
+  color: var(--color-brand-hover);
+}
+
+.login-footer {
+  margin-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-4);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.forgot-panel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.forgot-panel__back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 0.85rem;
+  color: var(--color-brand);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  padding: var(--space-1) 0;
+  min-height: 2.75rem;
+}
+
+.forgot-panel__back:hover {
+  text-decoration: underline;
+}
+
+.forgot-panel__back:active {
+  color: var(--color-brand-hover);
+}
+
+.test-credentials {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.test-credentials__title {
+  font-weight: 700;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-1);
+}
+
+@media (max-width: 30rem) {
+  .login-page {
+    padding: var(--space-3);
+    align-items: flex-start;
+    padding-top: var(--space-6);
+  }
+
+  .login-container {
+    padding: var(--space-5);
+  }
+
+  .login-header {
+    margin-bottom: var(--space-4);
+  }
+
+  .login-form-options {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .login-footer {
+    margin-top: var(--space-4);
+  }
+}

@@ -431,7 +431,7 @@ export default function App() {
           {isOffline && <Alert variant="warning" className="view-feedback">{t("offline.banner")}</Alert>}
           <main id="forensic-main" role="main">
             <Suspense fallback={suspenseFallback}>
-              {view === "dashboard" && <Dashboard authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "dashboard" && <Dashboard authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
               {view === "cases" && <CaseList authHeaders={authHeaders} isOffline={isOffline} onSelect={(id) => navigate("case-detail", id)} />}
               {view === "case-detail" && resourceId && <CaseDetail id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => navigate("cases")} onNavigate={navigate} />}
               {view === "evidence-detail" && resourceId && <EvidenceDetail id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => window.history.back()} />}

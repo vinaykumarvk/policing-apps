@@ -14,7 +14,7 @@ type DashboardStats = {
   recentAlerts: RecentAlert[];
 };
 
-type Props = { authHeaders: () => Record<string, string>; isOffline: boolean };
+type Props = { authHeaders: () => Record<string, string>; isOffline: boolean; onNavigate: (view: string) => void };
 
 const STATE_COLORS: Record<string, string> = {
   NEW: "var(--color-state-open)",
@@ -25,7 +25,7 @@ const STATE_COLORS: Record<string, string> = {
   CLOSED: "var(--color-state-closed)",
 };
 
-export default function Dashboard({ authHeaders, isOffline }: Props) {
+export default function Dashboard({ authHeaders, isOffline, onNavigate }: Props) {
   const { t } = useTranslation();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,22 +59,22 @@ export default function Dashboard({ authHeaders, isOffline }: Props) {
       </div>
       {error && <Alert variant="error">{error}</Alert>}
       <div className="dashboard-grid">
-        <div className="stat-card">
+        <button type="button" className="stat-card stat-card--clickable" onClick={() => onNavigate("alerts")}>
           <p className="stat-card__label">{t("dashboard.alert_queue")}</p>
           <p className="stat-card__value">{totalAlerts}</p>
-        </div>
-        <div className="stat-card">
+        </button>
+        <button type="button" className="stat-card stat-card--clickable" onClick={() => onNavigate("cases")}>
           <p className="stat-card__label">{t("dashboard.open_cases")}</p>
           <p className="stat-card__value">{stats?.totalCases ?? 0}</p>
-        </div>
-        <div className="stat-card">
+        </button>
+        <button type="button" className="stat-card stat-card--clickable" onClick={() => onNavigate("content")}>
           <p className="stat-card__label">{t("dashboard.content_volume")}</p>
           <p className="stat-card__value">{stats?.totalContent ?? 0}</p>
-        </div>
-        <div className="stat-card">
+        </button>
+        <button type="button" className="stat-card stat-card--clickable" onClick={() => onNavigate("watchlists")}>
           <p className="stat-card__label">{t("dashboard.active_watchlists")}</p>
           <p className="stat-card__value">{stats?.activeWatchlists ?? 0}</p>
-        </div>
+        </button>
       </div>
 
       {alertsByState.length > 0 && (

@@ -5,7 +5,17 @@ import { apiBaseUrl, ForensicCase } from "../types";
 
 const LIMIT = 20;
 
+type FacetEntry = { value: string; label?: string; count: number };
+type Facets = Record<string, FacetEntry[]>;
+
 type Props = { authHeaders: () => Record<string, string>; isOffline: boolean; onSelect: (id: string) => void };
+
+function facetOptions(entries: FacetEntry[] | undefined, fallback: string[]) {
+  if (entries && entries.length > 0) {
+    return entries.map((f) => <option key={f.value} value={f.value}>{f.label || f.value} ({f.count})</option>);
+  }
+  return fallback.map((v) => <option key={v} value={v}>{v}</option>);
+}
 
 export default function CaseList({ authHeaders, isOffline, onSelect }: Props) {
   const { t } = useTranslation();
@@ -17,6 +27,15 @@ export default function CaseList({ authHeaders, isOffline, onSelect }: Props) {
   const [stateFilter, setStateFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+  const [facets, setFacets] = useState<Facets>({});
+
+  useEffect(() => {
+    if (isOffline) return;
+    fetch(`${apiBaseUrl}/api/v1/cases/facets`, { headers: authHeaders() })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setFacets(data.facets || {}); })
+      .catch(() => {});
+  }, [authHeaders, isOffline]);
 
   useEffect(() => {
     if (isOffline) { setLoading(false); return; }
@@ -46,27 +65,19 @@ export default function CaseList({ authHeaders, isOffline, onSelect }: Props) {
         <Field label={t("filter.state")} htmlFor="filter-state">
           <Select id="filter-state" value={stateFilter} onChange={(e) => { setStateFilter(e.target.value); setPage(1); }}>
             <option value="">{t("filter.all")}</option>
-            <option value="DRAFT">DRAFT</option>
-            <option value="ACTIVE">ACTIVE</option>
-            <option value="INGESTION_IN_PROGRESS">INGESTION_IN_PROGRESS</option>
-            <option value="UNDER_REVIEW">UNDER_REVIEW</option>
-            <option value="REPORT_READY">REPORT_READY</option>
-            <option value="SUBMITTED">SUBMITTED</option>
-            <option value="CLOSED">CLOSED</option>
-            <option value="REOPENED">REOPENED</option>
+            {facetOptions(facets.state_id, ["DRAFT", "ACTIVE", "INGESTION_IN_PROGRESS", "UNDER_REVIEW", "REPORT_READY", "SUBMITTED", "CLOSED", "REOPENED"])}
           </Select>
         </Field>
         <Field label={t("filter.priority")} htmlFor="filter-priority">
           <Select id="filter-priority" value={priorityFilter} onChange={(e) => { setPriorityFilter(e.target.value); setPage(1); }}>
             <option value="">{t("filter.all")}</option>
-            <option value="HIGH">HIGH</option>
-            <option value="MEDIUM">MEDIUM</option>
-            <option value="LOW">LOW</option>
+            {facetOptions(facets.priority, ["HIGH", "MEDIUM", "LOW"])}
           </Select>
         </Field>
         <Field label={t("filter.type")} htmlFor="filter-type">
           <Select id="filter-type" value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}>
             <option value="">{t("filter.all")}</option>
+            {facetOptions(facets.case_type, [])}
           </Select>
         </Field>
       </div>

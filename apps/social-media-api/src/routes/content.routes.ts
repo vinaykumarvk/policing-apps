@@ -22,13 +22,14 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
       const limit = Math.min(Math.max(parseInt(rawLimit || "50", 10) || 50, 1), 200);
       const offset = Math.max(parseInt(rawOffset || "0", 10) || 0, 0);
       const result = await query(
-        `SELECT content_id, platform, author_handle, author_name, content_text, content_url,
-                language, sentiment, category_id, threat_score, published_at, ingested_at,
+        `SELECT ci.content_id, ci.platform, ci.author_handle, ci.author_name, ci.content_text, ci.content_url,
+                ci.language, ci.sentiment, ci.category_id, tc.name AS category_name, ci.threat_score, ci.published_at, ci.ingested_at,
                 COUNT(*) OVER() AS total_count
-         FROM content_item
-         WHERE ($1::text IS NULL OR platform = $1)
-           AND ($2::text IS NULL OR category_id = $2)
-         ORDER BY ingested_at DESC
+         FROM content_item ci
+         LEFT JOIN taxonomy_category tc ON tc.category_id = ci.category_id
+         WHERE ($1::text IS NULL OR ci.platform = $1)
+           AND ($2::uuid IS NULL OR ci.category_id = $2::uuid)
+         ORDER BY ci.ingested_at DESC
          LIMIT $3 OFFSET $4`,
         [platform || null, category_id || null, limit, offset],
       );
@@ -40,16 +41,26 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
     }
   });
 
+  app.get("/api/v1/content/facets", async () => {
+    const [platformRows, categoryRows] = await Promise.all([
+      query(`SELECT platform AS value, COUNT(*)::int AS count FROM content_item GROUP BY platform ORDER BY count DESC`, []),
+      query(`SELECT ci.category_id AS value, tc.name AS label, COUNT(*)::int AS count FROM content_item ci LEFT JOIN taxonomy_category tc ON tc.category_id = ci.category_id WHERE ci.category_id IS NOT NULL GROUP BY ci.category_id, tc.name ORDER BY count DESC`, []),
+    ]);
+    return { facets: { platform: platformRows.rows, category_id: categoryRows.rows } };
+  });
+
   app.get("/api/v1/content/:id", {
     schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
   }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const result = await query(
-        `SELECT content_id, connector_id, platform, platform_post_id, author_handle, author_name,
-                content_text, content_url, language, sentiment, category_id, threat_score,
-                metadata_jsonb, published_at, ingested_at, created_at
-         FROM content_item WHERE content_id = $1`,
+        `SELECT ci.content_id, ci.connector_id, ci.platform, ci.platform_post_id, ci.author_handle, ci.author_name,
+                ci.content_text, ci.content_url, ci.language, ci.sentiment, ci.category_id, tc.name AS category_name,
+                ci.threat_score, ci.metadata_jsonb, ci.published_at, ci.ingested_at, ci.created_at
+         FROM content_item ci
+         LEFT JOIN taxonomy_category tc ON tc.category_id = ci.category_id
+         WHERE ci.content_id = $1`,
         [id],
       );
       if (result.rows.length === 0) {

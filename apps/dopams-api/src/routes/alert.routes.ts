@@ -33,13 +33,23 @@ export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
        WHERE ($1::text IS NULL OR state_id = $1)
          AND ($2::text IS NULL OR severity = $2)
          AND ($3::text IS NULL OR alert_type = $3)
-         AND ($4::text IS NULL OR unit_id = $4)
+         AND ($4::uuid IS NULL OR unit_id = $4::uuid)
        ORDER BY created_at DESC
        LIMIT $5 OFFSET $6`,
       [state_id || null, severity || null, alert_type || null, unitId, limit, offset],
     );
     const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
     return { alerts: result.rows.map(({ total_count, ...r }) => r), total };
+  });
+
+  app.get("/api/v1/alerts/facets", async (request) => {
+    const unitId = request.authUser?.unitId || null;
+    const [stateRows, severityRows, typeRows] = await Promise.all([
+      query(`SELECT state_id AS value, COUNT(*)::int AS count FROM alert WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY state_id ORDER BY count DESC`, [unitId]),
+      query(`SELECT severity AS value, COUNT(*)::int AS count FROM alert WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY severity ORDER BY count DESC`, [unitId]),
+      query(`SELECT alert_type AS value, COUNT(*)::int AS count FROM alert WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY alert_type ORDER BY count DESC`, [unitId]),
+    ]);
+    return { facets: { state_id: stateRows.rows, severity: severityRows.rows, alert_type: typeRows.rows } };
   });
 
   app.get("/api/v1/alerts/:id", {
@@ -51,7 +61,7 @@ export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
       `SELECT alert_id, alert_type, severity, title, description, source_system,
               subject_id, case_id, state_id, row_version, assigned_to,
               acknowledged_by, acknowledged_at, resolved_at, created_at, updated_at
-       FROM alert WHERE alert_id = $1 AND ($2::text IS NULL OR unit_id = $2)`,
+       FROM alert WHERE alert_id = $1 AND ($2::uuid IS NULL OR unit_id = $2::uuid)`,
       [id, unitId],
     );
     if (result.rows.length === 0) {

@@ -435,7 +435,7 @@ export default function App() {
           {isOffline && <Alert variant="warning" className="view-feedback">{t("offline.banner")}</Alert>}
           <main id="sm-main" role="main">
             <Suspense fallback={suspenseFallback}>
-              {view === "dashboard" && <Dashboard authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "dashboard" && <Dashboard authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
               {view === "alerts" && <AlertList authHeaders={authHeaders} isOffline={isOffline} onSelect={(id) => navigate("alert-detail", id)} />}
               {view === "alert-detail" && resourceId && <AlertDetail id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => navigate("alerts")} />}
               {view === "cases" && <CaseList authHeaders={authHeaders} isOffline={isOffline} onSelect={(id) => navigate("case-detail", id)} />}

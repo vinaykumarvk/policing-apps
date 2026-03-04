@@ -630,7 +630,7 @@ export default function App() {
           )}
           <main id="dopams-main" role="main">
             <Suspense fallback={suspenseFallback}>
-              {view === "dashboard" && <Dashboard authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "dashboard" && <Dashboard authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
               {view === "alerts" && <AlertList authHeaders={authHeaders} isOffline={isOffline} onSelect={(id) => navigate("alert-detail", id)} />}
               {view === "alert-detail" && resourceId && <AlertDetail id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => navigate("alerts")} />}
               {view === "leads" && <LeadList authHeaders={authHeaders} isOffline={isOffline} onSelect={(id) => navigate("lead-detail", id)} />}

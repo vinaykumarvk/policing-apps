@@ -16,7 +16,7 @@ export async function registerReportRoutes(app: FastifyInstance): Promise<void> 
                 COUNT(*) OVER() AS total_count
          FROM report_instance
          WHERE ($1::text IS NULL OR state_id = $1)
-           AND ($2::text IS NULL OR unit_id = $2)
+           AND ($2::uuid IS NULL OR unit_id = $2::uuid)
          ORDER BY created_at DESC
          LIMIT $3 OFFSET $4`,
         [state_id || null, unitId, limit, offset],
