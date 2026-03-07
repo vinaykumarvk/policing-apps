@@ -41,6 +41,7 @@ export default function Login({ onLogin }: LoginProps) {
       } else {
         localStorage.removeItem("sm_saved_username");
       }
+      window.location.hash = "";
       await onLogin(username, password);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("login.failed"));

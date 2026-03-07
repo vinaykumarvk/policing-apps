@@ -6,7 +6,7 @@ import compress from "@fastify/compress";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
-import { registerAuthMiddleware } from "./middleware/auth";
+import { registerAuthMiddleware, registerMfaEnforcement } from "./middleware/auth";
 import { registerAuditLogger } from "./middleware/audit-logger";
 import { setLogContext } from "./log-context";
 import { registerAuthRoutes } from "./routes/auth.routes";
@@ -33,6 +33,12 @@ import { registerGeofenceRoutes } from "./routes/geofence.routes";
 import { registerDrugClassifyRoutes } from "./routes/drug-classify.routes";
 import { registerModelRoutes } from "./routes/model.routes";
 import { registerDashboardRoutes } from "./routes/dashboard.routes";
+import { registerDopamsSyncRoutes } from "./routes/dopams-sync.routes";
+import { registerEntityOpsRoutes } from "./routes/entity-ops.routes";
+import { registerDictionaryRoutes } from "./routes/dictionary.routes";
+import { registerDataLifecycleRoutes } from "./routes/data-lifecycle.routes";
+import { createOidcAuth, createOidcRoutes, createAuthMiddleware, createConfigGovernanceRoutes, createIdempotencyMiddleware } from "@puda/api-core";
+import { query } from "./db";
 
 export async function buildApp(logger = true): Promise<FastifyInstance> {
   const isTestRuntime = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
@@ -131,6 +137,7 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
         { name: "geofence", description: "Geofence management" },
         { name: "drug-classify", description: "Drug classification" },
         { name: "models", description: "Model governance" },
+        { name: "entity-ops", description: "Entity merge and split operations" },
       ],
       components: {
         securitySchemes: {
@@ -154,7 +161,11 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
   });
 
   registerAuthMiddleware(app);
+  registerMfaEnforcement(app);
   registerAuditLogger(app);
+
+  const idempotencyMiddleware = createIdempotencyMiddleware({ queryFn: query });
+  idempotencyMiddleware.register(app);
 
   app.addHook("onRequest", async (request) => {
     setLogContext({ requestId: request.id });
@@ -206,6 +217,37 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
   await registerDrugClassifyRoutes(app);
   await registerModelRoutes(app);
   await registerDashboardRoutes(app);
+  await registerDopamsSyncRoutes(app);
+  await registerEntityOpsRoutes(app);
+  await registerDictionaryRoutes(app);
+  await registerDataLifecycleRoutes(app);
+
+  // Config governance routes
+  const registerConfigGovernanceRoutes = createConfigGovernanceRoutes({ queryFn: query });
+  await registerConfigGovernanceRoutes(app);
+
+  // OIDC routes (conditionally enabled via env)
+  if (process.env.OIDC_ISSUER_URL) {
+    const auth = createAuthMiddleware({
+      cookieName: "forensic_auth",
+      defaultDevSecret: "forensic-dev-secret-DO-NOT-USE-IN-PRODUCTION",
+      queryFn: query,
+    });
+    const oidc = createOidcAuth({
+      issuerUrl: process.env.OIDC_ISSUER_URL,
+      clientId: process.env.OIDC_CLIENT_ID || "forensic",
+      clientSecret: process.env.OIDC_CLIENT_SECRET,
+      redirectUri: process.env.OIDC_REDIRECT_URI || "http://localhost:3002/api/v1/auth/oidc/callback",
+      claimMapping: {
+        userId: process.env.OIDC_CLAIM_USER_ID,
+        userType: process.env.OIDC_CLAIM_USER_TYPE,
+        roles: process.env.OIDC_CLAIM_ROLES,
+        unitId: process.env.OIDC_CLAIM_UNIT_ID,
+      },
+    }, query);
+    const registerOidcRoutes = createOidcRoutes({ auth, oidc });
+    await registerOidcRoutes(app);
+  }
 
   return app;
 }

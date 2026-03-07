@@ -1,28 +1,35 @@
 #!/bin/bash
 # =============================================================================
-# Policing Apps — Full GCP Cloud Run Deployment
-# Deploys all 9 services (4 APIs + 5 UIs) with Cloud SQL, secrets, and
+# Policing Apps (non-PUDA) — Full GCP Cloud Run Deployment
+# Deploys 6 services (3 APIs + 3 UIs): social-media, dopams, forensic
+# to the policing-apps GCP project with Cloud SQL, secrets, and
 # optional GitHub Actions CI/CD via Workload Identity Federation.
+#
+# NOTE: PUDA services (puda-api, puda-citizen, puda-officer) are deployed
+# separately to the puda-489215 project via scripts/setup-puda-cloudrun.sh.
 #
 # Prerequisites:
 #   - gcloud CLI authenticated with project-owner or equivalent permissions
 #   - Docker installed (for Cloud Build)
 #
 # Required env vars:
-#   GCP_PROJECT     — GCP project ID
 #   DB_PASS         — Database password (URL-encoded if it contains special chars)
 #
 # Optional env vars:
-#   GCP_REGION      — GCP region (default: asia-south1)
+#   GCP_PROJECT     — GCP project ID (default: policing-apps)
+#   GCP_REGION      — Cloud Run region (default: asia-southeast1)
+#   CLOUDSQL_REGION — Cloud SQL region (default: asia-southeast1)
+#   CLOUDSQL_INSTANCE — Cloud SQL instance name (default: policing-db-v2)
 #   DB_USER         — Database user (default: puda)
 #   CLOUDSQL_TIER   — Cloud SQL machine type (default: db-f1-micro)
 #   GITHUB_REPO     — GitHub repo (org/name) for WIF setup; skip WIF if unset
 #
 # Usage:
-#   GCP_PROJECT=my-proj DB_PASS='StrongPass123!' ./scripts/setup-all-cloudrun.sh
+#   DB_PASS='StrongPass123!' ./scripts/setup-all-cloudrun.sh
+#   GCP_PROJECT=policing-apps DB_PASS='StrongPass123!' ./scripts/setup-all-cloudrun.sh
 #
 # Dry run (prints commands without executing):
-#   ./scripts/setup-all-cloudrun.sh --dry-run
+#   DB_PASS=test ./scripts/setup-all-cloudrun.sh --dry-run
 # =============================================================================
 set -euo pipefail
 
@@ -36,16 +43,18 @@ for arg in "$@"; do
 done
 
 # ---- Required env vars ----
-PROJECT="${GCP_PROJECT:?GCP_PROJECT must be set}"
 DB_PASS="${DB_PASS:?DB_PASS must be set}"
 
 # ---- Defaults ----
-REGION="${GCP_REGION:-asia-south1}"
+PROJECT="${GCP_PROJECT:-policing-apps}"
+REGION="${GCP_REGION:-asia-southeast1}"
 DB_USER="${DB_USER:-puda}"
 CLOUDSQL_TIER="${CLOUDSQL_TIER:-db-f1-micro}"
 GITHUB_REPO="${GITHUB_REPO:-}"
+# Cloud SQL instance region — same as Cloud Run region after migration to policing-db-v2
+CLOUDSQL_REGION="${CLOUDSQL_REGION:-asia-southeast1}"
 
-INSTANCE_NAME="policing-db"
+INSTANCE_NAME="${CLOUDSQL_INSTANCE:-policing-db-v2}"
 
 # ---- cd to repo root ----
 cd "$(dirname "$0")/.."
@@ -141,14 +150,14 @@ step "Creating Cloud SQL Postgres instance"
 
 if [ "$DRY_RUN" = true ]; then
   echo "[DRY RUN] Would create Cloud SQL instance '${INSTANCE_NAME}'"
-  CLOUDSQL_CONNECTION="${PROJECT}:${REGION}:${INSTANCE_NAME}"
+  CLOUDSQL_CONNECTION="${PROJECT}:${CLOUDSQL_REGION}:${INSTANCE_NAME}"
 else
   if gcloud sql instances describe "$INSTANCE_NAME" --project="$PROJECT" &>/dev/null; then
     warn "Cloud SQL instance '${INSTANCE_NAME}' already exists — skipping creation"
   else
     gcloud sql instances create "$INSTANCE_NAME" \
       --project="$PROJECT" \
-      --region="$REGION" \
+      --region="$CLOUDSQL_REGION" \
       --database-version=POSTGRES_15 \
       --tier="$CLOUDSQL_TIER" \
       --storage-type=SSD \
@@ -158,11 +167,11 @@ else
       --quiet
     ok "Cloud SQL instance created"
   fi
-  CLOUDSQL_CONNECTION="${PROJECT}:${REGION}:${INSTANCE_NAME}"
+  CLOUDSQL_CONNECTION="${PROJECT}:${CLOUDSQL_REGION}:${INSTANCE_NAME}"
 fi
 
-# Create databases
-DATABASES=(puda social_media dopams forensic)
+# Create databases (no PUDA — it has its own Cloud SQL in puda-489215)
+DATABASES=(social_media dopams forensic)
 for db in "${DATABASES[@]}"; do
   if [ "$DRY_RUN" = true ]; then
     echo "[DRY RUN] Would create database '${db}'"
@@ -197,7 +206,6 @@ ok "Cloud SQL setup complete: ${CLOUDSQL_CONNECTION}"
 step "Creating secrets in Secret Manager"
 
 # Generate JWT secrets (one per API)
-PUDA_JWT=$(openssl rand -base64 32)
 SM_JWT=$(openssl rand -base64 32)
 DOPAMS_JWT=$(openssl rand -base64 32)
 FORENSIC_JWT=$(openssl rand -base64 32)
@@ -208,15 +216,9 @@ mk_db_url() {
   echo "postgresql://${DB_USER}:${DB_PASS}@/${db_name}?host=/cloudsql/${CLOUDSQL_CONNECTION}"
 }
 
-PUDA_DB_URL=$(mk_db_url "puda")
 SM_DB_URL=$(mk_db_url "social_media")
 DOPAMS_DB_URL=$(mk_db_url "dopams")
 FORENSIC_DB_URL=$(mk_db_url "forensic")
-
-# PUDA
-create_secret "puda-database-url"             "$PUDA_DB_URL"
-create_secret "puda-jwt-secret"               "$PUDA_JWT"
-create_secret "puda-payment-webhook-secret"   "placeholder-change-when-gateway-ready"
 
 # Social Media
 create_secret "sm-database-url"               "$SM_DB_URL"
@@ -231,7 +233,6 @@ create_secret "forensic-database-url"         "$FORENSIC_DB_URL"
 create_secret "forensic-jwt-secret"           "$FORENSIC_JWT"
 
 ALL_SECRETS=(
-  puda-database-url puda-jwt-secret puda-payment-webhook-secret
   sm-database-url sm-jwt-secret
   dopams-database-url dopams-jwt-secret
   forensic-database-url forensic-jwt-secret
@@ -253,22 +254,24 @@ else
   done
   ok "Secret accessor granted for all secrets"
 
-  gcloud projects add-iam-policy-binding "$PROJECT" \
-    --member="serviceAccount:$COMPUTE_SA" \
-    --role=roles/cloudsql.client \
-    --quiet 2>/dev/null
-  ok "Cloud SQL client role granted"
+  # Grant project-level roles needed for Cloud Build + Cloud Run
+  for role in roles/cloudsql.client roles/storage.admin roles/artifactregistry.writer roles/artifactregistry.createOnPushWriter roles/logging.logWriter; do
+    gcloud projects add-iam-policy-binding "$PROJECT" \
+      --member="serviceAccount:$COMPUTE_SA" \
+      --role="$role" \
+      --quiet 2>/dev/null
+  done
+  ok "Project IAM roles granted (cloudsql.client, storage.admin, artifactregistry.writer, logging.logWriter)"
 fi
 
 echo ""
 echo "Generated JWT secrets (save these):"
-echo "  PUDA:     $PUDA_JWT"
 echo "  SM:       $SM_JWT"
 echo "  DOPAMS:   $DOPAMS_JWT"
 echo "  Forensic: $FORENSIC_JWT"
 
 # =========================================================================
-# PHASE 4: Build & Deploy APIs (4 services)
+# PHASE 4: Build & Deploy APIs (3 services)
 # =========================================================================
 step "Building and deploying API services"
 
@@ -283,7 +286,7 @@ deploy_api() {
   local dockerfile="$2"     # e.g. Dockerfile.api
   local db_url_secret="$3"  # Secret Manager secret name for database URL
   local jwt_secret="$4"     # Secret Manager secret name for JWT
-  local db_env_var="$5"     # Env var the API reads (e.g. DATABASE_URL, SM_DATABASE_URL)
+  local db_env_var="$5"     # Env var the API reads (e.g. SM_DATABASE_URL)
   shift 5
   local extra_secrets=("$@")  # Additional --set-secrets args
 
@@ -320,7 +323,7 @@ deploy_api() {
     --min-instances 0 \
     --max-instances 10 \
     --add-cloudsql-instances "$CLOUDSQL_CONNECTION" \
-    --set-env-vars "NODE_ENV=production,ALLOWED_ORIGINS=*" \
+    --set-env-vars "NODE_ENV=production,ALLOWED_ORIGINS=https://placeholder.invalid,DATABASE_SSL=false" \
     --set-secrets "$secrets_arg" \
     --quiet >&2
 
@@ -330,11 +333,6 @@ deploy_api() {
   health_check "$url" "$service_name" >&2
   echo "$url"  # only the URL goes to stdout (captured by caller)
 }
-
-# Deploy PUDA API
-PUDA_API_URL=$(deploy_api "puda-api" "Dockerfile.api" \
-  "puda-database-url" "puda-jwt-secret" "DATABASE_URL" \
-  "PAYMENT_GATEWAY_WEBHOOK_SECRET=puda-payment-webhook-secret:latest")
 
 # Deploy Social Media API
 SM_API_URL=$(deploy_api "social-media-api" "Dockerfile.social-media-api" \
@@ -349,13 +347,13 @@ FORENSIC_API_URL=$(deploy_api "forensic-api" "Dockerfile.forensic-api" \
   "forensic-database-url" "forensic-jwt-secret" "FORENSIC_DATABASE_URL")
 
 # =========================================================================
-# PHASE 5: Build & Deploy UIs (5 services)
+# PHASE 5: Build & Deploy UIs (3 services)
 # =========================================================================
 step "Building and deploying UI services"
 
 deploy_ui() {
   local service_name="$1"   # Cloud Run service name
-  local app_name="$2"       # Matches Dockerfile.<app_name> (citizen, officer, social-media-ui, etc.)
+  local app_name="$2"       # Matches Dockerfile.<app_name>
   local api_url="$3"        # Deployed API URL for VITE_API_BASE_URL
 
   echo "" >&2
@@ -391,10 +389,6 @@ deploy_ui() {
   echo "$url"  # only the URL goes to stdout
 }
 
-# PUDA UIs
-CITIZEN_URL=$(deploy_ui "puda-citizen" "citizen" "$PUDA_API_URL")
-OFFICER_URL=$(deploy_ui "puda-officer" "officer" "$PUDA_API_URL")
-
 # Social Media UI
 SM_UI_URL=$(deploy_ui "social-media-ui" "social-media-ui" "$SM_API_URL")
 
@@ -409,32 +403,69 @@ FORENSIC_UI_URL=$(deploy_ui "forensic-ui" "forensic-ui" "$FORENSIC_API_URL")
 # =========================================================================
 step "Updating API CORS origins with frontend URLs"
 
-run gcloud run services update puda-api \
-  --project "$PROJECT" --region "$REGION" \
-  --update-env-vars "ALLOWED_ORIGINS=${CITIZEN_URL},${OFFICER_URL}" \
-  --quiet
-ok "puda-api CORS → citizen + officer"
+SM_DOMAIN="police-smmt.adssoftek.com"
+DOPAMS_DOMAIN="police-dopams.adssoftek.com"
+FORENSIC_DOMAIN="police-forensic.adssoftek.com"
 
 run gcloud run services update social-media-api \
   --project "$PROJECT" --region "$REGION" \
-  --update-env-vars "ALLOWED_ORIGINS=${SM_UI_URL}" \
+  --update-env-vars "^::^ALLOWED_ORIGINS=${SM_UI_URL},https://${SM_DOMAIN}" \
   --quiet
-ok "social-media-api CORS → social-media-ui"
+ok "social-media-api CORS → social-media-ui + ${SM_DOMAIN}"
 
 run gcloud run services update dopams-api \
   --project "$PROJECT" --region "$REGION" \
-  --update-env-vars "ALLOWED_ORIGINS=${DOPAMS_UI_URL}" \
+  --update-env-vars "^::^ALLOWED_ORIGINS=${DOPAMS_UI_URL},https://${DOPAMS_DOMAIN}" \
   --quiet
-ok "dopams-api CORS → dopams-ui"
+ok "dopams-api CORS → dopams-ui + ${DOPAMS_DOMAIN}"
 
 run gcloud run services update forensic-api \
   --project "$PROJECT" --region "$REGION" \
-  --update-env-vars "ALLOWED_ORIGINS=${FORENSIC_UI_URL}" \
+  --update-env-vars "^::^ALLOWED_ORIGINS=${FORENSIC_UI_URL},https://${FORENSIC_DOMAIN}" \
   --quiet
-ok "forensic-api CORS → forensic-ui"
+ok "forensic-api CORS → forensic-ui + ${FORENSIC_DOMAIN}"
 
 # =========================================================================
-# PHASE 7: GitHub Actions CI/CD (Workload Identity Federation)
+# PHASE 7: Custom Domain Mapping
+# =========================================================================
+step "Mapping custom domains"
+
+map_domain() {
+  local service="$1"
+  local domain="$2"
+  if [ "$DRY_RUN" = true ]; then
+    echo "[DRY RUN] gcloud run domain-mappings create --service=${service} --domain=${domain}"
+    return
+  fi
+  if gcloud beta run domain-mappings describe --domain="$domain" \
+      --project="$PROJECT" --region="$REGION" &>/dev/null; then
+    warn "Domain mapping '${domain}' already exists"
+  else
+    gcloud beta run domain-mappings create \
+      --service="$service" \
+      --domain="$domain" \
+      --project="$PROJECT" \
+      --region="$REGION" \
+      --quiet
+    ok "Mapped ${domain} → ${service}"
+  fi
+}
+
+map_domain "social-media-ui" "$SM_DOMAIN"
+map_domain "dopams-ui"       "$DOPAMS_DOMAIN"
+map_domain "forensic-ui"     "$FORENSIC_DOMAIN"
+
+echo ""
+echo "┌──────────────────────────────────────────────────────────────┐"
+echo "│ DNS Records Required (CNAME → ghs.googlehosted.com)        │"
+echo "├──────────────────────────────────────────────────────────────┤"
+echo "│  ${SM_DOMAIN}       CNAME  ghs.googlehosted.com             │"
+echo "│  ${DOPAMS_DOMAIN}   CNAME  ghs.googlehosted.com             │"
+echo "│  ${FORENSIC_DOMAIN} CNAME  ghs.googlehosted.com             │"
+echo "└──────────────────────────────────────────────────────────────┘"
+
+# =========================================================================
+# PHASE 8: GitHub Actions CI/CD (Workload Identity Federation)
 # =========================================================================
 if [ -n "$GITHUB_REPO" ]; then
   step "Setting up GitHub Actions Workload Identity Federation"
@@ -530,34 +561,35 @@ fi
 # =========================================================================
 echo ""
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║         Policing Apps — Deployment Complete                 ║"
+echo "║    Policing Apps (non-PUDA) — Deployment Complete          ║"
 echo "╠══════════════════════════════════════════════════════════════╣"
-echo "║                                                            ║"
-echo "║  PUDA                                                      ║"
-printf "║    API:      %-46s ║\n" "$PUDA_API_URL"
-printf "║    Citizen:  %-46s ║\n" "$CITIZEN_URL"
-printf "║    Officer:  %-46s ║\n" "$OFFICER_URL"
 echo "║                                                            ║"
 echo "║  Social Media Intelligence                                 ║"
 printf "║    API:      %-46s ║\n" "$SM_API_URL"
 printf "║    UI:       %-46s ║\n" "$SM_UI_URL"
+printf "║              https://%-37s ║\n" "$SM_DOMAIN"
 echo "║                                                            ║"
 echo "║  DOPAMS                                                    ║"
 printf "║    API:      %-46s ║\n" "$DOPAMS_API_URL"
 printf "║    UI:       %-46s ║\n" "$DOPAMS_UI_URL"
+printf "║              https://%-37s ║\n" "$DOPAMS_DOMAIN"
 echo "║                                                            ║"
 echo "║  Forensic Science Lab                                      ║"
 printf "║    API:      %-46s ║\n" "$FORENSIC_API_URL"
 printf "║    UI:       %-46s ║\n" "$FORENSIC_UI_URL"
+printf "║              https://%-37s ║\n" "$FORENSIC_DOMAIN"
 echo "║                                                            ║"
 echo "║  Cloud SQL: ${CLOUDSQL_CONNECTION}"
-echo "║  Databases: puda, social_media, dopams, forensic           ║"
+echo "║  Databases: social_media, dopams, forensic                 ║"
+echo "║                                                            ║"
+echo "║  NOTE: PUDA deploys separately → scripts/setup-puda-cloudrun.sh"
 echo "║                                                            ║"
 echo "╠══════════════════════════════════════════════════════════════╣"
 echo "║  Next steps:                                               ║"
 echo "║    1. Save the JWT secrets above securely                  ║"
-echo "║    2. Test each API: curl <API_URL>/health                 ║"
-echo "║    3. Open each UI URL in browser                          ║"
+echo "║    2. Add DNS CNAME records (see above)                    ║"
+echo "║    3. Test each API: curl <API_URL>/health                 ║"
+echo "║    4. Open each UI URL in browser                          ║"
 if [ -n "$GITHUB_REPO" ]; then
 echo "║    4. Set the 2 GitHub secrets shown above                 ║"
 echo "║    5. Push to main to trigger CI/CD                        ║"

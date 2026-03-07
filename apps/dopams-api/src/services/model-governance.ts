@@ -154,3 +154,119 @@ export async function getVersionHistory(modelName: string): Promise<DbRow[]> {
   );
   return result.rows;
 }
+
+// ---------------------------------------------------------------------------
+// Production threshold enforcement (FR-26)
+// ---------------------------------------------------------------------------
+
+export interface ProductionThresholdResult {
+  passed: boolean;
+  modelId: string;
+  observedAccuracy: number | null;
+  minAccuracyThreshold: number;
+  activeFallback: { modelId: string; modelName: string; version: string } | null;
+}
+
+/**
+ * Check a production model's live accuracy against its min_accuracy_threshold.
+ *
+ * Accuracy is derived from the model_prediction_log (verified predictions only).
+ * If the model falls below threshold AND a fallback_model_id is configured, the
+ * fallback model is promoted to ACTIVE and the failing model is DEPRECATED.
+ *
+ * Returns { passed, activeFallback } so the caller can take further action.
+ */
+export async function enforceProductionThreshold(
+  modelId: string,
+): Promise<ProductionThresholdResult> {
+  // Load the model registry row including the new governance columns
+  const modelResult = await query(
+    `SELECT model_id, model_name, version, status, is_production,
+            min_accuracy_threshold, fallback_model_id, performance_metrics
+     FROM model_registry WHERE model_id = $1`,
+    [modelId],
+  );
+
+  if (modelResult.rows.length === 0) {
+    throw new Error("MODEL_NOT_FOUND");
+  }
+
+  const model = modelResult.rows[0] as DbRow;
+  const minThreshold = parseFloat(String(model.min_accuracy_threshold ?? 0.8));
+
+  // Compute live accuracy from prediction log (only verified predictions)
+  const statsResult = await query(
+    `SELECT
+       COUNT(*) FILTER (WHERE is_correct IS NOT NULL) AS verified_count,
+       COUNT(*) FILTER (WHERE is_correct = TRUE)      AS correct_count
+     FROM model_prediction_log
+     WHERE model_id = $1`,
+    [modelId],
+  );
+
+  const stats = statsResult.rows[0] as DbRow;
+  const verifiedCount = parseInt(String(stats.verified_count || "0"), 10);
+  const correctCount = parseInt(String(stats.correct_count || "0"), 10);
+
+  // Accuracy is null when there are no verified predictions yet
+  const observedAccuracy: number | null =
+    verifiedCount > 0 ? correctCount / verifiedCount : null;
+
+  // Threshold passes if we have no data yet (give benefit of the doubt) or if
+  // accuracy meets/exceeds the minimum
+  const passed = observedAccuracy === null || observedAccuracy >= minThreshold;
+
+  let activeFallback: ProductionThresholdResult["activeFallback"] = null;
+
+  if (!passed && model.fallback_model_id) {
+    const fallbackId = String(model.fallback_model_id);
+
+    // Load fallback model details
+    const fallbackResult = await query(
+      `SELECT model_id, model_name, version, status FROM model_registry WHERE model_id = $1`,
+      [fallbackId],
+    );
+
+    if (fallbackResult.rows.length > 0) {
+      const fallback = fallbackResult.rows[0] as DbRow;
+
+      // Promote fallback to ACTIVE — deprecate any currently active sibling first
+      await query(
+        `UPDATE model_registry
+         SET status = 'DEPRECATED', updated_at = NOW()
+         WHERE model_name = $1 AND status = 'ACTIVE' AND model_id != $2`,
+        [fallback.model_name, fallbackId],
+      );
+
+      // Deprecate the failing model itself
+      await query(
+        `UPDATE model_registry
+         SET status = 'DEPRECATED', is_production = FALSE, updated_at = NOW()
+         WHERE model_id = $1`,
+        [modelId],
+      );
+
+      // Activate the fallback
+      await query(
+        `UPDATE model_registry
+         SET status = 'ACTIVE', is_production = TRUE, activated_at = NOW(), updated_at = NOW()
+         WHERE model_id = $1`,
+        [fallbackId],
+      );
+
+      activeFallback = {
+        modelId: String(fallback.model_id),
+        modelName: String(fallback.model_name),
+        version: String(fallback.version),
+      };
+    }
+  }
+
+  return {
+    passed,
+    modelId,
+    observedAccuracy,
+    minAccuracyThreshold: minThreshold,
+    activeFallback,
+  };
+}

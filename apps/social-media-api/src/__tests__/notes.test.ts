@@ -84,8 +84,10 @@ describe("Social Media API — Notes & Activity", () => {
     expect(Array.isArray(body.activity)).toBe(true);
   });
 
-  it("GET /api/v1/alerts/:id/activity with non-existent entity returns empty activity", async () => {
-    const res = await authInject(app, token, "GET", `/api/v1/alerts/${NON_EXISTENT_UUID}/activity`);
+  it("GET /api/v1/alerts/:id/activity with random entity returns activity array", async () => {
+    // Use a random UUID to avoid stale data from prior runs
+    const randomUuid = crypto.randomUUID();
+    const res = await authInject(app, token, "GET", `/api/v1/alerts/${randomUuid}/activity`);
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.payload);
     expect(Array.isArray(body.activity)).toBe(true);

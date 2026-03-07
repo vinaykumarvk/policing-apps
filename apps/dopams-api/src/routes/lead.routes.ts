@@ -33,7 +33,7 @@ export async function registerLeadRoutes(app: FastifyInstance): Promise<void> {
        WHERE ($1::text IS NULL OR state_id = $1)
          AND ($2::text IS NULL OR priority = $2)
          AND ($3::text IS NULL OR source_type = $3)
-         AND ($4::uuid IS NULL OR unit_id = $4::uuid)
+         AND (unit_id = $4::uuid)
        ORDER BY created_at DESC
        LIMIT $5 OFFSET $6`,
       [state_id || null, priority || null, source_type || null, unitId, limit, offset],
@@ -45,28 +45,79 @@ export async function registerLeadRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/v1/leads/facets", async (request) => {
     const unitId = request.authUser?.unitId || null;
     const [stateRows, priorityRows, sourceRows] = await Promise.all([
-      query(`SELECT state_id AS value, COUNT(*)::int AS count FROM lead WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY state_id ORDER BY count DESC`, [unitId]),
-      query(`SELECT priority AS value, COUNT(*)::int AS count FROM lead WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY priority ORDER BY count DESC`, [unitId]),
-      query(`SELECT source_type AS value, COUNT(*)::int AS count FROM lead WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY source_type ORDER BY count DESC`, [unitId]),
+      query(`SELECT state_id AS value, COUNT(*)::int AS count FROM lead WHERE (unit_id = $1::uuid) GROUP BY state_id ORDER BY count DESC`, [unitId]),
+      query(`SELECT priority AS value, COUNT(*)::int AS count FROM lead WHERE (unit_id = $1::uuid) GROUP BY priority ORDER BY count DESC`, [unitId]),
+      query(`SELECT source_type AS value, COUNT(*)::int AS count FROM lead WHERE (unit_id = $1::uuid) GROUP BY source_type ORDER BY count DESC`, [unitId]),
     ]);
     return { facets: { state_id: stateRows.rows, priority: priorityRows.rows, source_type: sourceRows.rows } };
   });
 
   app.post("/api/v1/leads", {
-    schema: { body: { type: "object", additionalProperties: false, required: ["sourceType", "summary"], properties: { sourceType: { type: "string" }, summary: { type: "string" }, details: { type: "string" } } } },
+    schema: { body: { type: "object", additionalProperties: false, required: ["sourceType", "summary"], properties: {
+      sourceType: { type: "string" }, summary: { type: "string" }, details: { type: "string" },
+      channel: { type: "string" }, informantName: { type: "string" }, informantContact: { type: "string" },
+      urgency: { type: "string", enum: ["LOW", "NORMAL", "HIGH", "CRITICAL"] },
+      duplicateOfLeadId: { type: "string", format: "uuid" },
+      geoLatitude: { type: "number" }, geoLongitude: { type: "number" },
+    } } },
   }, async (request, reply) => {
-    const { sourceType, summary, details } = request.body as { sourceType: string; summary: string; details?: string };
+    const body = request.body as Record<string, unknown>;
+    const { sourceType, summary, details } = body as { sourceType: string; summary: string; details?: string };
     const { userId } = request.authUser!;
     const unitId = request.authUser?.unitId || null;
+    // Duplicate detection using pg_trgm similarity on summary
+    let duplicateScore = 0;
+    let duplicateOfId: string | null = (body.duplicateOfLeadId as string) || null;
+    if (!duplicateOfId) {
+      const dupeCheck = await query(
+        `SELECT lead_id, similarity(summary, $1) AS score
+         FROM lead
+         WHERE similarity(summary, $1) > 0.4
+           AND unit_id = $2::uuid
+         ORDER BY score DESC LIMIT 1`,
+        [summary, unitId],
+      ).catch(() => ({ rows: [] })); // pg_trgm may not be installed
+      if (dupeCheck.rows.length > 0) {
+        duplicateScore = parseFloat(dupeCheck.rows[0].score) || 0;
+        if (duplicateScore > 0.7) {
+          duplicateOfId = dupeCheck.rows[0].lead_id;
+        }
+      }
+    }
+
     const refResult = await query(`SELECT 'DOP-LEAD-' || EXTRACT(YEAR FROM NOW())::text || '-' || LPAD(nextval('dopams_lead_ref_seq')::text, 6, '0') AS ref`);
     const leadRef = refResult.rows[0].ref;
     const result = await query(
-      `INSERT INTO lead (lead_ref, source_type, summary, details, created_by, unit_id) VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING lead_id, lead_ref, source_type, summary, details, priority, state_id, unit_id, created_by, created_at`,
-      [leadRef, sourceType, summary, details || null, userId, unitId],
+      `INSERT INTO lead (lead_ref, source_type, summary, details, created_by, unit_id,
+        channel, informant_name, informant_contact, urgency, duplicate_of_lead_id, duplicate_score, geo_latitude, geo_longitude)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       RETURNING lead_id, lead_ref, source_type, summary, details, priority, state_id, unit_id,
+                 channel, urgency, duplicate_of_lead_id, duplicate_score, created_by, created_at`,
+      [leadRef, sourceType, summary, details || null, userId, unitId,
+       body.channel || null, body.informantName || null, body.informantContact || null,
+       body.urgency || "NORMAL", duplicateOfId,
+       duplicateScore, body.geoLatitude || null, body.geoLongitude || null],
     );
+
+    // Auto-generate memo if urgency is HIGH or CRITICAL
+    const newLead = result.rows[0];
+    if (body.urgency === "HIGH" || body.urgency === "CRITICAL") {
+      try {
+        const memoRef = await query(`SELECT 'DOP-MEMO-' || EXTRACT(YEAR FROM NOW())::text || '-' || LPAD(nextval('dopams_memo_ref_seq')::text, 6, '0') AS ref`);
+        await query(
+          `INSERT INTO memo (lead_id, memo_number, subject, body, created_by)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [newLead.lead_id, memoRef.rows[0].ref, `Auto-memo: ${summary.substring(0, 100)}`, `Auto-generated memo for ${body.urgency} lead.\n\n${summary}`, userId],
+        );
+        await query(`UPDATE lead SET auto_memo_generated = TRUE WHERE lead_id = $1`, [newLead.lead_id]);
+        newLead.auto_memo_generated = true;
+      } catch (memoErr) {
+        request.log.warn(memoErr, "Auto-memo generation failed");
+      }
+    }
+
     reply.code(201);
-    return { lead: result.rows[0] };
+    return { lead: newLead, ...(duplicateScore > 0.4 ? { duplicateWarning: { score: duplicateScore, matchedLeadId: duplicateOfId } } : {}) };
   });
 
   app.get("/api/v1/leads/:id", {
@@ -76,8 +127,10 @@ export async function registerLeadRoutes(app: FastifyInstance): Promise<void> {
     const unitId = request.authUser?.unitId || null;
     const result = await query(
       `SELECT lead_id, lead_ref, source_type, summary, details, priority, state_id, row_version,
-              subject_id, assigned_to, created_by, created_at, updated_at
-       FROM lead WHERE lead_id = $1 AND ($2::uuid IS NULL OR unit_id = $2::uuid)`,
+              subject_id, assigned_to, channel, informant_name, informant_contact, urgency,
+              duplicate_of_lead_id, auto_memo_generated, geo_latitude, geo_longitude,
+              created_by, created_at, updated_at
+       FROM lead WHERE lead_id = $1 AND unit_id = $2::uuid`,
       [id, unitId],
     );
     if (result.rows.length === 0) {

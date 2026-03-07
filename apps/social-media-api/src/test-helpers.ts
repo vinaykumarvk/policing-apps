@@ -1,65 +1,64 @@
-/**
- * Test helpers for Social Media API integration tests.
- * Provides app builder, auth token retrieval, and authenticated injection.
- */
-import path from "path";
-import dotenv from "dotenv";
-
-dotenv.config({ path: path.resolve(__dirname, "..", "..", "..", ".env") });
-
+import { FastifyInstance } from "fastify";
+import { createTestHelpers } from "@puda/api-core";
 import { buildApp } from "./app";
 
-export type TestApp = Awaited<ReturnType<typeof buildApp>>;
+const helpers = createTestHelpers({
+  buildApp,
+  dbUrlEnvVar: "SM_DATABASE_URL",
+  defaultDbUrl: "postgres://puda:puda@localhost:5432/social_media",
+});
 
-export async function buildTestApp(): Promise<TestApp> {
-  return buildApp(false);
-}
+export type TestApp = FastifyInstance;
 
-/**
- * Login and return a JWT token for the given credentials.
- * Returns null if login fails (e.g. wrong password or DB not available).
- */
-export async function getAuthToken(
-  app: TestApp,
-  username: string,
-  password: string,
-): Promise<string | null> {
-  const res = await app.inject({
-    method: "POST",
-    url: "/api/v1/auth/login",
-    payload: { username, password },
-  });
-  if (res.statusCode !== 200) return null;
-  return JSON.parse(res.payload).token;
-}
-
-/**
- * Inject a request with Bearer token authentication.
- */
-export function authInject(
-  app: TestApp,
-  token: string,
-  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
-  url: string,
-  body?: unknown,
-) {
-  const opts: Record<string, unknown> = {
-    method,
-    url,
-    headers: { authorization: `Bearer ${token}` },
-  };
-  if (body !== undefined) {
-    opts.payload = body;
-  }
-  return app.inject(opts as any);
-}
-
-/** Seed user credentials matching the seed script */
-export const SEED_USERS = {
-  admin: { username: "admin", password: "password", role: "PLATFORM_ADMINISTRATOR" },
-  analyst: { username: "analyst1", password: "password", role: "INTELLIGENCE_ANALYST" },
-  supervisor: { username: "supervisor1", password: "password", role: "SUPERVISOR" },
-} as const;
-
-/** A UUID that will never match any existing record */
 export const NON_EXISTENT_UUID = "00000000-0000-0000-0000-000000000000";
+
+export const SEED_USERS = {
+  admin: { username: "admin", password: "password" },
+  analyst: { username: "analyst1", password: "password" },
+};
+
+export const buildTestApp = helpers.buildTestApp;
+export const isDatabaseReady = helpers.isDatabaseReady;
+
+/** Wraps getAuthToken to return null instead of throwing when DB is unavailable */
+export async function getAuthToken(
+  app: FastifyInstance,
+  username = "admin",
+  password = "password",
+): Promise<string | null> {
+  try {
+    return await helpers.getAuthToken(app, username, password);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Authenticated inject helper — supports both call signatures:
+ *   authInject(app, token, method, url, body?)        — positional
+ *   authInject(app, token, { method, url, payload? })  — opts object
+ */
+export async function authInject(
+  app: FastifyInstance,
+  token: string,
+  methodOrOpts: string | { method: string; url: string; payload?: Record<string, unknown> | string },
+  url?: string,
+  body?: Record<string, unknown> | string,
+) {
+  if (typeof methodOrOpts === "object") {
+    // opts-object form
+    const res = await helpers.authInject(app, token, {
+      method: methodOrOpts.method as any,
+      url: methodOrOpts.url,
+      payload: methodOrOpts.payload,
+    });
+    return Object.assign(res, { payload: res.body });
+  }
+  // positional form
+  const res = await helpers.authInject(app, token, {
+    method: methodOrOpts as any,
+    url: url!,
+    payload: body,
+  });
+  return Object.assign(res, { payload: res.body });
+}

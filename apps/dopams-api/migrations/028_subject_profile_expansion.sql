@@ -1,0 +1,52 @@
+-- FR-04: Expand subject_profile to ~54 BRD-required columns + field provenance
+
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS father_name TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS mother_name TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS spouse_name TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS date_of_birth DATE;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS gender TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS height_cm NUMERIC(5,1);
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS weight_kg NUMERIC(5,1);
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS complexion TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS distinguishing_marks TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS blood_group TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS nationality TEXT DEFAULT 'Indian';
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS religion TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS caste TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS education TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS occupation TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS marital_status TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS known_languages JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS mobile_numbers JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS email_addresses JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS social_handles JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS aadhaar_hash TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS pan_number TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS passport_number TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS driving_license TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS voter_id TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS criminal_history JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS ndps_history JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS first_arrested_at TIMESTAMPTZ;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS total_arrests INTEGER DEFAULT 0;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS bail_status TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS monitoring_status TEXT DEFAULT 'NONE';
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS last_seen_location TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS known_associates JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS gang_affiliation TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS modus_operandi TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS threat_level TEXT DEFAULT 'UNKNOWN';
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS field_provenance JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS photo_urls JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS is_merged BOOLEAN DEFAULT FALSE;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS merged_into_id UUID REFERENCES subject_profile(subject_id);
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS source_system TEXT;
+ALTER TABLE subject_profile ADD COLUMN IF NOT EXISTS cctns_id TEXT;
+
+-- Indexes for common lookups
+CREATE INDEX IF NOT EXISTS idx_subject_monitoring_status ON subject_profile (monitoring_status) WHERE monitoring_status != 'NONE';
+CREATE INDEX IF NOT EXISTS idx_subject_threat_level ON subject_profile (threat_level) WHERE threat_level != 'UNKNOWN';
+CREATE INDEX IF NOT EXISTS idx_subject_merged_into ON subject_profile (merged_into_id) WHERE merged_into_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_subject_cctns_id ON subject_profile (cctns_id) WHERE cctns_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_subject_bail_status ON subject_profile (bail_status) WHERE bail_status IS NOT NULL;

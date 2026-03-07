@@ -27,6 +27,11 @@ services:
       dockerfile: Dockerfile.api
     container_name: puda-api
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "3001:8080"
     environment:
@@ -98,6 +103,7 @@ services:
       retries: 5
     networks:
       - sm-backend
+      - default
 
   social-media-api:
     build:
@@ -119,6 +125,12 @@ services:
       DATABASE_SSL: "false"
       JWT_SECRET: "${SM_JWT_SECRET:-sm-local-dev-secret}"
       ALLOWED_ORIGINS: "http://localhost:3020"
+      YOUTUBE_API_KEY: "${YOUTUBE_API_KEY:-}"
+      TWITTER_BEARER_TOKEN: "${TWITTER_BEARER_TOKEN:-}"
+      META_ACCESS_TOKEN: "${META_ACCESS_TOKEN:-}"
+      INSTAGRAM_BUSINESS_ACCOUNT_ID: "${INSTAGRAM_BUSINESS_ACCOUNT_ID:-}"
+      CONNECTOR_POLL_INTERVAL_MS: "300000"
+      ALERT_THREAT_THRESHOLD: "40"
     command: ["sh", "-c", "node apps/social-media-api/dist/migrate-runner.js && node apps/social-media-api/dist/index.js"]
     depends_on:
       social-media-db:

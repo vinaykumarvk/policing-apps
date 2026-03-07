@@ -156,7 +156,7 @@ run gcloud run deploy puda-api \
   --set-env-vars "PAYMENT_GATEWAY_PROVIDER=stub" \
   --set-env-vars "EMAIL_PROVIDER=stub" \
   --set-env-vars "SMS_PROVIDER=stub" \
-  --set-env-vars "ALLOWED_ORIGINS=*" \
+  --set-env-vars "ALLOWED_ORIGINS=https://placeholder.invalid" \
   --set-secrets "DATABASE_URL=puda-database-url:latest" \
   --set-secrets "JWT_SECRET=puda-jwt-secret:latest" \
   --set-secrets "PAYMENT_GATEWAY_WEBHOOK_SECRET=puda-payment-webhook-secret:latest" \

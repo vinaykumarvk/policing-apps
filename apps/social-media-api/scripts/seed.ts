@@ -73,6 +73,37 @@ async function seed() {
     }
   }
 
+  // 4. Source connectors
+  for (const c of [
+    { platform: "reddit", type: "Polling" },
+    { platform: "youtube", type: "Polling" },
+    { platform: "twitter", type: "Polling" },
+    { platform: "instagram", type: "Polling" },
+    { platform: "facebook", type: "Polling" },
+  ]) {
+    await query(
+      `INSERT INTO source_connector (platform, connector_type, config_jsonb, is_active)
+       SELECT $1, $2, '{}'::jsonb, true
+       WHERE NOT EXISTS (SELECT 1 FROM source_connector WHERE platform = $1)`,
+      [c.platform, c.type],
+    );
+  }
+  console.log("[SEED] Source connectors ensured");
+
+  // 5. Sample watchlist
+  await query(
+    `INSERT INTO watchlist (name, description, keywords, platforms, is_active, created_by)
+     SELECT $1, $2, $3, $4, true, (SELECT user_id FROM user_account WHERE username = 'admin' LIMIT 1)
+     WHERE NOT EXISTS (SELECT 1 FROM watchlist WHERE name = $1)`,
+    [
+      "Default Monitoring",
+      "Default watchlist for initial monitoring",
+      JSON.stringify(["cyber crime india", "online fraud", "social media threat"]),
+      JSON.stringify(["reddit", "youtube", "twitter", "instagram", "facebook"]),
+    ],
+  );
+  console.log("[SEED] Default watchlist ensured");
+
   console.log("[SEED] Social Media API seed complete!");
 }
 

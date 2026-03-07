@@ -32,6 +32,21 @@ import { registerGeofenceRoutes } from "./routes/geofence.routes";
 import { registerDrugClassifyRoutes } from "./routes/drug-classify.routes";
 import { registerModelRoutes } from "./routes/model.routes";
 import { registerDashboardRoutes } from "./routes/dashboard.routes";
+import { registerIngestionRoutes } from "./routes/ingestion.routes";
+import { registerEcourtsRoutes } from "./routes/ecourts.routes";
+import { registerUnocrossRoutes } from "./routes/unocross.routes";
+import { registerMonthlyReportRoutes } from "./routes/monthly-report.routes";
+import { registerDedupRoutes } from "./routes/dedup.routes";
+import { registerTaxonomyRoutes } from "./routes/taxonomy.routes";
+import { registerDossierRoutes } from "./routes/dossier.routes";
+import { registerInterrogationRoutes } from "./routes/interrogation.routes";
+import { registerJurisdictionRoutes } from "./routes/jurisdiction.routes";
+import { registerWatchlistRoutes } from "./routes/watchlist.routes";
+import { registerCdrRoutes } from "./routes/cdr.routes";
+import { registerEvidenceRoutes } from "./routes/evidence.routes";
+import { registerContentMonitoringRoutes } from "./routes/content-monitoring.routes";
+import { createOidcAuth, createOidcRoutes, createAuthMiddleware, createConfigGovernanceRoutes, createIdempotencyMiddleware } from "@puda/api-core";
+import { query } from "./db";
 
 
 export async function buildApp(logger = true): Promise<FastifyInstance> {
@@ -131,6 +146,11 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
         { name: "drug-classify", description: "Drug classification" },
         { name: "models", description: "Model governance" },
         { name: "memo", description: "Memo management" },
+        { name: "dedup", description: "Subject deduplication" },
+        { name: "dossiers", description: "Intelligence dossier assembly and export" },
+        { name: "interrogation", description: "Interrogation reports and report templates" },
+        { name: "evidence", description: "Digital evidence chain of custody" },
+        { name: "content-monitoring", description: "Cross-platform content monitoring" },
       ],
       components: {
         securitySchemes: {
@@ -155,6 +175,10 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
 
   registerAuthMiddleware(app);
   registerAuditLogger(app);
+
+  // Idempotency middleware for write endpoints
+  const idempotencyMiddleware = createIdempotencyMiddleware({ queryFn: query });
+  idempotencyMiddleware.register(app);
 
   app.addHook("onRequest", async (request) => {
     setLogContext({ requestId: request.id });
@@ -205,6 +229,46 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
   await registerDrugClassifyRoutes(app);
   await registerModelRoutes(app);
   await registerDashboardRoutes(app);
+  await registerIngestionRoutes(app);
+  await registerEcourtsRoutes(app);
+  await registerUnocrossRoutes(app);
+  await registerMonthlyReportRoutes(app);
+  await registerDedupRoutes(app);
+  await registerTaxonomyRoutes(app);
+  await registerDossierRoutes(app);
+  await registerInterrogationRoutes(app);
+  await registerJurisdictionRoutes(app);
+  await registerWatchlistRoutes(app);
+  await registerCdrRoutes(app);
+  await registerEvidenceRoutes(app);
+  await registerContentMonitoringRoutes(app);
+
+  // Config governance routes (always available)
+  const registerConfigGovernanceRoutes = createConfigGovernanceRoutes({ queryFn: query });
+  await registerConfigGovernanceRoutes(app);
+
+  // OIDC routes (conditionally enabled via env)
+  if (process.env.OIDC_ISSUER_URL) {
+    const auth = createAuthMiddleware({
+      cookieName: "dopams_auth",
+      defaultDevSecret: "dopams-dev-secret-DO-NOT-USE-IN-PRODUCTION",
+      queryFn: query,
+    });
+    const oidc = createOidcAuth({
+      issuerUrl: process.env.OIDC_ISSUER_URL,
+      clientId: process.env.OIDC_CLIENT_ID || "dopams",
+      clientSecret: process.env.OIDC_CLIENT_SECRET,
+      redirectUri: process.env.OIDC_REDIRECT_URI || "http://localhost:3001/api/v1/auth/oidc/callback",
+      claimMapping: {
+        userId: process.env.OIDC_CLAIM_USER_ID,
+        userType: process.env.OIDC_CLAIM_USER_TYPE,
+        roles: process.env.OIDC_CLAIM_ROLES,
+        unitId: process.env.OIDC_CLAIM_UNIT_ID,
+      },
+    }, query);
+    const registerOidcRoutes = createOidcRoutes({ auth, oidc });
+    await registerOidcRoutes(app);
+  }
 
   return app;
 }

@@ -42,7 +42,7 @@ describe("Social Media API — Workflow Transitions", () => {
       expect([404, 409]).toContain(res.statusCode);
     });
 
-    it("POST /api/v1/alerts/:id/transition with invalid transitionId on existing alert returns 409", async () => {
+    it("POST /api/v1/alerts/:id/transition with invalid transitionId on existing alert returns 400", async () => {
       // First, list alerts to find one if any exist
       const listRes = await authInject(app, token, "GET", "/api/v1/alerts?limit=1");
       const alerts = JSON.parse(listRes.payload).alerts;
@@ -52,7 +52,9 @@ describe("Social Media API — Workflow Transitions", () => {
       const res = await authInject(app, token, "POST", `/api/v1/alerts/${alertId}/transition`, {
         transitionId: "nonexistent_transition_id",
       });
-      expect(res.statusCode).toBe(409);
+      // Route checks available transitions and returns 400 INVALID_TRANSITION
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.payload).error).toBe("INVALID_TRANSITION");
     });
 
     it("GET /api/v1/alerts/:id/transitions returns transitions array for existing alert", async () => {

@@ -775,6 +775,7 @@ export default function App() {
     resumeHydratedRef.current = null;
     hashInitializedRef.current = false;
     deepLinkAppliedRef.current = false;
+    window.location.hash = "";
     setUsingStaleData(false);
     setLastSyncAt(null);
   }, [user]);
@@ -1070,6 +1071,7 @@ export default function App() {
   }, [formDirty]);
 
   const handleLogout = useCallback(() => {
+    window.location.hash = "";
     void flushCacheTelemetryNow(true).finally(() => logout());
   }, [flushCacheTelemetryNow, logout]);
 

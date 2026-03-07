@@ -1,172 +1,126 @@
-import { randomUUID } from "node:crypto";
-import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import jwt, { JwtPayload, SignOptions } from "jsonwebtoken";
+import { createAuthMiddleware } from "@puda/api-core";
 import { query } from "../db";
 
-if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
-  throw new Error("FATAL: JWT_SECRET must be set in production");
-}
-const JWT_SECRET = process.env.JWT_SECRET || "sm-dev-secret-DO-NOT-USE-IN-PRODUCTION";
-const COOKIE_NAME = "sm_auth";
-const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+export type { AuthPayload } from "@puda/api-core";
 
-const PUBLIC_ROUTES = ["/health", "/ready", "/api/v1/auth/login", "/api/v1/auth/logout"];
+const auth = createAuthMiddleware({
+  cookieName: "sm_auth",
+  defaultDevSecret: "sm-dev-secret-DO-NOT-USE-IN-PRODUCTION",
+  queryFn: query,
+});
 
-export interface AuthPayload {
-  userId: string;
-  userType: string;
-  roles: string[];
-  unitId: string | null;
-  jti: string;
-}
+export const verifyToken = auth.verifyToken;
+export const generateToken = auth.generateToken;
+export const setAuthCookie = auth.setAuthCookie;
+export const clearAuthCookie = auth.clearAuthCookie;
+export const checkTokenRevocation = auth.checkTokenRevocation;
+export const revokeToken = auth.revokeToken;
+export const revokeAllUserTokens = auth.revokeAllUserTokens;
 
-declare module "fastify" {
-  interface FastifyRequest {
-    authUser?: AuthPayload;
-    authToken?: string;
-  }
-}
+// FR-02: Permission level timeout mapping (PL0-PL4)
+const PERMISSION_LEVEL_TIMEOUT_MINUTES: Record<number, number> = {
+  0: 5,    // PL0 — highest privilege, shortest timeout
+  1: 15,   // PL1
+  2: 30,   // PL2
+  3: 60,   // PL3
+  4: 120,  // PL4 — lowest privilege, longest timeout
+};
 
-export function verifyToken(token: string): AuthPayload | null {
-  try {
-    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }) as JwtPayload;
-    if (!payload.userId || !payload.userType) return null;
-    return {
-      userId: payload.userId as string,
-      userType: payload.userType as string,
-      roles: (payload.roles as string[]) || [],
-      unitId: (payload.unitId as string) || null,
-      jti: (payload.jti as string) || "",
-    };
-  } catch {
-    return null;
-  }
+/**
+ * FR-02: Get the session timeout in minutes for a given permission level.
+ */
+export function getTimeoutForPermissionLevel(level: number): number {
+  return PERMISSION_LEVEL_TIMEOUT_MINUTES[level] ?? 30;
 }
 
-export function generateToken(user: { user_id: string; user_type: string; roles: string[]; unit_id?: string | null }): string {
-  return jwt.sign(
-    { userId: user.user_id, userType: user.user_type, roles: user.roles, unitId: user.unit_id || null, jti: randomUUID() },
-    JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || "30m" } as SignOptions
-  );
-}
-
-export function setAuthCookie(reply: FastifyReply, token: string): void {
-  reply.setCookie(COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 1800,
-  });
-}
-
-export function clearAuthCookie(reply: FastifyReply): void {
-  reply.clearCookie(COOKIE_NAME, { path: "/" });
-}
-
-export async function checkTokenRevocation(jti: string, userId: string, iat: number): Promise<boolean> {
-  // Check if the specific token JTI is in the denylist
-  const denyResult = await query(
-    "SELECT 1 FROM auth_token_denylist WHERE jti = $1",
-    [jti]
-  );
-  if (denyResult.rows.length > 0) return true;
-
-  // Check if the user has revoked all tokens issued before a certain time
-  const userResult = await query(
-    "SELECT tokens_revoked_before FROM user_account WHERE user_id = $1",
-    [userId]
-  );
-  if (userResult.rows.length > 0 && userResult.rows[0].tokens_revoked_before) {
-    const revokedBefore = new Date(userResult.rows[0].tokens_revoked_before).getTime() / 1000;
-    if (iat < revokedBefore) return true;
-  }
-
-  return false;
-}
-
-export async function revokeToken(jti: string, userId: string, expiresAt: Date): Promise<void> {
-  await query(
-    "INSERT INTO auth_token_denylist (jti, user_id, expires_at) VALUES ($1, $2, $3) ON CONFLICT (jti) DO NOTHING",
-    [jti, userId, expiresAt]
-  );
-}
-
-export async function revokeAllUserTokens(userId: string): Promise<void> {
-  await query(
-    "UPDATE user_account SET tokens_revoked_before = NOW() WHERE user_id = $1",
-    [userId]
-  );
-}
-
-async function checkSessionInactivity(jti: string, userId: string): Promise<boolean> {
+/**
+ * FR-02: Check if the user has a role with a permission level at or below the required level.
+ * Lower permission_level = higher privilege (PL0 is admin).
+ * Returns true if user has sufficient permission.
+ */
+export async function checkPermissionLevel(userId: string, requiredLevel: number): Promise<boolean> {
   const result = await query(
-    "SELECT last_activity_at FROM auth_session_activity WHERE jti = $1",
-    [jti]
+    `SELECT MIN(r.permission_level) AS min_level
+     FROM user_role ur
+     JOIN role r ON r.role_id = ur.role_id
+     WHERE ur.user_id = $1`,
+    [userId],
   );
-  if (result.rows.length === 0) return false; // First request — no inactivity yet
-  const lastActivity = new Date(result.rows[0].last_activity_at).getTime();
-  return Date.now() - lastActivity > INACTIVITY_TIMEOUT_MS;
+  if (result.rows.length === 0 || result.rows[0].min_level === null) return false;
+  return result.rows[0].min_level <= requiredLevel;
 }
 
-async function updateSessionActivity(jti: string, userId: string): Promise<void> {
-  try {
-    await query(
-      `INSERT INTO auth_session_activity (jti, user_id, last_activity_at)
-       VALUES ($1, $2, NOW())
-       ON CONFLICT (jti) DO UPDATE SET last_activity_at = NOW()
-       WHERE auth_session_activity.last_activity_at < NOW() - INTERVAL '1 minute'`,
-      [jti, userId]
-    );
-  } catch (err) {
-    // Non-critical: log but don't block the request
-    if (typeof process !== "undefined" && process.env.NODE_ENV !== "test") {
-      console.warn("[AUTH] Failed to update session activity:", err);
-    }
-  }
+/**
+ * FR-02: Get the session timeout for a user based on their highest-privilege role.
+ */
+export async function getUserSessionTimeout(userId: string): Promise<number> {
+  const result = await query(
+    `SELECT MIN(r.permission_level) AS min_level, MIN(r.session_timeout_minutes) AS min_timeout
+     FROM user_role ur
+     JOIN role r ON r.role_id = ur.role_id
+     WHERE ur.user_id = $1`,
+    [userId],
+  );
+  if (result.rows.length === 0 || result.rows[0].min_level === null) return 30;
+  return result.rows[0].min_timeout || getTimeoutForPermissionLevel(result.rows[0].min_level);
 }
 
-export function registerAuthMiddleware(app: FastifyInstance): void {
-  app.addHook("onRequest", async (request: FastifyRequest, reply: FastifyReply) => {
-    const url = request.url.split("?")[0];
-    if (PUBLIC_ROUTES.some((r) => url === r)) return;
-
-    const authHeader = request.headers.authorization;
-    const cookieToken = (request.cookies as Record<string, string> | undefined)?.sm_auth;
-    const token = cookieToken || (authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null);
-    if (!token) {
-      reply.code(401).send({ error: "AUTHENTICATION_REQUIRED", message: "Missing authentication", statusCode: 401 });
-      return;
+/**
+ * FR-02: Fastify preHandler to enforce a minimum permission level on a route.
+ * Usage: { preHandler: requirePermissionLevel(2) }
+ */
+export function requirePermissionLevel(requiredLevel: number) {
+  return async (request: import("fastify").FastifyRequest, reply: import("fastify").FastifyReply) => {
+    if (!request.authUser?.userId) {
+      return reply.code(401).send({ error: "UNAUTHORIZED", message: "Authentication required", statusCode: 401 });
     }
-    const payload = verifyToken(token);
-    if (!payload) {
-      reply.code(401).send({ error: "INVALID_TOKEN", message: "Token is invalid or expired", statusCode: 401 });
-      return;
+    const allowed = await checkPermissionLevel(request.authUser.userId, requiredLevel);
+    if (!allowed) {
+      return reply.code(403).send({
+        error: "INSUFFICIENT_PERMISSION_LEVEL",
+        message: `This action requires permission level ${requiredLevel} or higher`,
+        statusCode: 403,
+      });
     }
+  };
+}
 
-    // Check if token has been revoked
-    const decoded = jwt.decode(token) as JwtPayload | null;
-    const iat = decoded?.iat || 0;
-    if (payload.jti) {
-      const isRevoked = await checkTokenRevocation(payload.jti, payload.userId, iat);
-      if (isRevoked) {
-        reply.code(401).send({ error: "TOKEN_REVOKED", message: "Token has been revoked", statusCode: 401 });
-        return;
+export function registerAuthMiddleware(app: import("fastify").FastifyInstance) {
+  auth.register(app);
+
+  // FR-17: MFA enforcement check — skip for auth routes and health endpoints
+  const MFA_EXEMPT_PATHS = ["/api/v1/auth/", "/health", "/ready", "/api/v1/auth/mfa"];
+  const MFA_REVALIDATION_HOURS = parseInt(process.env.MFA_REVALIDATION_HOURS || "8", 10);
+
+  app.addHook("onRequest", async (request, reply) => {
+    // Skip MFA check for exempt paths
+    if (MFA_EXEMPT_PATHS.some((p) => request.url.startsWith(p))) return;
+    if (!request.authUser?.userId) return;
+
+    try {
+      const userResult = await query(
+        `SELECT mfa_enforced, mfa_last_verified_at FROM user_account WHERE user_id = $1`,
+        [request.authUser.userId],
+      );
+      if (userResult.rows.length === 0) return;
+
+      const { mfa_enforced, mfa_last_verified_at } = userResult.rows[0];
+      if (!mfa_enforced) return;
+
+      // Check if MFA was verified within the revalidation window
+      if (mfa_last_verified_at) {
+        const verifiedAt = new Date(mfa_last_verified_at);
+        const hoursSinceVerification = (Date.now() - verifiedAt.getTime()) / (1000 * 60 * 60);
+        if (hoursSinceVerification < MFA_REVALIDATION_HOURS) return;
       }
 
-      // Check session inactivity (15-minute timeout)
-      const isInactive = await checkSessionInactivity(payload.jti, payload.userId);
-      if (isInactive) {
-        reply.code(401).send({ error: "SESSION_INACTIVE", message: "Session expired due to inactivity", statusCode: 401 });
-        return;
-      }
-
-      // Update last activity (throttled to once per minute)
-      updateSessionActivity(payload.jti, payload.userId);
+      reply.code(403).send({
+        error: "MFA_REQUIRED",
+        message: "Multi-factor authentication verification required",
+        statusCode: 403,
+      });
+    } catch {
+      // MFA check failure should not block requests — log and continue
     }
-
-    request.authUser = payload;
-    request.authToken = token;
   });
 }

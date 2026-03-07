@@ -78,12 +78,9 @@ describe("Social Media API — Pagination", () => {
     expect(typeof body.total).toBe("number");
   });
 
-  it("default limit caps at 200 (alerts)", async () => {
-    // Requesting limit=999 should be capped to 200 by the server
+  it("limit exceeding maximum (200) is rejected by schema validation", async () => {
+    // Fastify schema enforces maximum: 200 on the limit parameter
     const res = await authInject(app, token, "GET", "/api/v1/alerts?limit=999");
-    expect(res.statusCode).toBe(200);
-    const body = JSON.parse(res.payload);
-    // Even if there are 999 records, the server should cap at 200
-    expect(body.alerts.length).toBeLessThanOrEqual(200);
+    expect(res.statusCode).toBe(400);
   });
 });

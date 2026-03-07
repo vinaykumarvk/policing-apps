@@ -89,7 +89,7 @@ export default function App() {
 
   const isAdmin = roles.includes("admin");
 
-  const handleLogout = useCallback(() => { clearCachedState(); logout(); }, [logout]);
+  const handleLogout = useCallback(() => { clearCachedState(); window.location.hash = ""; logout(); }, [logout]);
 
   const { showWarning: idleWarning, dismissWarning } = useIdleTimeout(handleLogout);
 
@@ -219,7 +219,7 @@ export default function App() {
     return () => window.removeEventListener("popstate", handle);
   }, [auth]);
 
-  useEffect(() => { if (auth) return; hashInitializedRef.current = false; }, [auth]);
+  useEffect(() => { if (auth) return; hashInitializedRef.current = false; window.location.hash = ""; }, [auth]);
 
   const navigate = (target: View, id?: string) => {
     setResourceId(id || null);

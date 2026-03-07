@@ -1,96 +1,53 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { createAdminRoutes } from "@puda/api-core";
+import { FastifyInstance } from "fastify";
 import { query } from "../db";
-import { createUser } from "../auth";
-import { sendError, send400, send403, send404 } from "../errors";
+import { sendError, send400 } from "../errors";
 
-function validatePasswordComplexity(pw: string): string | null {
-  if (pw.length < 12) return "Password must be at least 12 characters";
-  if (!/[A-Z]/.test(pw)) return "Password must contain an uppercase letter";
-  if (!/[a-z]/.test(pw)) return "Password must contain a lowercase letter";
-  if (!/[0-9]/.test(pw)) return "Password must contain a digit";
-  if (!/[^A-Za-z0-9]/.test(pw)) return "Password must contain a special character";
-  return null;
-}
-
-function requireAdmin(request: FastifyRequest, reply: FastifyReply): boolean {
-  const roles = request.authUser?.roles ?? [];
-  if (!roles.includes("ADMINISTRATOR") && !roles.includes("PLATFORM_ADMINISTRATOR")) {
-    send403(reply, "FORBIDDEN", "Administrator access required");
-    return false;
-  }
-  return true;
-}
+const baseAdminRoutes = createAdminRoutes({ queryFn: query });
 
 export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
-  app.addHook("onRequest", async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!requireAdmin(request, reply)) return;
-  });
+  // Register base admin routes from @puda/api-core
+  await baseAdminRoutes(app);
 
-  app.get("/api/v1/users", async () => {
-    const result = await query(
-      `SELECT u.user_id, u.username, u.full_name, u.user_type, u.is_active, u.created_at,
-              COALESCE(array_agg(r.role_key) FILTER (WHERE r.role_key IS NOT NULL), '{}') AS roles
-       FROM user_account u
-       LEFT JOIN user_role ur ON ur.user_id = u.user_id
-       LEFT JOIN role r ON r.role_id = ur.role_id
-       GROUP BY u.user_id
-       ORDER BY u.created_at DESC`,
-    );
-    return { users: result.rows, total: result.rows.length };
-  });
-
-  app.post("/api/v1/users", {
-    schema: { body: { type: "object", additionalProperties: false, required: ["username", "password", "fullName"], properties: { username: { type: "string", minLength: 3, maxLength: 100 }, password: { type: "string", minLength: 12, maxLength: 128 }, fullName: { type: "string", minLength: 1, maxLength: 200 }, userType: { type: "string" } } } },
-  }, async (request, reply) => {
-    const { username, password, fullName, userType } = request.body as { username: string; password: string; fullName: string; userType?: string };
-    const pwError = validatePasswordComplexity(password);
-    if (pwError) return send400(reply, "WEAK_PASSWORD", pwError);
-    try {
-      const user = await createUser({ username, password, fullName, userType });
-      reply.code(201);
-      return { user };
-    } catch (err: unknown) {
-      const pgCode = err instanceof Error && "code" in err ? (err as any).code : undefined;
-      if (pgCode === "23505") {
-        return send400(reply, "USERNAME_EXISTS", "Username already taken");
-      }
-      request.log.error(err, "User creation failed");
-      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
-    }
-  });
-
-  app.put("/api/v1/users/:id/role", {
+  // Data export with mandatory justification
+  app.post("/api/v1/admin/export", {
     schema: {
-      params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } },
-      body: { type: "object", additionalProperties: false, required: ["roleId"], properties: { roleId: { type: "string" }, action: { type: "string", enum: ["assign", "revoke"] } } },
+      body: {
+        type: "object",
+        additionalProperties: false,
+        required: ["exportType", "justification"],
+        properties: {
+          exportType: { type: "string" },
+          filters: { type: "object" },
+          justification: { type: "string", minLength: 10 },
+        },
+      },
     },
   }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const { roleId, action } = request.body as { roleId: string; action?: "assign" | "revoke" };
+    try {
+      const { exportType, filters, justification } = request.body as {
+        exportType: string;
+        filters?: Record<string, unknown>;
+        justification: string;
+      };
+      const { userId } = request.authUser!;
 
-    if (id === request.authUser?.userId) {
-      return send403(reply, "SELF_ROLE_CHANGE", "Cannot modify your own roles");
-    }
+      if (!justification || justification.trim().length < 10) {
+        return send400(reply, "JUSTIFICATION_REQUIRED", "Export justification must be at least 10 characters");
+      }
 
-    const userCheck = await query(`SELECT 1 FROM user_account WHERE user_id = $1`, [id]);
-    if (userCheck.rows.length === 0) {
-      return send404(reply, "USER_NOT_FOUND", "User not found");
-    }
-
-    const roleCheck = await query(`SELECT role_id FROM role WHERE role_id = $1`, [roleId]);
-    if (roleCheck.rows.length === 0) {
-      return send404(reply, "ROLE_NOT_FOUND", "Role not found");
-    }
-
-    if (action === "revoke") {
-      await query(`DELETE FROM user_role WHERE user_id = $1 AND role_id = $2`, [id, roleId]);
-    } else {
-      await query(
-        `INSERT INTO user_role (user_id, role_id) VALUES ($1, $2) ON CONFLICT (user_id, role_id) DO NOTHING`,
-        [id, roleId],
+      // Log the export with justification
+      const result = await query(
+        `INSERT INTO export_log (export_type, filters_jsonb, justification, created_by)
+         VALUES ($1, $2, $3, $4)
+         RETURNING export_id, export_type, justification, created_by, created_at`,
+        [exportType, JSON.stringify(filters || {}), justification, userId],
       );
-    }
 
-    return { success: true };
+      return { export: result.rows[0], message: "Export initiated" };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to initiate export");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
   });
 }

@@ -77,6 +77,7 @@ export default function Login() {
         throw new Error(t("login.access_denied"));
       }
 
+      window.location.hash = "";
       login(data.user, data.token);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("login.login_failed"));

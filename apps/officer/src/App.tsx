@@ -76,6 +76,7 @@ export default function App() {
 
   const handleLogout = useCallback(() => {
     clearOfficerCachedState();
+    window.location.hash = "";
     logout();
   }, [logout]);
 
@@ -467,6 +468,7 @@ export default function App() {
   useEffect(() => {
     if (auth) return;
     hashInitializedRef.current = false;
+    window.location.hash = "";
   }, [auth]);
 
   // --- Login gate ---

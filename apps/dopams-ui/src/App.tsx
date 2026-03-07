@@ -106,6 +106,7 @@ export default function App() {
 
   const handleLogout = useCallback(() => {
     clearCachedState();
+    window.location.hash = "";
     logout();
   }, [logout]);
 
@@ -300,10 +301,11 @@ export default function App() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, [auth]);
 
-  // Reset hash on logout
+  // Reset hash on logout / session expiry
   useEffect(() => {
     if (auth) return;
     hashInitializedRef.current = false;
+    window.location.hash = "";
   }, [auth]);
 
   const navigate = (target: View, id?: string) => {

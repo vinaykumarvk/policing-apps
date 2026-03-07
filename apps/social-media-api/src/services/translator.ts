@@ -71,10 +71,12 @@ export async function translateText(params: {
   text: string;
   targetLanguage: string;
   createdBy?: string;
+  detectedLang?: string;
+  langConfidence?: number;
 }): Promise<DbRow> {
-  const { sourceEntityType, sourceEntityId, text, targetLanguage, createdBy } = params;
+  const { sourceEntityType, sourceEntityId, text, targetLanguage, createdBy, detectedLang, langConfidence } = params;
 
-  const sourceLang = detectLanguage(text);
+  const sourceLang = detectedLang || detectLanguage(text);
 
   // Check for existing translation
   const existing = await query(
@@ -96,10 +98,10 @@ export async function translateText(params: {
 
     const result = await query(
       `INSERT INTO translation_record
-        (source_entity_type, source_entity_id, source_language, target_language, source_text, translated_text, status, provider, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, 'COMPLETED', 'INTERNAL', $7)
+        (source_entity_type, source_entity_id, source_language, target_language, source_text, translated_text, status, provider, created_by, detected_lang, lang_confidence)
+       VALUES ($1, $2, $3, $4, $5, $6, 'COMPLETED', 'INTERNAL', $7, $8, $9)
        RETURNING *`,
-      [sourceEntityType, sourceEntityId, sourceLang, targetLanguage, text, translated, createdBy || null],
+      [sourceEntityType, sourceEntityId, sourceLang, targetLanguage, text, translated, createdBy || null, detectedLang || sourceLang, langConfidence ?? null],
     );
 
     return result.rows[0];
@@ -107,10 +109,10 @@ export async function translateText(params: {
     const errMsg = err instanceof Error ? err.message : String(err);
     const result = await query(
       `INSERT INTO translation_record
-        (source_entity_type, source_entity_id, source_language, target_language, source_text, status, error_message, provider, created_by)
-       VALUES ($1, $2, $3, $4, $5, 'FAILED', $6, 'INTERNAL', $7)
+        (source_entity_type, source_entity_id, source_language, target_language, source_text, status, error_message, provider, created_by, detected_lang, lang_confidence)
+       VALUES ($1, $2, $3, $4, $5, 'FAILED', $6, 'INTERNAL', $7, $8, $9)
        RETURNING *`,
-      [sourceEntityType, sourceEntityId, sourceLang, targetLanguage, text, errMsg, createdBy || null],
+      [sourceEntityType, sourceEntityId, sourceLang, targetLanguage, text, errMsg, createdBy || null, detectedLang || sourceLang, langConfidence ?? null],
     );
     return result.rows[0];
   }

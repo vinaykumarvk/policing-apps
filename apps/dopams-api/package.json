@@ -21,6 +21,8 @@
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/swagger": "^9.6.0",
     "@fastify/swagger-ui": "^5.2.2",
+    "@puda/api-core": "^0.1.0",
+    "@puda/api-integrations": "^0.1.0",
     "@puda/shared": "^0.1.0",
     "@puda/workflow-engine": "^0.1.0",
     "argon2": "^0.44.0",

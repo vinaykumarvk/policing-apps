@@ -3,8 +3,13 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { query } from "../db";
 import { sendError, send404 } from "../errors";
+import { validateFilePath } from "@puda/api-core";
 import { executeTransition } from "../workflow-bridge";
 import { getAvailableTransitions } from "../workflow-bridge/transitions";
+import { createEvidencePackager } from "@puda/api-integrations";
+import { generateAndLogWatermark } from "../services/watermark";
+
+const EVIDENCE_BASE_DIR = process.env.EVIDENCE_STORAGE_DIR || "/data/evidence";
 
 export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void> {
   app.post("/api/v1/evidence/capture", {
@@ -22,15 +27,23 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
         fileHash = createHash("sha256").update(buffer).digest("hex");
       } else if (screenshotUrl) {
         // If a screenshot path is provided without inline content, try to hash from disk
+        const safePath = validateFilePath(screenshotUrl, EVIDENCE_BASE_DIR);
+        if (!safePath) {
+          return sendError(reply, 400, "INVALID_FILE_PATH", "File path is outside the allowed storage directory");
+        }
         try {
-          const buffer = await readFile(screenshotUrl);
+          const buffer = await readFile(safePath);
           fileHash = createHash("sha256").update(buffer).digest("hex");
         } catch (fsErr: unknown) {
           request.log.warn(fsErr, "Could not read file for hash computation");
         }
       } else if (archiveUrl) {
+        const safeArchivePath = validateFilePath(archiveUrl, EVIDENCE_BASE_DIR);
+        if (!safeArchivePath) {
+          return sendError(reply, 400, "INVALID_FILE_PATH", "File path is outside the allowed storage directory");
+        }
         try {
-          const buffer = await readFile(archiveUrl);
+          const buffer = await readFile(safeArchivePath);
           fileHash = createHash("sha256").update(buffer).digest("hex");
         } catch (fsErr: unknown) {
           request.log.warn(fsErr, "Could not read archive for hash computation");
@@ -63,7 +76,7 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
         `SELECT evidence_id, evidence_ref, content_id, alert_id, case_id, capture_type, screenshot_url,
                 archive_url, hash_sha256, chain_of_custody, state_id, row_version,
                 captured_by, created_at, updated_at
-         FROM evidence_item WHERE evidence_id = $1 AND ($2::uuid IS NULL OR unit_id = $2::uuid)`,
+         FROM evidence_item WHERE evidence_id = $1 AND (unit_id = $2::uuid)`,
         [id, unitId],
       );
       if (result.rows.length === 0) {
@@ -120,8 +133,11 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
       let verificationError: string | null = null;
       const fileUrl = ev.screenshot_url || ev.archive_url;
       if (fileUrl) {
-        try {
-          const buffer = await readFile(fileUrl);
+        const safePath = validateFilePath(fileUrl, EVIDENCE_BASE_DIR);
+        if (!safePath) {
+          verificationError = "INVALID_FILE_PATH";
+        } else try {
+          const buffer = await readFile(safePath);
           recomputedHash = createHash("sha256").update(buffer).digest("hex");
         } catch (fsErr: unknown) {
           verificationError = "FILE_NOT_ACCESSIBLE";
@@ -196,6 +212,72 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
       return { success: true, newStateId: result.newStateId };
     } catch (err: unknown) {
       request.log.error(err, "Failed to execute evidence transition");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  // Package evidence as ZIP with SHA-256 manifest
+  app.post("/api/v1/evidence/:id/package", {
+    schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const { userId } = request.authUser!;
+      const unitId = request.authUser?.unitId || null;
+
+      const result = await query(
+        `SELECT e.evidence_id, e.evidence_ref, e.content_id, e.case_id, e.capture_type,
+                e.screenshot_url, e.archive_url, e.hash_sha256
+         FROM evidence_item e
+         WHERE e.evidence_id = $1 AND e.unit_id = $2::uuid`,
+        [id, unitId],
+      );
+      if (result.rows.length === 0) return send404(reply, "EVIDENCE_NOT_FOUND", "Evidence not found");
+      const ev = result.rows[0];
+
+      const items: Array<{ filename: string; data: Buffer; mimeType: string; metadata?: Record<string, unknown> }> = [];
+      const fileUrl = ev.screenshot_url || ev.archive_url;
+      if (fileUrl) {
+        const safePath = validateFilePath(fileUrl, EVIDENCE_BASE_DIR);
+        if (!safePath) {
+          return sendError(reply, 400, "INVALID_FILE_PATH", "Evidence file path is outside the allowed storage directory");
+        }
+        try {
+          const buffer = await readFile(safePath);
+          const filename = fileUrl.split("/").pop() || "evidence-file";
+          const mimeType = ev.screenshot_url ? "image/png" : "application/octet-stream";
+          items.push({
+            filename,
+            data: buffer,
+            mimeType,
+            metadata: { evidenceRef: ev.evidence_ref, storedHash: ev.hash_sha256 },
+          });
+        } catch (fsErr: unknown) {
+          request.log.warn(fsErr, "Could not read evidence file for packaging");
+          return sendError(reply, 422, "FILE_NOT_ACCESSIBLE", "Evidence file could not be read from storage");
+        }
+      } else {
+        return sendError(reply, 422, "NO_FILE_PATH", "Evidence has no associated file to package");
+      }
+
+      // FR-10: Apply watermark on evidence export/share
+      const watermarkText = await generateAndLogWatermark(userId, "sm_evidence", id, "EVIDENCE_PACKAGE");
+
+      const caseId = ev.case_id || ev.content_id || "unknown";
+      const packager = createEvidencePackager();
+      const zipBuffer = await packager.packageEvidence(caseId, userId, items);
+
+      await query(
+        `INSERT INTO custody_event (evidence_id, event_type, actor_id, details) VALUES ($1, 'PACKAGED', $2, $3)`,
+        [id, userId, JSON.stringify({ format: "ZIP+SHA256", itemCount: items.length, watermark: watermarkText })],
+      ).catch((err: unknown) => { app.log.warn(err, "Custody event write failed"); });
+
+      reply.header("Content-Type", "application/zip");
+      reply.header("Content-Disposition", `attachment; filename="evidence-${ev.evidence_ref}.zip"`);
+      reply.header("X-Watermark", watermarkText);
+      return reply.send(zipBuffer);
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to package evidence");
       return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
     }
   });

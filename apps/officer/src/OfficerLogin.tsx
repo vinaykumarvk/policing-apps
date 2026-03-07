@@ -21,6 +21,7 @@ export default function OfficerLogin({ onLogin }: OfficerLoginProps) {
     setLoginError(null);
     setLoginLoading(true);
     try {
+      window.location.hash = "";
       await onLogin(loginId, loginPassword);
     } catch (err) {
       setLoginError(err instanceof Error ? err.message : "Login failed");

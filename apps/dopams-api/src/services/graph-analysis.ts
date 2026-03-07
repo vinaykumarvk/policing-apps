@@ -27,10 +27,13 @@ interface GraphAnalysis {
   communities: { id: string; members: string[] }[];
 }
 
-// Build adjacency list from entity_relationship table
-async function buildAdjacencyList(): Promise<Map<string, Set<string>>> {
+// Build adjacency list from entity_relationship table with row limit to prevent memory exhaustion
+const MAX_RELATIONSHIPS = 50000;
+
+async function buildAdjacencyList(_maxDepth = 3): Promise<Map<string, Set<string>>> {
   const result = await query(
-    `SELECT from_entity_id::text, to_entity_id::text FROM entity_relationship`
+    `SELECT from_entity_id::text, to_entity_id::text FROM entity_relationship LIMIT $1`,
+    [MAX_RELATIONSHIPS],
   );
 
   const adj = new Map<string, Set<string>>();
@@ -168,8 +171,8 @@ function detectCommunities(adj: Map<string, Set<string>>): Map<string, string> {
   return communityMap;
 }
 
-export async function analyzeNetwork(): Promise<GraphAnalysis> {
-  const adj = await buildAdjacencyList();
+export async function analyzeNetwork(maxDepth = 3): Promise<GraphAnalysis> {
+  const adj = await buildAdjacencyList(maxDepth);
 
   if (adj.size === 0) {
     return { nodes: [], edges: [], kingpins: [], communities: [] };
@@ -227,7 +230,8 @@ export async function analyzeNetwork(): Promise<GraphAnalysis> {
 
   // Get edges
   const edgeResult = await query(
-    `SELECT from_entity_id::text as "from", to_entity_id::text as "to", relationship_type as type, strength FROM entity_relationship`
+    `SELECT from_entity_id::text as "from", to_entity_id::text as "to", relationship_type as type, strength FROM entity_relationship LIMIT $1`,
+    [MAX_RELATIONSHIPS],
   );
   const edges: GraphEdge[] = edgeResult.rows;
 

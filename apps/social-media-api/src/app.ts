@@ -33,6 +33,14 @@ import { registerGeofenceRoutes } from "./routes/geofence.routes";
 import { registerDrugClassifyRoutes } from "./routes/drug-classify.routes";
 import { registerModelRoutes } from "./routes/model.routes";
 import { registerDashboardRoutes } from "./routes/dashboard.routes";
+import { registerConnectorRoutes } from "./routes/connector.routes";
+import { registerActorRoutes } from "./routes/actor.routes";
+import { registerSavedSearchRoutes } from "./routes/saved-search.routes";
+import { registerSlangRoutes } from "./routes/slang.routes";
+import { registerTaxonomyRoutes } from "./routes/taxonomy.routes";
+import { registerReportTemplateRoutes } from "./routes/report-template.routes";
+import { createOidcAuth, createOidcRoutes, createAuthMiddleware, createConfigGovernanceRoutes, createIdempotencyMiddleware } from "@puda/api-core";
+import { query } from "./db";
 
 export async function buildApp(logger = true): Promise<FastifyInstance> {
   const isTestRuntime = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
@@ -132,6 +140,11 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
         { name: "geofence", description: "Geofence management" },
         { name: "drug-classify", description: "Drug classification" },
         { name: "models", description: "Model governance" },
+        { name: "connectors", description: "Source connector management" },
+        { name: "actors", description: "Social media actor management" },
+        { name: "saved-searches", description: "Saved search management" },
+        { name: "taxonomy", description: "Taxonomy versioning and rules" },
+        { name: "report-templates", description: "Report template management and MIS queries" },
       ],
       components: {
         securitySchemes: {
@@ -156,6 +169,10 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
 
   registerAuthMiddleware(app);
   registerAuditLogger(app);
+
+  // Idempotency middleware for write endpoints (FR-15 AC-03)
+  const idempotencyMiddleware = createIdempotencyMiddleware({ queryFn: query });
+  idempotencyMiddleware.register(app);
 
   app.addHook("onRequest", async (request) => {
     setLogContext({ requestId: request.id });
@@ -207,6 +224,39 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
   await registerDrugClassifyRoutes(app);
   await registerModelRoutes(app);
   await registerDashboardRoutes(app);
+  await registerConnectorRoutes(app);
+  await registerActorRoutes(app);
+  await registerSavedSearchRoutes(app);
+  await registerSlangRoutes(app);
+  await registerTaxonomyRoutes(app);
+  await registerReportTemplateRoutes(app);
+
+  // Config governance routes
+  const registerConfigGovernanceRoutes = createConfigGovernanceRoutes({ queryFn: query });
+  await registerConfigGovernanceRoutes(app);
+
+  // OIDC routes (conditionally enabled via env)
+  if (process.env.OIDC_ISSUER_URL) {
+    const auth = createAuthMiddleware({
+      cookieName: "sm_auth",
+      defaultDevSecret: "sm-dev-secret-DO-NOT-USE-IN-PRODUCTION",
+      queryFn: query,
+    });
+    const oidc = createOidcAuth({
+      issuerUrl: process.env.OIDC_ISSUER_URL,
+      clientId: process.env.OIDC_CLIENT_ID || "social-media",
+      clientSecret: process.env.OIDC_CLIENT_SECRET,
+      redirectUri: process.env.OIDC_REDIRECT_URI || "http://localhost:3004/api/v1/auth/oidc/callback",
+      claimMapping: {
+        userId: process.env.OIDC_CLAIM_USER_ID,
+        userType: process.env.OIDC_CLAIM_USER_TYPE,
+        roles: process.env.OIDC_CLAIM_ROLES,
+        unitId: process.env.OIDC_CLAIM_UNIT_ID,
+      },
+    }, query);
+    const registerOidcRoutes = createOidcRoutes({ auth, oidc });
+    await registerOidcRoutes(app);
+  }
 
   return app;
 }

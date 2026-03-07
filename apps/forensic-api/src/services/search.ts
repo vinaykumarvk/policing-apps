@@ -89,8 +89,12 @@ export async function globalSearch(params: {
   limit?: number;
   offset?: number;
   entityTypes?: string[];
+  artifactTypes?: string[];
+  riskBands?: string[];
+  dateFrom?: string;
+  dateTo?: string;
 }): Promise<{ results: SearchResult[]; total: number }> {
-  const { q, fuzzy = false, limit = 20, offset = 0, entityTypes } = params;
+  const { q, fuzzy = false, limit = 20, offset = 0, entityTypes, artifactTypes, riskBands, dateFrom, dateTo } = params;
   let searchTerm = q.trim();
 
   if (params.transliterate) {
@@ -154,5 +158,39 @@ export async function globalSearch(params: {
   return {
     results: results.slice(0, limit),
     total: results.length,
+  };
+}
+
+/**
+ * FR-05: Faceted search — return filter counts for artifact_type, risk_band, date ranges
+ */
+export async function getSearchFacets(unitId?: string): Promise<Record<string, unknown>> {
+  const [artifactTypes, riskBands, dateRanges] = await Promise.all([
+    query(
+      `SELECT artifact_type AS value, COUNT(*)::int AS count
+       FROM artifact
+       WHERE artifact_type IS NOT NULL
+       GROUP BY artifact_type ORDER BY count DESC`,
+    ),
+    query(
+      `SELECT risk_band AS value, COUNT(*)::int AS count
+       FROM risk_score
+       WHERE risk_band IS NOT NULL
+       GROUP BY risk_band ORDER BY count DESC`,
+    ),
+    query(
+      `SELECT
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int AS last_7_days,
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int AS last_30_days,
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '90 days')::int AS last_90_days,
+         COUNT(*)::int AS all_time
+       FROM artifact`,
+    ),
+  ]);
+
+  return {
+    artifact_type: artifactTypes.rows,
+    risk_band: riskBands.rows,
+    date_range: dateRanges.rows[0] || {},
   };
 }

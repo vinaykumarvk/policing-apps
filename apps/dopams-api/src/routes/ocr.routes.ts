@@ -4,6 +4,7 @@ import { sendError, send400, send404 } from "../errors";
 
 export async function registerOcrRoutes(app: FastifyInstance): Promise<void> {
   // Submit OCR job for a document / evidence item
+  // FR-03: Accepts language parameter (te/en/hi) and confidence_threshold
   app.post("/api/v1/ocr/submit", {
     schema: {
       body: {
@@ -12,17 +13,23 @@ export async function registerOcrRoutes(app: FastifyInstance): Promise<void> {
         required: ["evidenceId"],
         properties: {
           evidenceId: { type: "string", format: "uuid" },
+          language: { type: "string", enum: ["en", "hi", "te"], default: "en" },
+          confidenceThreshold: { type: "number", minimum: 0, maximum: 1, default: 0.7 },
         },
       },
     },
   }, async (request, reply) => {
     try {
-      const { evidenceId } = request.body as { evidenceId: string };
+      const { evidenceId, language, confidenceThreshold } =
+        request.body as { evidenceId: string; language?: string; confidenceThreshold?: number };
       if (!evidenceId) {
         return send400(reply, "VALIDATION_ERROR", "evidenceId is required");
       }
       const userId = request.authUser?.userId || "";
-      const result = await submitOcrJob(evidenceId, userId);
+      const result = await submitOcrJob(evidenceId, userId, {
+        language: language || "en",
+        confidenceThreshold: confidenceThreshold ?? 0.7,
+      });
       reply.code(201);
       return result;
     } catch (err: unknown) {

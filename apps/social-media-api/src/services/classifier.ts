@@ -52,12 +52,44 @@ export function classifyContent(text: string): ClassificationResult {
     factors.push({ factor: "lengthy_content", weight: 0.1, score: 30, detail: "Content exceeds 500 characters" });
   }
 
+  // Actor history risk bonus (FR-07) — will be applied if actorRiskBonus > 0
+  // This is a placeholder; callers can add actor-specific factors after calling classifyContent
+
   // Calculate weighted risk score
   const riskScore = factors.length > 0
     ? Math.min(100, factors.reduce((sum, f) => sum + f.weight * f.score, 0) / factors.reduce((sum, f) => sum + f.weight, 0))
     : 0;
 
   return { category: bestCategory, riskScore: Math.round(riskScore * 100) / 100, factors };
+}
+
+/**
+ * FR-07: Classify content with actor history risk bonus.
+ * If the actor is a repeat offender or has 3+ flagged posts, add a risk bonus.
+ */
+export function classifyContentWithActorHistory(
+  text: string,
+  actorFlaggedPosts: number,
+  isRepeatOffender: boolean,
+): ClassificationResult {
+  const base = classifyContent(text);
+
+  if (isRepeatOffender || actorFlaggedPosts >= 3) {
+    const bonus = Math.min(actorFlaggedPosts * 5, 30);
+    base.factors.push({
+      factor: "repeat_offender_history",
+      weight: 0.4,
+      score: bonus,
+      detail: `Actor has ${actorFlaggedPosts} flagged posts, repeat_offender=${isRepeatOffender}`,
+    });
+    // Recalculate
+    const totalWeight = base.factors.reduce((s, f) => s + f.weight, 0);
+    base.riskScore = Math.min(100, Math.round(
+      (base.factors.reduce((s, f) => s + f.weight * f.score, 0) / totalWeight) * 100,
+    ) / 100);
+  }
+
+  return base;
 }
 
 export async function classifyEntity(entityType: string, entityId: string): Promise<DbRow> {

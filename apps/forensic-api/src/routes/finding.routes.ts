@@ -28,7 +28,7 @@ export async function registerFindingRoutes(app: FastifyInstance): Promise<void>
 
       const result = await query(
         `SELECT finding_id, case_id, artifact_id, finding_type, severity, title,
-                description, state_id, created_at,
+                description, analysis_source, state_id, created_at,
                 COUNT(*) OVER() AS total_count
          FROM ai_finding
          WHERE case_id = $1
