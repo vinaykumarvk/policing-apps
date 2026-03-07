@@ -60,7 +60,7 @@ function writeLocal(prefs: UserPreferences) {
 
 export function usePreferences(
   apiBaseUrl: string,
-  authHeaders: () => Record<string, string>,
+  authHeaders: () => RequestInit,
   userId: string | undefined
 ) {
   const [preferences, setPreferences] = useState<UserPreferences>(readLocal);
@@ -78,7 +78,7 @@ export function usePreferences(
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch(`${apiBaseUrl}/api/v1/profile/me`, { headers: authHeaders() });
+        const res = await fetch(`${apiBaseUrl}/api/v1/profile/me`, authHeaders());
         if (!res.ok || cancelled) return;
         const data = await res.json();
         const remotePrefs = data.preferences;
@@ -114,8 +114,8 @@ export function usePreferences(
         if (!userId) return;
         const current = readLocal();
         void fetch(`${apiBaseUrl}/api/v1/profile/me`, {
+          ...authHeaders(),
           method: "PATCH",
-          headers: authHeaders(),
           body: JSON.stringify({ preferences: { [key]: value } }),
         }).then((res) => {
           if (res.ok) {

@@ -105,7 +105,7 @@ function getStatusBadgeClass(status: string): string {
 
 export default function ReportComplaint({ onBack, isOffline }: ReportComplaintProps) {
   const { t } = useTranslation();
-  const { token } = useAuth();
+  const { user, authHeaders } = useAuth();
   const [subView, setSubView] = useState<SubView>("list");
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [total, setTotal] = useState(0);
@@ -206,18 +206,13 @@ export default function ReportComplaint({ onBack, isOffline }: ReportComplaintPr
     };
   }, []);
 
-  const authHeaders = useCallback((): Record<string, string> => {
-    if (!token) return {};
-    return { Authorization: `Bearer ${token}` };
-  }, [token]);
-
   const parseWithAI = useCallback(async (transcript: string) => {
     setAiParsing(true);
     try {
       const lang = navigator.language?.startsWith("hi") ? "hi" : navigator.language?.startsWith("pa") ? "pa" : "en";
       const res = await fetch(`${apiBaseUrl}/api/v1/ai/parse-complaint`, {
+        ...authHeaders(),
         method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ transcript, language: lang }),
       });
       if (!res.ok) return;
@@ -241,15 +236,13 @@ export default function ReportComplaint({ onBack, isOffline }: ReportComplaintPr
   }, [authHeaders]);
 
   const loadComplaints = useCallback(async () => {
-    if (isOffline || !token) return;
+    if (isOffline || !user) return;
     setLoading(true);
     setError(null);
     try {
       const qs = new URLSearchParams();
       if (statusFilter !== "ALL") qs.set("status", statusFilter);
-      const res = await fetch(`${apiBaseUrl}/api/v1/complaints?${qs}`, {
-        headers: authHeaders(),
-      });
+      const res = await fetch(`${apiBaseUrl}/api/v1/complaints?${qs}`, authHeaders());
       if (!res.ok) throw new Error("Failed to load");
       const data = await res.json();
       setComplaints(data.complaints || []);
@@ -259,7 +252,7 @@ export default function ReportComplaint({ onBack, isOffline }: ReportComplaintPr
     } finally {
       setLoading(false);
     }
-  }, [token, isOffline, statusFilter, authHeaders, t]);
+  }, [user, isOffline, statusFilter, authHeaders, t]);
 
   useEffect(() => {
     loadComplaints();
@@ -267,11 +260,11 @@ export default function ReportComplaint({ onBack, isOffline }: ReportComplaintPr
 
   const loadComplaintDetail = useCallback(
     async (complaintNumber: string) => {
-      if (!token) return;
+      if (!user) return;
       try {
         const res = await fetch(
           `${apiBaseUrl}/api/v1/complaints/${encodeURIComponent(complaintNumber)}`,
-          { headers: authHeaders() }
+          authHeaders()
         );
         if (!res.ok) throw new Error("Failed to load");
         const data: Complaint = await res.json();
@@ -281,13 +274,13 @@ export default function ReportComplaint({ onBack, isOffline }: ReportComplaintPr
         setError(t("complaints.failed_load"));
       }
     },
-    [token, authHeaders, t]
+    [user, authHeaders, t]
   );
 
   const handleSubmitComplaint = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      if (isOffline || !token) return;
+      if (isOffline || !user) return;
 
       // Submit-time validation guard
       const submitErrors: Record<string, string> = {};
@@ -309,8 +302,8 @@ export default function ReportComplaint({ onBack, isOffline }: ReportComplaintPr
       setSuccessMsg(null);
       try {
         const res = await fetch(`${apiBaseUrl}/api/v1/complaints`, {
+          ...authHeaders(),
           method: "POST",
-          headers: { ...authHeaders(), "Content-Type": "application/json" },
           body: JSON.stringify({
             violationType: formData.violationType,
             subject: formData.subject,
@@ -351,12 +344,12 @@ export default function ReportComplaint({ onBack, isOffline }: ReportComplaintPr
         setFiling(false);
       }
     },
-    [isOffline, token, formData, authHeaders, t, loadComplaints]
+    [isOffline, user, formData, authHeaders, t, loadComplaints]
   );
 
   const handleUploadEvidence = useCallback(
     async (file: File) => {
-      if (!selectedComplaint || !token) return;
+      if (!selectedComplaint || !user) return;
       setEvidenceUploading(true);
       setEvidenceError(null);
       try {
@@ -365,8 +358,8 @@ export default function ReportComplaint({ onBack, isOffline }: ReportComplaintPr
         const res = await fetch(
           `${apiBaseUrl}/api/v1/complaints/${encodeURIComponent(selectedComplaint.complaint_number)}/evidence`,
           {
+            ...authHeaders(),
             method: "POST",
-            headers: authHeaders(),
             body: fd,
           }
         );
@@ -382,7 +375,7 @@ export default function ReportComplaint({ onBack, isOffline }: ReportComplaintPr
         setEvidenceUploading(false);
       }
     },
-    [selectedComplaint, token, authHeaders, loadComplaintDetail, t]
+    [selectedComplaint, user, authHeaders, loadComplaintDetail, t]
   );
 
   // Filter complaints locally by search

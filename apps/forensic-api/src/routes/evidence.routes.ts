@@ -3,8 +3,11 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { query } from "../db";
 import { sendError, send403, send404 } from "../errors";
-import { validateFilePath } from "@puda/api-core";
+import { validateFilePath, createRoleGuard } from "@puda/api-core";
 import { createEvidencePackager, createPdfGenerator } from "@puda/api-integrations";
+
+const requireEvidenceUpload = createRoleGuard(["EXAMINER", "SUPERVISOR", "ADMINISTRATOR", "PLATFORM_ADMINISTRATOR"]);
+const requireEvidenceDelete = createRoleGuard(["SUPERVISOR", "ADMINISTRATOR", "PLATFORM_ADMINISTRATOR"]);
 
 const EVIDENCE_BASE_DIR = process.env.EVIDENCE_STORAGE_DIR || "/data/evidence";
 
@@ -15,6 +18,7 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
       body: { type: "object", additionalProperties: false, required: ["sourceType"], properties: { sourceType: { type: "string" }, description: { type: "string" }, filePath: { type: "string" }, fileContent: { type: "string", description: "Base64-encoded file content for hash computation" } } },
     },
   }, async (request, reply) => {
+    if (!requireEvidenceUpload(request, reply)) return;
     try {
       const { id: caseId } = request.params as { id: string };
       const { sourceType, description, filePath, fileContent } = request.body as { sourceType: string; description?: string; filePath?: string; fileContent?: string };

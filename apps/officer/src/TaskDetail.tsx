@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Card, Field, Input, Modal, Textarea } from "@puda/shared";
+import { Bilingual } from "./Bilingual";
 import { Task, Application, apiBaseUrl } from "./types";
 
 // Field label map for structured data display
@@ -99,7 +100,7 @@ interface TaskDetailProps {
   application: Application;
   serviceConfig: any;
   officerUserId: string;
-  authHeaders: () => Record<string, string>;
+  authHeaders: () => RequestInit;
   isOffline: boolean;
   fromSearch: boolean;
   onBack: () => void;
@@ -190,9 +191,7 @@ export default function TaskDetail({
   }, [previewBlobUrl]);
 
   const fetchDocBlob = useCallback(async (docId: string): Promise<{ url: string; mime: string }> => {
-    const res = await fetch(`${apiBaseUrl}/api/v1/documents/${docId}/download`, {
-      headers: authHeaders(),
-    });
+    const res = await fetch(`${apiBaseUrl}/api/v1/documents/${docId}/download`, authHeaders());
     if (!res.ok) throw new Error("Failed to fetch document");
     const mime = res.headers.get("content-type") || "application/octet-stream";
     const blob = await res.blob();
@@ -251,8 +250,8 @@ export default function TaskDetail({
     setDocVerifyFeedback(null);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/documents/${docId}/verify`, {
+        ...authHeaders(),
         method: "PATCH",
-        headers: authHeaders(),
         body: JSON.stringify({ status, remarks: remarks || undefined }),
       });
       if (!res.ok) {
@@ -317,8 +316,8 @@ export default function TaskDetail({
         body.verificationData = { checklist: verificationChecklist, remarks: verificationRemarks };
       }
       const res = await fetch(`${apiBaseUrl}/api/v1/tasks/${task.task_id}/actions`, {
+        ...authHeaders(),
         method: "POST",
-        headers: authHeaders(),
         body: JSON.stringify(body),
       });
       if (!res.ok) {
@@ -377,7 +376,7 @@ export default function TaskDetail({
                 </label>
               ))}
             </div>
-            <Field label={t("task.verification_remarks")} htmlFor="verification-remarks">
+            <Field label={<Bilingual tKey="task.verification_remarks" />} htmlFor="verification-remarks">
               <Textarea
                 id="verification-remarks"
                 value={verificationRemarks}
@@ -579,7 +578,7 @@ export default function TaskDetail({
               <div className="action-form">
                 {action === "QUERY" && (
                   <>
-                    <Field label={t("task.query_message")} htmlFor="query-message" required>
+                    <Field label={<Bilingual tKey="task.query_message" />} htmlFor="query-message" required>
                       <Textarea
                         id="query-message"
                         value={queryMessage}
@@ -588,7 +587,7 @@ export default function TaskDetail({
                         disabled={isOffline || actionLoading}
                       />
                     </Field>
-                    <Field label={t("task.unlock_fields")} htmlFor="unlock-fields">
+                    <Field label={<Bilingual tKey="task.unlock_fields" />} htmlFor="unlock-fields">
                       <Input
                         id="unlock-fields"
                         type="text"
@@ -602,7 +601,7 @@ export default function TaskDetail({
                         disabled={isOffline || actionLoading}
                       />
                     </Field>
-                    <Field label={t("task.unlock_documents")} htmlFor="unlock-documents">
+                    <Field label={<Bilingual tKey="task.unlock_documents" />} htmlFor="unlock-documents">
                       <Input
                         id="unlock-documents"
                         type="text"
@@ -618,7 +617,7 @@ export default function TaskDetail({
                     </Field>
                   </>
                 )}
-                <Field label={t("task.remarks")} htmlFor="action-remarks" required={action === "REJECT"}>
+                <Field label={<Bilingual tKey="task.remarks" />} htmlFor="action-remarks" required={action === "REJECT"}>
                   <Textarea
                     id="action-remarks"
                     value={remarks}

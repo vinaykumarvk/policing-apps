@@ -26,20 +26,20 @@ export default function SubjectDetail({ id, authHeaders, isOffline, onBack }: Pr
   const [submittingNote, setSubmittingNote] = useState(false);
 
   const fetchTransitions = () => {
-    fetch(`${apiBaseUrl}/api/v1/subjects/${id}/transitions`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/subjects/${id}/transitions`, authHeaders())
       .then((r) => r.ok ? r.json() : { transitions: [] })
       .then((data) => setAvailableTransitions(data.transitions || []))
       .catch(() => setAvailableTransitions([]));
   };
 
   const fetchNotes = () => {
-    fetch(`${apiBaseUrl}/api/v1/subjects/${id}/notes`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/subjects/${id}/notes`, authHeaders())
       .then((r) => r.ok ? r.json() : { notes: [] })
       .then((data) => setNotes(data.notes || []))
       .catch(() => setNotes([]));
   };
   const fetchActivity = () => {
-    fetch(`${apiBaseUrl}/api/v1/subjects/${id}/activity`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/subjects/${id}/activity`, authHeaders())
       .then((r) => r.ok ? r.json() : { events: [] })
       .then((data) => setActivity(data.events || data.activity || []))
       .catch(() => setActivity([]));
@@ -49,7 +49,7 @@ export default function SubjectDetail({ id, authHeaders, isOffline, onBack }: Pr
     setSubmittingNote(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/subjects/${id}/notes`, {
-        method: "POST", headers: authHeaders(),
+        ...authHeaders(), method: "POST",
         body: JSON.stringify({ note_text: newNote }),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
@@ -61,7 +61,7 @@ export default function SubjectDetail({ id, authHeaders, isOffline, onBack }: Pr
   };
 
   useEffect(() => {
-    fetch(`${apiBaseUrl}/api/v1/subjects/${id}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/subjects/${id}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
       .then((data) => { setSubject(data.subject || data); fetchTransitions(); fetchNotes(); fetchActivity(); })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load subject"))
@@ -73,12 +73,12 @@ export default function SubjectDetail({ id, authHeaders, isOffline, onBack }: Pr
     setTransitioning(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/subjects/${id}/transition`, {
+        ...authHeaders(),
         method: "POST",
-        headers: authHeaders(),
         body: JSON.stringify({ transitionId: selectedTransition, remarks }),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
-      const entityRes = await fetch(`${apiBaseUrl}/api/v1/subjects/${id}`, { headers: authHeaders() });
+      const entityRes = await fetch(`${apiBaseUrl}/api/v1/subjects/${id}`, authHeaders());
       if (entityRes.ok) { const d = await entityRes.json(); setSubject(d.subject || d); }
       setSelectedTransition("");
       setRemarks("");

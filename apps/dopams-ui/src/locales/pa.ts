@@ -264,6 +264,9 @@ const pa: Record<string, string> = {
   "idle.warning_title": "Session Expiring",
   "idle.warning_message": "Your session will expire in 1 minute due to inactivity. Move the mouse or press a key to stay logged in.",
   "idle.continue": "Continue Session",
+  "error.boundary_title": "ਕੁਝ ਗਲਤ ਹੋ ਗਿਆ",
+  "error.reported_refresh": "ਇਸ ਗਲਤੀ ਦੀ ਰਿਪੋਰਟ ਕੀਤੀ ਗਈ ਹੈ। ਪੇਜ ਰਿਫ੍ਰੈਸ਼ ਕਰਨ ਦੀ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  "error.refresh_page": "ਪੇਜ ਰਿਫ੍ਰੈਸ਼ ਕਰੋ",
 };
 
 export default pa;

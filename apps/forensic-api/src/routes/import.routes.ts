@@ -3,6 +3,9 @@ import { query } from "../db";
 import { sendError, send400, send404 } from "../errors";
 import { executeImport } from "../services/import-executor";
 import { listParsers } from "../parsers/parser-registry";
+import { createRoleGuard } from "@puda/api-core";
+
+const requireImport = createRoleGuard(["EXAMINER", "SUPERVISOR", "ADMINISTRATOR", "PLATFORM_ADMINISTRATOR"]);
 
 export async function registerImportRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/v1/imports", {
@@ -86,6 +89,7 @@ export async function registerImportRoutes(app: FastifyInstance): Promise<void> 
       },
     },
   }, async (request, reply) => {
+    if (!requireImport(request, reply)) return;
     try {
       const body = request.body as Record<string, unknown>;
       const idempotencyKey = request.headers["idempotency-key"] as string | undefined;

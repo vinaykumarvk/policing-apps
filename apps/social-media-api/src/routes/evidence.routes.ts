@@ -3,12 +3,13 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { query } from "../db";
 import { sendError, send404 } from "../errors";
-import { validateFilePath } from "@puda/api-core";
+import { validateFilePath, createRoleGuard } from "@puda/api-core";
 import { executeTransition } from "../workflow-bridge";
 import { getAvailableTransitions } from "../workflow-bridge/transitions";
 import { createEvidencePackager } from "@puda/api-integrations";
 import { generateAndLogWatermark } from "../services/watermark";
 
+const requireAnalyst = createRoleGuard(["ANALYST", "SUPERVISOR", "PLATFORM_ADMINISTRATOR"]);
 const EVIDENCE_BASE_DIR = process.env.EVIDENCE_STORAGE_DIR || "/data/evidence";
 
 export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void> {
@@ -195,18 +196,11 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
       const { transitionId, remarks } = request.body as { transitionId: string; remarks?: string };
       const { userId, roles } = request.authUser!;
 
-      // Validate transition is allowed from current state
-      const stateResult = await query(`SELECT state_id FROM evidence_item WHERE evidence_id = $1`, [id]);
-      if (stateResult.rows.length === 0) return send404(reply, "EVIDENCE_NOT_FOUND", "Evidence not found");
-      const available = getAvailableTransitions("sm_evidence", stateResult.rows[0].state_id);
-      if (!available.some((t) => t.transitionId === transitionId)) {
-        return sendError(reply, 400, "INVALID_TRANSITION", "Transition not allowed from current state");
-      }
-
       const result = await executeTransition(
         id, "sm_evidence", transitionId, userId, "OFFICER", roles, remarks,
       );
       if (!result.success) {
+        if (result.error === "ENTITY_NOT_FOUND") return send404(reply, "EVIDENCE_NOT_FOUND", "Evidence not found");
         return sendError(reply, 409, result.error || "TRANSITION_FAILED", "Evidence transition failed");
       }
       return { success: true, newStateId: result.newStateId };
@@ -220,6 +214,7 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
   app.post("/api/v1/evidence/:id/package", {
     schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
   }, async (request, reply) => {
+    if (!requireAnalyst(request, reply)) return;
     try {
       const { id } = request.params as { id: string };
       const { userId } = request.authUser!;

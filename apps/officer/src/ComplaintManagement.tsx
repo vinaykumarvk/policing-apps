@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Card, Field, SkeletonBlock, Textarea } from "@puda/shared";
+import { Bilingual } from "./Bilingual";
 import { apiBaseUrl } from "./types";
 
 interface Complaint {
@@ -36,7 +37,7 @@ interface Evidence {
 }
 
 interface ComplaintManagementProps {
-  authHeaders: () => Record<string, string>;
+  authHeaders: () => RequestInit;
   isOffline: boolean;
   onBack: () => void;
 }
@@ -129,7 +130,7 @@ export default function ComplaintManagement({
       params.set("limit", "50");
       const res = await fetch(
         `${apiBaseUrl}/api/v1/officer/complaints?${params.toString()}`,
-        { headers: authHeaders() }
+        authHeaders()
       );
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
@@ -155,7 +156,7 @@ export default function ComplaintManagement({
     try {
       const res = await fetch(
         `${apiBaseUrl}/api/v1/officer/complaints/${encodeURIComponent(complaint.complaint_number)}`,
-        { headers: authHeaders() }
+        authHeaders()
       );
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
@@ -180,8 +181,8 @@ export default function ComplaintManagement({
       const res = await fetch(
         `${apiBaseUrl}/api/v1/officer/complaints/${encodeURIComponent(selected.complaint_number)}/status`,
         {
+          ...authHeaders(),
           method: "PATCH",
-          headers: authHeaders(),
           body: JSON.stringify({
             status: newStatus,
             officerRemarks: officerRemarks || undefined,
@@ -214,7 +215,7 @@ export default function ComplaintManagement({
     try {
       const res = await fetch(
         `${apiBaseUrl}/api/v1/officer/complaints/${encodeURIComponent(complaintNumber)}/evidence/${evidenceId}/file`,
-        { headers: authHeaders() }
+        authHeaders()
       );
       if (!res.ok) throw new Error("Failed to fetch evidence");
       const blob = await res.blob();
@@ -395,7 +396,7 @@ export default function ComplaintManagement({
             <div className="action-panel">
               <h2>{t("complaints.update_status")}</h2>
               <div className="action-form">
-                <Field label={t("complaints.new_status")} htmlFor="complaint-new-status" required>
+                <Field label={<Bilingual tKey="complaints.new_status" />} htmlFor="complaint-new-status" required>
                   <select
                     id="complaint-new-status"
                     className="ui-input"
@@ -409,7 +410,7 @@ export default function ComplaintManagement({
                     ))}
                   </select>
                 </Field>
-                <Field label={t("complaints.officer_remarks")} htmlFor="complaint-remarks">
+                <Field label={<Bilingual tKey="complaints.officer_remarks" />} htmlFor="complaint-remarks">
                   <Textarea
                     id="complaint-remarks"
                     value={officerRemarks}

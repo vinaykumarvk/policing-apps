@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Alert, Button, DropZone, Tabs, Textarea, UploadConfirm, useToast } from "@puda/shared";
 import { apiBaseUrl, EvidenceSource } from "../types";
 
-type Props = { id: string; authHeaders: () => Record<string, string>; isOffline: boolean; onBack: () => void };
+type Props = { id: string; authHeaders: () => RequestInit; isOffline: boolean; onBack: () => void };
 
 export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: Props) {
   const { t } = useTranslation();
@@ -22,14 +22,14 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
   const [ocrLoading, setOcrLoading] = useState(false);
 
   const fetchNotes = () => {
-    fetch(`${apiBaseUrl}/api/v1/evidence/${id}/notes`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/evidence/${id}/notes`, authHeaders())
       .then((r) => r.ok ? r.json() : { notes: [] })
       .then((data) => setNotes(data.notes || []))
       .catch(() => setNotes([]));
   };
 
   const fetchActivity = () => {
-    fetch(`${apiBaseUrl}/api/v1/evidence/${id}/activity`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/evidence/${id}/activity`, authHeaders())
       .then((r) => r.ok ? r.json() : { events: [] })
       .then((data) => setActivity(data.events || data.activity || []))
       .catch(() => setActivity([]));
@@ -40,7 +40,7 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
     setSubmittingNote(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/evidence/${id}/notes`, {
-        method: "POST", headers: authHeaders(),
+        ...authHeaders(), method: "POST",
         body: JSON.stringify({ note_text: newNote }),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
@@ -55,14 +55,13 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
     setOcrLoading(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/ocr/submit`, {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        ...authHeaders(), method: "POST",
         body: JSON.stringify({ evidence_id: id }),
       });
       const data = await res.json();
       setOcrJobId(data.job_id);
       const pollInterval = setInterval(async () => {
-        const pollRes = await fetch(`${apiBaseUrl}/api/v1/ocr/${data.job_id}`, { headers: authHeaders() });
+        const pollRes = await fetch(`${apiBaseUrl}/api/v1/ocr/${data.job_id}`, authHeaders());
         const pollData = await pollRes.json();
         if (pollData.status === "COMPLETED") {
           setOcrResult(pollData.extracted_text);
@@ -87,11 +86,8 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
       const formData = new FormData();
       formData.append("file", uploadFile);
       formData.append("evidence_id", id);
-      const h = authHeaders();
       const res = await fetch(`${apiBaseUrl}/api/v1/evidence/upload`, {
-        method: "POST",
-        headers: { authorization: h.authorization || h.Authorization || "" },
-        body: formData,
+        method: "POST", credentials: "include", body: formData,
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
       setUploadFile(null);
@@ -101,7 +97,7 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
   };
 
   useEffect(() => {
-    fetch(`${apiBaseUrl}/api/v1/evidence/${id}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/evidence/${id}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
       .then((data) => { setEvidence(data.evidence || data); fetchNotes(); fetchActivity(); })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load evidence"))

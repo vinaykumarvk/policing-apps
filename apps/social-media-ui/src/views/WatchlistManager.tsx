@@ -29,7 +29,7 @@ export default function WatchlistManager({ authHeaders, isOffline }: Props) {
     params.set("offset", String((page - 1) * LIMIT));
     if (activeFilter) params.set("is_active", activeFilter);
 
-    fetch(`${apiBaseUrl}/api/v1/watchlists?${params}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/watchlists?${params}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
       .then((data) => {
         setWatchlists(data.watchlists || data || []);
@@ -47,7 +47,7 @@ export default function WatchlistManager({ authHeaders, isOffline }: Props) {
     setCreating(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/watchlists`, {
-        method: "POST", headers: authHeaders(),
+        ...authHeaders(), method: "POST",
         body: JSON.stringify({ name: newName, description: newDesc, keywords: newKeywords.split(",").map((k) => k.trim()).filter(Boolean), platforms: [], is_active: true }),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);

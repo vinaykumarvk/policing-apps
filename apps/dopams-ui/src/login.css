@@ -161,7 +161,7 @@
   text-decoration: none;
 }
 
-.login-footer a:hover {
+.login-footer a:hover, .login-footer a:active {
   text-decoration: underline;
 }
 

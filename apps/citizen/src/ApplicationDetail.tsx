@@ -132,7 +132,7 @@ export default function ApplicationDetail({
     setDownloading(true);
     setDownloadError(null);
     try {
-      const res = await fetch(url, { headers: authHeaders() });
+      const res = await fetch(url, authHeaders());
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.message || body?.error || `Download failed (${res.status})`);
@@ -211,7 +211,7 @@ export default function ApplicationDetail({
       try {
         const res = await fetch(
           `${import.meta.env.VITE_API_BASE_URL || "http://localhost:3001"}/api/v1/applications/${application.arn}/payment-status`,
-          { headers: authHeaders() }
+          authHeaders()
         );
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -414,8 +414,8 @@ export default function ApplicationDetail({
       const res = await fetch(
         `${import.meta.env.VITE_API_BASE_URL || "http://localhost:3001"}/api/v1/applications/${application.arn}/query-response`,
         {
+          ...authHeaders(),
           method: "POST",
-          headers: authHeaders(),
           body: JSON.stringify({
             queryId: pendingQuery.query_id,
             responseMessage,
@@ -460,8 +460,8 @@ export default function ApplicationDetail({
       const res = await fetch(
         `${import.meta.env.VITE_API_BASE_URL || "http://localhost:3001"}/api/v1/applications/${application.arn}/pay-due`,
         {
+          ...authHeaders(),
           method: "POST",
-          headers: authHeaders(),
           body: JSON.stringify({ dueCode, userId }),
         }
       );
@@ -492,8 +492,8 @@ export default function ApplicationDetail({
       const res = await fetch(
         `${import.meta.env.VITE_API_BASE_URL || "http://localhost:3001"}/api/v1/applications/${application.arn}/declarations`,
         {
+          ...authHeaders(),
           method: "POST",
-          headers: { ...authHeaders(), "Content-Type": "application/json" },
           body: JSON.stringify({ docTypeId: declarationDocTypeId, filledFields }),
         }
       );

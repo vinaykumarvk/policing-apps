@@ -44,10 +44,10 @@ interface OnboardingProps {
 type StepId = 1 | 2 | 3 | 4;
 
 const STEPS = [
-  { id: 1 as StepId, label: "Aadhaar eKYC" },
-  { id: 2 as StepId, label: "PAN Verify" },
-  { id: 3 as StepId, label: "Details" },
-  { id: 4 as StepId, label: "Address" },
+  { id: 1 as StepId, tKey: "onboarding.step_aadhaar" },
+  { id: 2 as StepId, tKey: "onboarding.step_pan" },
+  { id: 3 as StepId, tKey: "onboarding.step_details" },
+  { id: 4 as StepId, tKey: "onboarding.step_address" },
 ];
 
 function SourceBadge({ type }: { type: "aadhaar" | "pan" | "self" }) {
@@ -109,7 +109,7 @@ export default function Onboarding({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const hdrs = useCallback(
-    () => ({ ...authHeaders(), "Content-Type": "application/json" }),
+    () => authHeaders(),
     [authHeaders]
   );
 
@@ -130,7 +130,7 @@ export default function Onboarding({
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/profile/ekyc/aadhaar/send-otp`, {
         method: "POST",
-        headers: hdrs(),
+        ...hdrs(),
         body: JSON.stringify({ aadhaar: aadhaarInput }),
       });
       const data = await res.json();
@@ -151,7 +151,7 @@ export default function Onboarding({
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/profile/ekyc/aadhaar/verify`, {
         method: "POST",
-        headers: hdrs(),
+        ...hdrs(),
         body: JSON.stringify({ aadhaar: aadhaarInput, otp: otpInput, txnId }),
       });
       const data = await res.json();
@@ -177,7 +177,7 @@ export default function Onboarding({
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/profile/verify/pan`, {
         method: "POST",
-        headers: hdrs(),
+        ...hdrs(),
         body: JSON.stringify({ pan: panInput.toUpperCase() }),
       });
       const data = await res.json();
@@ -227,7 +227,7 @@ export default function Onboarding({
 
       const res = await fetch(`${apiBaseUrl}/api/v1/profile/me`, {
         method: "PATCH",
-        headers: hdrs(),
+        ...hdrs(),
         body: JSON.stringify({
           applicant: {
             father_name: manualFields.father_name,
@@ -272,7 +272,7 @@ export default function Onboarding({
               <span className="onboarding__step-number" aria-current={isActive ? "step" : undefined}>
                 {isDone ? "\u2713" : s.id}
               </span>
-              <span className="onboarding__step-label">{s.label}</span>
+              <span className="onboarding__step-label">{t(s.tKey)}</span>
             </div>
           </div>
         );
@@ -283,31 +283,31 @@ export default function Onboarding({
   // Step 1: Aadhaar eKYC
   const renderStep1 = () => (
     <div className="onboarding__card">
-      <h2>Aadhaar eKYC Verification</h2>
+      <h2><Bilingual tKey="onboarding.aadhaar_title" /></h2>
       <p className="onboarding__card-subtitle">
-        Verify your Aadhaar to auto-populate your name, date of birth, gender, and address.
+        {t("onboarding.aadhaar_subtitle")}
       </p>
 
       {error && <Alert variant="error">{error}</Alert>}
 
       {verification.aadhaar_verified && aadhaarDemographics ? (
         <div className="onboarding__fetched">
-          <h3>Details Fetched from Aadhaar <SourceBadge type="aadhaar" /></h3>
+          <h3><Bilingual tKey="onboarding.details_from_aadhaar" /> <SourceBadge type="aadhaar" /></h3>
           <div className="onboarding__fetched-grid">
             <div>
-              <div className="onboarding__fetched-label">Full Name</div>
+              <div className="onboarding__fetched-label"><Bilingual tKey="onboarding.full_name" /></div>
               <div className="onboarding__fetched-value">{aadhaarDemographics.full_name}</div>
             </div>
             <div>
-              <div className="onboarding__fetched-label">Date of Birth</div>
+              <div className="onboarding__fetched-label"><Bilingual tKey="onboarding.date_of_birth" /></div>
               <div className="onboarding__fetched-value">{aadhaarDemographics.date_of_birth}</div>
             </div>
             <div>
-              <div className="onboarding__fetched-label">Gender</div>
+              <div className="onboarding__fetched-label"><Bilingual tKey="onboarding.gender" /></div>
               <div className="onboarding__fetched-value">{aadhaarDemographics.gender}</div>
             </div>
             <div>
-              <div className="onboarding__fetched-label">Address</div>
+              <div className="onboarding__fetched-label"><Bilingual tKey="onboarding.address" /></div>
               <div className="onboarding__fetched-value">
                 {aadhaarDemographics.address?.line1}, {aadhaarDemographics.address?.city}, {aadhaarDemographics.address?.state} - {aadhaarDemographics.address?.pincode}
               </div>
@@ -317,7 +317,7 @@ export default function Onboarding({
       ) : (
         <>
           <div className="onboarding__field-group">
-            <Field label="Aadhaar Number" htmlFor="onb-aadhaar" required error={fieldErrors.aadhaar ? t(fieldErrors.aadhaar) : undefined}>
+            <Field label={<Bilingual tKey="onboarding.aadhaar_number" />} htmlFor="onb-aadhaar" required error={fieldErrors.aadhaar ? t(fieldErrors.aadhaar) : undefined}>
               <Input
                 id="onb-aadhaar"
                 value={aadhaarInput}
@@ -335,11 +335,11 @@ export default function Onboarding({
                 onClick={() => void sendOtp()}
                 disabled={aadhaarInput.length !== 12 || sendingOtp}
               >
-                {sendingOtp ? "Sending OTP..." : "Send OTP"}
+                {sendingOtp ? t("onboarding.sending_otp") : t("onboarding.send_otp")}
               </Button>
             ) : (
               <div className="onboarding__otp-row">
-                <Field label="Enter OTP" htmlFor="onb-otp" required>
+                <Field label={<Bilingual tKey="onboarding.enter_otp" />} htmlFor="onb-otp" required>
                   <Input
                     id="onb-otp"
                     value={otpInput}
@@ -354,7 +354,7 @@ export default function Onboarding({
                   onClick={() => void verifyAadhaar()}
                   disabled={otpInput.length < 4 || verifyingAadhaar}
                 >
-                  {verifyingAadhaar ? "Verifying..." : "Verify"}
+                  {verifyingAadhaar ? t("onboarding.verifying") : t("onboarding.verify")}
                 </Button>
               </div>
             )}
@@ -364,7 +364,7 @@ export default function Onboarding({
 
       <div className="onboarding__nav">
         <Button variant="ghost" onClick={onSkip}>
-          Skip for now
+          {t("onboarding.skip_for_now")}
         </Button>
         <div className="onboarding__nav-right">
           {!verification.aadhaar_verified && (
@@ -372,12 +372,12 @@ export default function Onboarding({
               variant="ghost"
               onClick={() => { setError(null); goNext(); }}
             >
-              I'll enter details manually
+              {t("onboarding.enter_manually")}
             </Button>
           )}
           {verification.aadhaar_verified && (
             <Button variant="primary" onClick={() => { setError(null); goNext(); }}>
-              Next
+              {t("onboarding.next")}
             </Button>
           )}
         </div>
@@ -388,9 +388,9 @@ export default function Onboarding({
   // Step 2: PAN Verification
   const renderStep2 = () => (
     <div className="onboarding__card">
-      <h2>PAN Verification</h2>
+      <h2><Bilingual tKey="onboarding.pan_title" /></h2>
       <p className="onboarding__card-subtitle">
-        Verify your PAN card for identity confirmation.
+        {t("onboarding.pan_subtitle")}
       </p>
 
       {error && <Alert variant="error">{error}</Alert>}
@@ -398,14 +398,14 @@ export default function Onboarding({
       {verification.pan_verified && panResult ? (
         <>
           <div className="onboarding__fetched">
-            <h3>PAN Verified <SourceBadge type="pan" /></h3>
+            <h3><Bilingual tKey="onboarding.pan_verified" /> <SourceBadge type="pan" /></h3>
             <div className="onboarding__fetched-grid">
               <div>
-                <div className="onboarding__fetched-label">PAN</div>
+                <div className="onboarding__fetched-label"><Bilingual tKey="onboarding.pan" /></div>
                 <div className="onboarding__fetched-value">{applicant.pan}</div>
               </div>
               <div>
-                <div className="onboarding__fetched-label">Registered Name</div>
+                <div className="onboarding__fetched-label"><Bilingual tKey="onboarding.registered_name" /></div>
                 <div className="onboarding__fetched-value">{panResult.registered_name}</div>
               </div>
             </div>
@@ -413,14 +413,14 @@ export default function Onboarding({
           {panResult.name_match_score !== undefined && (
             <div className={`onboarding__match ${panResult.name_match_score >= 50 ? "onboarding__match--good" : "onboarding__match--warn"}`}>
               {panResult.name_match_score >= 50
-                ? `Name matches Aadhaar record (${panResult.name_match_score}% match)`
-                : `Name mismatch with Aadhaar record (${panResult.name_match_score}% match). Please verify.`}
+                ? t("onboarding.pan_match", { score: panResult.name_match_score })
+                : t("onboarding.pan_mismatch", { score: panResult.name_match_score })}
             </div>
           )}
         </>
       ) : (
         <div className="onboarding__field-group">
-          <Field label="PAN Number" htmlFor="onb-pan" required error={fieldErrors.pan ? t(fieldErrors.pan) : undefined}>
+          <Field label={<Bilingual tKey="onboarding.pan_number" />} htmlFor="onb-pan" required error={fieldErrors.pan ? t(fieldErrors.pan) : undefined}>
             <Input
               id="onb-pan"
               value={panInput}
@@ -436,23 +436,23 @@ export default function Onboarding({
             onClick={() => void verifyPan()}
             disabled={panInput.length !== 10 || verifyingPan}
           >
-            {verifyingPan ? "Verifying..." : "Verify PAN"}
+            {verifyingPan ? t("onboarding.verifying") : t("onboarding.verify_pan")}
           </Button>
         </div>
       )}
 
       <div className="onboarding__nav">
         <Button variant="ghost" onClick={() => { setError(null); goBack(); }}>
-          Back
+          {t("onboarding.back")}
         </Button>
         <div className="onboarding__nav-right">
           {!verification.pan_verified && (
             <Button variant="ghost" onClick={() => { setError(null); goNext(); }}>
-              I'll add PAN later
+              {t("onboarding.add_pan_later")}
             </Button>
           )}
           <Button variant="primary" onClick={() => { setError(null); goNext(); }}>
-            Next
+            {t("onboarding.next")}
           </Button>
         </div>
       </div>
@@ -462,27 +462,27 @@ export default function Onboarding({
   // Step 3: Additional Details
   const renderStep3 = () => (
     <div className="onboarding__card">
-      <h2>Additional Details</h2>
+      <h2><Bilingual tKey="onboarding.details_title" /></h2>
       <p className="onboarding__card-subtitle">
-        Complete the remaining personal details. <SourceBadge type="self" />
+        {t("onboarding.details_subtitle")} <SourceBadge type="self" />
       </p>
 
       {error && <Alert variant="error">{error}</Alert>}
 
       <div className="onboarding__field-group onboarding__field-group--two-col">
-        <Field label="Salutation" htmlFor="onb-salutation">
+        <Field label={<Bilingual tKey="onboarding.salutation" />} htmlFor="onb-salutation">
           <Select
             id="onb-salutation"
             value={manualFields.salutation}
             onChange={(e) => setManualFields((p) => ({ ...p, salutation: e.target.value }))}
           >
-            <option value="">Select</option>
-            <option value="MR">Mr</option>
-            <option value="MS">Ms</option>
-            <option value="MRS">Mrs</option>
+            <option value="">{t("onboarding.select")}</option>
+            <option value="MR">{t("onboarding.mr")}</option>
+            <option value="MS">{t("onboarding.ms")}</option>
+            <option value="MRS">{t("onboarding.mrs")}</option>
           </Select>
         </Field>
-        <Field label="Father's Name" htmlFor="onb-father" required error={fieldErrors.father_name ? t(fieldErrors.father_name) : undefined}>
+        <Field label={<Bilingual tKey="onboarding.father_name" />} htmlFor="onb-father" required error={fieldErrors.father_name ? t(fieldErrors.father_name) : undefined}>
           <Input
             id="onb-father"
             value={manualFields.father_name}
@@ -491,18 +491,18 @@ export default function Onboarding({
             placeholder={t("onboarding.placeholder_father_name")}
           />
         </Field>
-        <Field label="Marital Status" htmlFor="onb-marital" required>
+        <Field label={<Bilingual tKey="onboarding.marital_status" />} htmlFor="onb-marital" required>
           <Select
             id="onb-marital"
             value={manualFields.marital_status}
             onChange={(e) => setManualFields((p) => ({ ...p, marital_status: e.target.value }))}
           >
-            <option value="">Select</option>
-            <option value="SINGLE">Single</option>
-            <option value="MARRIED">Married</option>
+            <option value="">{t("onboarding.select")}</option>
+            <option value="SINGLE">{t("onboarding.single")}</option>
+            <option value="MARRIED">{t("onboarding.married")}</option>
           </Select>
         </Field>
-        <Field label="Email" htmlFor="onb-email" required error={fieldErrors.email ? t(fieldErrors.email) : undefined}>
+        <Field label={<Bilingual tKey="onboarding.email" />} htmlFor="onb-email" required error={fieldErrors.email ? t(fieldErrors.email) : undefined}>
           <Input
             id="onb-email"
             type="email"
@@ -512,7 +512,7 @@ export default function Onboarding({
             placeholder={t("onboarding.placeholder_email")}
           />
         </Field>
-        <Field label="Mobile Number" htmlFor="onb-mobile" required error={fieldErrors.mobile ? t(fieldErrors.mobile) : undefined}>
+        <Field label={<Bilingual tKey="onboarding.mobile_number" />} htmlFor="onb-mobile" required error={fieldErrors.mobile ? t(fieldErrors.mobile) : undefined}>
           <div className="phone-input-row">
             <span className="phone-prefix" aria-hidden="true">+91</span>
             <Input
@@ -530,18 +530,18 @@ export default function Onboarding({
 
       <div className="onboarding__nav">
         <Button variant="ghost" onClick={() => { setError(null); goBack(); }}>
-          Back
+          {t("onboarding.back")}
         </Button>
         <div className="onboarding__nav-right">
           <Button variant="ghost" onClick={onSkip}>
-            Skip for now
+            {t("onboarding.skip_for_now")}
           </Button>
           <Button
             variant="primary"
             onClick={() => { setError(null); goNext(); }}
             disabled={!manualFields.father_name || !manualFields.marital_status || !manualFields.email || !manualFields.mobile}
           >
-            Next
+            {t("onboarding.next")}
           </Button>
         </div>
       </div>
@@ -553,18 +553,18 @@ export default function Onboarding({
     const aadhaarLocked = Boolean(verification.aadhaar_verified);
     return (
       <div className="onboarding__card">
-        <h2>Address Confirmation</h2>
+        <h2><Bilingual tKey="onboarding.address_title" /></h2>
         <p className="onboarding__card-subtitle">
-          Confirm your permanent and communication addresses.
+          {t("onboarding.address_subtitle")}
         </p>
 
         {error && <Alert variant="error">{error}</Alert>}
 
         <h3 style={{ fontSize: "0.95rem", marginBottom: "var(--space-3)" }}>
-          Permanent Address {aadhaarLocked && <SourceBadge type="aadhaar" />}
+          <Bilingual tKey="onboarding.permanent_address" /> {aadhaarLocked && <SourceBadge type="aadhaar" />}
         </h3>
         <div className="onboarding__field-group onboarding__field-group--two-col">
-          <Field label="Address Line 1" htmlFor="onb-perm-line1" required>
+          <Field label={<Bilingual tKey="onboarding.address_line_1" />} htmlFor="onb-perm-line1" required>
             <Input
               id="onb-perm-line1"
               value={permanentAddr.line1 || ""}
@@ -572,7 +572,7 @@ export default function Onboarding({
               readOnly={aadhaarLocked}
             />
           </Field>
-          <Field label="Address Line 2" htmlFor="onb-perm-line2">
+          <Field label={<Bilingual tKey="onboarding.address_line_2" />} htmlFor="onb-perm-line2">
             <Input
               id="onb-perm-line2"
               value={permanentAddr.line2 || ""}
@@ -580,7 +580,7 @@ export default function Onboarding({
               readOnly={aadhaarLocked}
             />
           </Field>
-          <Field label="City" htmlFor="onb-perm-city" required>
+          <Field label={<Bilingual tKey="onboarding.city" />} htmlFor="onb-perm-city" required>
             <Input
               id="onb-perm-city"
               value={permanentAddr.city || ""}
@@ -588,7 +588,7 @@ export default function Onboarding({
               readOnly={aadhaarLocked}
             />
           </Field>
-          <Field label="District" htmlFor="onb-perm-district" required>
+          <Field label={<Bilingual tKey="onboarding.district" />} htmlFor="onb-perm-district" required>
             {aadhaarLocked ? (
               <Input
                 id="onb-perm-district"
@@ -601,12 +601,12 @@ export default function Onboarding({
                 value={permanentAddr.district || ""}
                 onChange={(e) => setPermanentAddr((p) => ({ ...p, district: e.target.value }))}
               >
-                <option value="">Select...</option>
+                <option value="">{t("onboarding.select_placeholder")}</option>
                 {PUNJAB_DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
               </Select>
             )}
           </Field>
-          <Field label="State" htmlFor="onb-perm-state" required>
+          <Field label={<Bilingual tKey="onboarding.state" />} htmlFor="onb-perm-state" required>
             {aadhaarLocked ? (
               <Input
                 id="onb-perm-state"
@@ -619,12 +619,12 @@ export default function Onboarding({
                 value={permanentAddr.state || "Punjab"}
                 onChange={(e) => setPermanentAddr((p) => ({ ...p, state: e.target.value }))}
               >
-                <option value="">Select...</option>
+                <option value="">{t("onboarding.select_placeholder")}</option>
                 {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
               </Select>
             )}
           </Field>
-          <Field label="Pincode" htmlFor="onb-perm-pin" required error={fieldErrors.perm_pincode ? t(fieldErrors.perm_pincode) : undefined}>
+          <Field label={<Bilingual tKey="onboarding.pincode" />} htmlFor="onb-perm-pin" required error={fieldErrors.perm_pincode ? t(fieldErrors.perm_pincode) : undefined}>
             <Input
               id="onb-perm-pin"
               value={permanentAddr.pincode || ""}
@@ -638,7 +638,7 @@ export default function Onboarding({
         </div>
 
         <h3 style={{ fontSize: "0.95rem", margin: "var(--space-5) 0 var(--space-3)" }}>
-          Communication Address
+          <Bilingual tKey="onboarding.communication_address" />
         </h3>
         <label className="onboarding__checkbox-row">
           <input
@@ -646,53 +646,53 @@ export default function Onboarding({
             checked={sameAsPermanent}
             onChange={(e) => setSameAsPermanent(e.target.checked)}
           />
-          Same as permanent address
+          {t("onboarding.same_as_permanent")}
         </label>
 
         {!sameAsPermanent && (
           <div className="onboarding__field-group onboarding__field-group--two-col">
-            <Field label="Address Line 1" htmlFor="onb-comm-line1" required>
+            <Field label={<Bilingual tKey="onboarding.address_line_1" />} htmlFor="onb-comm-line1" required>
               <Input
                 id="onb-comm-line1"
                 value={commAddr.line1 || ""}
                 onChange={(e) => setCommAddr((p) => ({ ...p, line1: e.target.value }))}
               />
             </Field>
-            <Field label="Address Line 2" htmlFor="onb-comm-line2">
+            <Field label={<Bilingual tKey="onboarding.address_line_2" />} htmlFor="onb-comm-line2">
               <Input
                 id="onb-comm-line2"
                 value={commAddr.line2 || ""}
                 onChange={(e) => setCommAddr((p) => ({ ...p, line2: e.target.value }))}
               />
             </Field>
-            <Field label="City" htmlFor="onb-comm-city" required>
+            <Field label={<Bilingual tKey="onboarding.city" />} htmlFor="onb-comm-city" required>
               <Input
                 id="onb-comm-city"
                 value={commAddr.city || ""}
                 onChange={(e) => setCommAddr((p) => ({ ...p, city: e.target.value }))}
               />
             </Field>
-            <Field label="District" htmlFor="onb-comm-district" required>
+            <Field label={<Bilingual tKey="onboarding.district" />} htmlFor="onb-comm-district" required>
               <Select
                 id="onb-comm-district"
                 value={commAddr.district || ""}
                 onChange={(e) => setCommAddr((p) => ({ ...p, district: e.target.value }))}
               >
-                <option value="">Select...</option>
+                <option value="">{t("onboarding.select_placeholder")}</option>
                 {PUNJAB_DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
               </Select>
             </Field>
-            <Field label="State" htmlFor="onb-comm-state" required>
+            <Field label={<Bilingual tKey="onboarding.state" />} htmlFor="onb-comm-state" required>
               <Select
                 id="onb-comm-state"
                 value={commAddr.state || "Punjab"}
                 onChange={(e) => setCommAddr((p) => ({ ...p, state: e.target.value }))}
               >
-                <option value="">Select...</option>
+                <option value="">{t("onboarding.select_placeholder")}</option>
                 {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
               </Select>
             </Field>
-            <Field label="Pincode" htmlFor="onb-comm-pin" required error={fieldErrors.comm_pincode ? t(fieldErrors.comm_pincode) : undefined}>
+            <Field label={<Bilingual tKey="onboarding.pincode" />} htmlFor="onb-comm-pin" required error={fieldErrors.comm_pincode ? t(fieldErrors.comm_pincode) : undefined}>
               <Input
                 id="onb-comm-pin"
                 value={commAddr.pincode || ""}
@@ -707,18 +707,18 @@ export default function Onboarding({
 
         <div className="onboarding__nav">
           <Button variant="ghost" onClick={() => { setError(null); goBack(); }}>
-            Back
+            {t("onboarding.back")}
           </Button>
           <div className="onboarding__nav-right">
             <Button variant="ghost" onClick={onSkip}>
-              Skip for now
+              {t("onboarding.skip_for_now")}
             </Button>
             <Button
               variant="primary"
               onClick={() => void completeOnboarding()}
               disabled={saving || !permanentAddr.line1 || !permanentAddr.city || !permanentAddr.pincode}
             >
-              {saving ? "Saving..." : "Complete Profile"}
+              {saving ? t("onboarding.saving") : t("onboarding.complete_profile")}
             </Button>
           </div>
         </div>

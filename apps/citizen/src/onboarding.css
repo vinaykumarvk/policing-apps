@@ -397,7 +397,7 @@
   border-color: color-mix(in srgb, var(--color-success), var(--color-border) 50%);
 }
 
-.profile-tile-nav--done:hover {
+.profile-tile-nav--done:hover, .profile-tile-nav--done:active {
   border-color: var(--color-success);
 }
 

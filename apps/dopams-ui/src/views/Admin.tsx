@@ -25,7 +25,7 @@ export default function Admin({ authHeaders, isOffline }: Props) {
   const [creating, setCreating] = useState(false);
 
   const loadUsers = () => {
-    fetch(`${apiBaseUrl}/api/v1/users`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/users`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
       .then((data) => setUsers(data.users || data || []))
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load users"))
@@ -43,8 +43,8 @@ export default function Admin({ authHeaders, isOffline }: Props) {
     setCreating(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/users`, {
+        ...authHeaders(),
         method: "POST",
-        headers: authHeaders(),
         body: JSON.stringify({
           username: newUsername,
           full_name: newFullName,

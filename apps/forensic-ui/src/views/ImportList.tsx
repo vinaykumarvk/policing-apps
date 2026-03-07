@@ -8,7 +8,7 @@ const LIMIT = 20;
 type FacetEntry = { value: string; label?: string; count: number };
 type Facets = Record<string, FacetEntry[]>;
 
-type Props = { authHeaders: () => Record<string, string>; isOffline: boolean; onSelect: (id: string) => void };
+type Props = { authHeaders: () => RequestInit; isOffline: boolean; onSelect: (id: string) => void };
 
 function facetOptions(entries: FacetEntry[] | undefined, fallback: string[]) {
   if (entries && entries.length > 0) {
@@ -29,7 +29,7 @@ export default function ImportList({ authHeaders, isOffline, onSelect }: Props) 
 
   useEffect(() => {
     if (isOffline) return;
-    fetch(`${apiBaseUrl}/api/v1/imports/facets`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/imports/facets`, authHeaders())
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (data) setFacets(data.facets || {}); })
       .catch(() => {});
@@ -43,7 +43,7 @@ export default function ImportList({ authHeaders, isOffline, onSelect }: Props) 
     params.set("offset", String((page - 1) * LIMIT));
     if (stateFilter) params.set("state_id", stateFilter);
 
-    fetch(`${apiBaseUrl}/api/v1/imports?${params}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/imports?${params}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
       .then((data) => {
         setImports(data.imports || data || []);

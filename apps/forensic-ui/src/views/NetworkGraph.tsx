@@ -9,7 +9,7 @@ type GraphData = { nodes: Node[]; edges: Edge[] };
 type NodePos = { x: number; y: number; vx: number; vy: number; node: Node };
 
 type Props = {
-  authHeaders: () => Record<string, string>;
+  authHeaders: () => RequestInit;
   isOffline: boolean;
   onNavigate?: (view: string, id?: string) => void;
 };
@@ -30,8 +30,7 @@ export default function NetworkGraph({ authHeaders, isOffline, onNavigate }: Pro
     setError("");
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/graph/analyze`, {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        ...authHeaders(), method: "POST",
         body: JSON.stringify({ entity_id: entityId.trim(), depth: 2 }),
       });
       if (res.ok) {

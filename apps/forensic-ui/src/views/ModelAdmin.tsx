@@ -14,7 +14,7 @@ type Model = {
 };
 
 type Props = {
-  authHeaders: () => Record<string, string>;
+  authHeaders: () => RequestInit;
   isOffline: boolean;
 };
 
@@ -27,7 +27,7 @@ export default function ModelAdmin({ authHeaders, isOffline }: Props) {
 
   const fetchModels = async () => {
     try {
-      const res = await fetch(`${apiBaseUrl}/api/v1/models`, { headers: authHeaders() });
+      const res = await fetch(`${apiBaseUrl}/api/v1/models`, authHeaders());
       if (res.ok) {
         const data = await res.json();
         setModels(data.models || data || []);
@@ -43,8 +43,7 @@ export default function ModelAdmin({ authHeaders, isOffline }: Props) {
   const handleStatusChange = async (modelId: string, newStatus: string) => {
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/models/${modelId}/status`, {
-        method: "PATCH",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        ...authHeaders(), method: "PATCH",
         body: JSON.stringify({ status: newStatus }),
       });
       if (res.ok) {

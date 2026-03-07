@@ -1,8 +1,11 @@
 import { FastifyInstance } from "fastify";
 import { analyzeNetwork, getNodeAnalysis, getKingpins } from "../services/graph-analysis";
 import { sendError } from "../errors";
+import { createRoleGuard } from "@puda/api-core";
 
 export async function registerGraphRoutes(app: FastifyInstance): Promise<void> {
+  const requireGraphAnalysis = createRoleGuard(["INTELLIGENCE_ANALYST", "SUPERVISORY_OFFICER", "ADMINISTRATOR"]);
+
   // Run full network analysis with configurable depth
   app.post("/api/v1/graph/analyze", {
     schema: {
@@ -16,6 +19,7 @@ export async function registerGraphRoutes(app: FastifyInstance): Promise<void> {
       },
     },
   }, async (request, reply) => {
+    if (!requireGraphAnalysis(request, reply)) return;
     try {
       const { maxDepth, rootEntityId } = (request.body || {}) as { maxDepth?: number; rootEntityId?: string };
       const depth = Math.min(maxDepth || 3, 10);

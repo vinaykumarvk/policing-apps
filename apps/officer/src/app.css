@@ -56,13 +56,13 @@
   align-items: flex-start;
 }
 
-.task-card:hover {
+.task-card:hover, .task-card:active {
   border-color: color-mix(in srgb, var(--color-brand), var(--color-border) 50%);
   box-shadow: var(--shadow-sm);
   background: var(--color-surface);
 }
 
-.task-card.ui-btn:hover {
+.task-card.ui-btn:hover, .task-card.ui-btn:active {
   border-color: color-mix(in srgb, var(--color-brand), var(--color-border) 50%);
   box-shadow: var(--shadow-sm);
   background: var(--color-surface);
@@ -161,7 +161,7 @@
   font-weight: 700;
 }
 
-.download-link:hover {
+.download-link:hover, .download-link:active {
   background: color-mix(in srgb, var(--color-success-soft), var(--color-surface) 30%);
 }
 

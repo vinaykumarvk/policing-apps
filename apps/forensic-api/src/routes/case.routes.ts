@@ -3,6 +3,10 @@ import { query } from "../db";
 import { sendError, send404 } from "../errors";
 import { executeTransition } from "../workflow-bridge";
 import { getAvailableTransitions } from "../workflow-bridge/transitions";
+import { createRoleGuard } from "@puda/api-core";
+
+const requireCaseCreate = createRoleGuard(["EXAMINER", "REVIEWER", "SUPERVISOR", "ADMINISTRATOR", "PLATFORM_ADMINISTRATOR"]);
+const requireCaseDelete = createRoleGuard(["SUPERVISOR", "ADMINISTRATOR", "PLATFORM_ADMINISTRATOR"]);
 
 export async function registerCaseRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/v1/cases", {
@@ -55,6 +59,7 @@ export async function registerCaseRoutes(app: FastifyInstance): Promise<void> {
   app.post("/api/v1/cases", {
     schema: { body: { type: "object", additionalProperties: false, required: ["title"], properties: { title: { type: "string" }, description: { type: "string" }, caseType: { type: "string" } } } },
   }, async (request, reply) => {
+    if (!requireCaseCreate(request, reply)) return;
     const { title, description, caseType } = request.body as { title: string; description?: string; caseType?: string };
     const { userId, unitId } = request.authUser!;
     const refResult = await query(`SELECT 'EF-CASE-' || EXTRACT(YEAR FROM NOW())::text || '-' || LPAD(nextval('forensic_case_ref_seq')::text, 6, '0') AS ref`);
@@ -104,32 +109,29 @@ export async function registerCaseRoutes(app: FastifyInstance): Promise<void> {
     const { transitionId, remarks } = request.body as { transitionId: string; remarks?: string };
     const { userId, roles } = request.authUser!;
 
-    // Validate transition is allowed from current state
-    const stateResult = await query(
-      `SELECT state_id, title, case_type, assigned_to FROM forensic_case WHERE case_id = $1`,
-      [id],
-    );
-    if (stateResult.rows.length === 0) return send404(reply, "CASE_NOT_FOUND", "Case not found");
-    const caseRow = stateResult.rows[0];
-    const available = getAvailableTransitions("forensic_case", caseRow.state_id);
-    if (!available.some((t) => t.transitionId === transitionId)) {
-      return sendError(reply, 400, "INVALID_TRANSITION", "Transition not allowed from current state");
-    }
-
     // FR-01: Mandatory field validation before DRAFT→ACTIVE
-    const target = available.find((t) => t.transitionId === transitionId);
-    if (caseRow.state_id === "DRAFT" && target?.toStateId === "ACTIVE") {
-      const missing: string[] = [];
-      if (!caseRow.title) missing.push("title");
-      if (!caseRow.case_type) missing.push("case_type");
-      if (!caseRow.assigned_to) missing.push("assigned_to");
-      if (missing.length > 0) {
-        return sendError(reply, 400, "MANDATORY_FIELDS_MISSING",
-          `Required fields missing for activation: ${missing.join(", ")}`);
+    // FR-07: Block close when unreviewed findings exist
+    // Business logic checks use best-effort state read; transition validation is atomic in engine
+    const target = getAvailableTransitions("forensic_case",
+      (await query(`SELECT state_id FROM forensic_case WHERE case_id = $1`, [id])).rows[0]?.state_id ?? "",
+    ).find((t) => t.transitionId === transitionId);
+
+    if (target?.toStateId === "ACTIVE") {
+      const caseRow = await query(
+        `SELECT title, case_type, assigned_to FROM forensic_case WHERE case_id = $1`, [id],
+      );
+      if (caseRow.rows.length > 0) {
+        const missing: string[] = [];
+        if (!caseRow.rows[0].title) missing.push("title");
+        if (!caseRow.rows[0].case_type) missing.push("case_type");
+        if (!caseRow.rows[0].assigned_to) missing.push("assigned_to");
+        if (missing.length > 0) {
+          return sendError(reply, 400, "MANDATORY_FIELDS_MISSING",
+            `Required fields missing for activation: ${missing.join(", ")}`);
+        }
       }
     }
 
-    // FR-07: Block close when unreviewed findings exist
     if (target?.toStateId === "CLOSED") {
       const unreviewedResult = await query(
         `SELECT COUNT(*)::int AS cnt FROM ai_finding WHERE case_id = $1 AND state_id = 'UNREVIEWED'`,
@@ -145,6 +147,7 @@ export async function registerCaseRoutes(app: FastifyInstance): Promise<void> {
       id, "forensic_case", transitionId, userId, "OFFICER", roles, remarks,
     );
     if (!result.success) {
+      if (result.error === "ENTITY_NOT_FOUND") return send404(reply, "CASE_NOT_FOUND", "Case not found");
       return sendError(reply, 409, result.error || "TRANSITION_FAILED", "Case transition failed");
     }
     return { success: true, newStateId: result.newStateId };

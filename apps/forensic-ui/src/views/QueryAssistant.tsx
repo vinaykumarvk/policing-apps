@@ -11,7 +11,7 @@ type Message = {
 };
 
 type Props = {
-  authHeaders: () => Record<string, string>;
+  authHeaders: () => RequestInit;
   isOffline: boolean;
   onNavigate?: (view: string, id?: string) => void;
 };
@@ -36,8 +36,7 @@ export default function QueryAssistant({ authHeaders, isOffline, onNavigate }: P
     setLoading(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/query`, {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        ...authHeaders(), method: "POST",
         body: JSON.stringify({ question }),
       });
       if (res.ok) {

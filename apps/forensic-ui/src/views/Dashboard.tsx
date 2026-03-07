@@ -24,7 +24,7 @@ type DashboardStats = {
   recentCases: RecentCase[];
 };
 
-type Props = { authHeaders: () => Record<string, string>; isOffline: boolean; onNavigate: (view: string) => void };
+type Props = { authHeaders: () => RequestInit; isOffline: boolean; onNavigate: (view: string) => void };
 
 const TYPE_COLORS: Record<string, string> = {
   MOBILE_FORENSICS: "var(--color-state-open)",
@@ -44,7 +44,7 @@ export default function Dashboard({ authHeaders, isOffline, onNavigate }: Props)
   useEffect(() => {
     if (isOffline) { setLoading(false); return; }
     const h = authHeaders();
-    fetch(`${apiBaseUrl}/api/v1/dashboard/stats`, { headers: h })
+    fetch(`${apiBaseUrl}/api/v1/dashboard/stats`, h)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();

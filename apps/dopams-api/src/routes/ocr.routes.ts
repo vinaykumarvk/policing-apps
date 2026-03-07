@@ -1,8 +1,11 @@
 import { FastifyInstance } from "fastify";
 import { submitOcrJob, getOcrJob, getOcrJobsByEvidence } from "../services/ocr-processor";
 import { sendError, send400, send404 } from "../errors";
+import { createRoleGuard } from "@puda/api-core";
 
 export async function registerOcrRoutes(app: FastifyInstance): Promise<void> {
+  const requireOcrSubmit = createRoleGuard(["INTELLIGENCE_ANALYST", "ADMINISTRATOR"]);
+
   // Submit OCR job for a document / evidence item
   // FR-03: Accepts language parameter (te/en/hi) and confidence_threshold
   app.post("/api/v1/ocr/submit", {
@@ -19,6 +22,7 @@ export async function registerOcrRoutes(app: FastifyInstance): Promise<void> {
       },
     },
   }, async (request, reply) => {
+    if (!requireOcrSubmit(request, reply)) return;
     try {
       const { evidenceId, language, confidenceThreshold } =
         request.body as { evidenceId: string; language?: string; confidenceThreshold?: number };

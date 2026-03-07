@@ -4,6 +4,9 @@ import { sendError, send404 } from "../errors";
 import { executeTransition } from "../workflow-bridge";
 import { getAvailableTransitions } from "../workflow-bridge/transitions";
 import { createPdfGenerator, createDocxGenerator } from "@puda/api-integrations";
+import { createRoleGuard } from "@puda/api-core";
+
+const requireReportPublish = createRoleGuard(["SUPERVISOR", "ADMINISTRATOR", "PLATFORM_ADMINISTRATOR"]);
 
 function buildReportTemplate(report: Record<string, any>) {
   const content = report.content_jsonb || {};
@@ -328,16 +331,16 @@ export async function registerReportRoutes(app: FastifyInstance): Promise<void> 
       const { transitionId, remarks } = request.body as { transitionId: string; remarks?: string };
       const { userId, roles } = request.authUser!;
 
-      const stateResult = await query(`SELECT state_id FROM report WHERE report_id = $1`, [id]);
-      if (stateResult.rows.length === 0) return send404(reply, "REPORT_NOT_FOUND", "Report not found");
-      const available = getAvailableTransitions("forensic_report", stateResult.rows[0].state_id);
-      const transition = available.find((t) => t.transitionId === transitionId);
-      if (!transition) {
-        return sendError(reply, 400, "INVALID_TRANSITION", "Transition not allowed from current state");
-      }
+      // Business logic checks use best-effort state read; transition validation is atomic in engine
+      const target = getAvailableTransitions("forensic_report",
+        (await query(`SELECT state_id FROM report WHERE report_id = $1`, [id])).rows[0]?.state_id ?? "",
+      ).find((t) => t.transitionId === transitionId);
 
-      // FR-11 AC-04: Block publish when findings are unreviewed
-      if (transition.toStateId === "PUBLISHED") {
+      // Role guard: only SUPERVISOR / ADMINISTRATOR may publish
+      if (target?.toStateId === "PUBLISHED") {
+        if (!requireReportPublish(request, reply)) return;
+
+        // FR-11 AC-04: Block publish when findings are unreviewed
         const unreviewedResult = await query(
           `SELECT COUNT(*) AS unreviewed_count FROM finding WHERE case_id = (SELECT case_id FROM report WHERE report_id = $1) AND status = 'UNREVIEWED'`,
           [id],
@@ -351,6 +354,7 @@ export async function registerReportRoutes(app: FastifyInstance): Promise<void> 
         id, "forensic_report", transitionId, userId, "OFFICER", roles, remarks,
       );
       if (!result.success) {
+        if (result.error === "ENTITY_NOT_FOUND") return send404(reply, "REPORT_NOT_FOUND", "Report not found");
         return sendError(reply, 409, result.error || "TRANSITION_FAILED", "Report transition failed");
       }
       return { success: true, newStateId: result.newStateId };

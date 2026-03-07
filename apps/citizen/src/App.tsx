@@ -54,7 +54,7 @@ import {
 } from "./citizen-types";
 
 export default function App() {
-  const { user, isLoading, logout, authHeaders, token } = useAuth();
+  const { user, isLoading, logout, authHeaders } = useAuth();
   const { theme, resolvedTheme, setTheme } = useTheme("puda_citizen_theme");
   const { preferences, updatePreference } = usePreferences(apiBaseUrl, authHeaders, user?.user_id);
   const { showToast } = useToast();
@@ -237,7 +237,6 @@ export default function App() {
       try {
         await flushCacheTelemetryWithRetry({
           apiBaseUrl,
-          token,
           userId: user.user_id,
           keepalive,
           maxAttempts: keepalive ? 1 : 3,
@@ -247,7 +246,7 @@ export default function App() {
         // Best-effort telemetry; ignore network errors to avoid UI impact.
       }
     },
-    [user, token]
+    [user]
   );
 
   const loadProfile = useCallback(async () => {
@@ -270,7 +269,7 @@ export default function App() {
           return;
         }
       }
-      const res = await fetch(`${apiBaseUrl}/api/v1/profile/me`, { headers: authHeaders() });
+      const res = await fetch(`${apiBaseUrl}/api/v1/profile/me`, authHeaders());
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         if (typeof data?.error === "string" && data.error.startsWith("PROFILE_INCOMPLETE")) {
@@ -319,7 +318,7 @@ export default function App() {
   const loadCitizenProperties = useCallback(async () => {
     if (!user) return;
     try {
-      const res = await fetch(`${apiBaseUrl}/api/v1/citizens/me/properties`, { headers: authHeaders() });
+      const res = await fetch(`${apiBaseUrl}/api/v1/citizens/me/properties`, authHeaders());
       if (res.ok) {
         const data = await res.json();
         setCitizenProperties(data.properties || []);
@@ -332,7 +331,7 @@ export default function App() {
   const loadCitizenDocuments = useCallback(async () => {
     if (!user) return;
     try {
-      const res = await fetch(`${apiBaseUrl}/api/v1/citizens/me/documents`, { headers: authHeaders() });
+      const res = await fetch(`${apiBaseUrl}/api/v1/citizens/me/documents`, authHeaders());
       if (res.ok) {
         const data = await res.json();
         setCitizenDocuments(data.documents || []);
@@ -439,9 +438,7 @@ export default function App() {
           return;
         }
       }
-      const res = await fetch(`${apiBaseUrl}/api/v1/applications/${arn}`, {
-        headers: authHeaders()
-      });
+      const res = await fetch(`${apiBaseUrl}/api/v1/applications/${arn}`, authHeaders());
       if (res.ok) {
         const data = await res.json();
         setApplicationDetail(data);
@@ -482,9 +479,7 @@ export default function App() {
           return;
         }
       }
-      const res = await fetch(`${apiBaseUrl}/api/v1/applications?userId=${user.user_id}&limit=50`, {
-        headers: authHeaders()
-      });
+      const res = await fetch(`${apiBaseUrl}/api/v1/applications?userId=${user.user_id}&limit=50`, authHeaders());
       if (res.ok) {
         const data = await res.json();
         setApplications(data.applications || []);
@@ -617,9 +612,7 @@ export default function App() {
     void (async () => {
       try {
         const qs = new URLSearchParams({ authorityId, upn });
-        const res = await fetch(`${apiBaseUrl}/api/v1/ndc/payment-status/by-upn?${qs.toString()}`, {
-          headers: authHeaders()
-        });
+        const res = await fetch(`${apiBaseUrl}/api/v1/ndc/payment-status/by-upn?${qs.toString()}`, authHeaders());
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
           throw new Error(body?.message || body?.error || `API error ${res.status}`);
@@ -670,8 +663,8 @@ export default function App() {
     void (async () => {
       try {
         const res = await fetch(`${apiBaseUrl}/api/v1/applications/check-duplicate`, {
+          ...authHeaders(),
           method: "POST",
-          headers: authHeaders(),
           body: JSON.stringify({ serviceKey: selectedService.serviceKey, propertyUpn: upn }),
         });
         if (res.ok) {
@@ -725,8 +718,8 @@ export default function App() {
         if (cancelled) break;
         try {
           const res = await fetch(`${apiBaseUrl}/api/v1/applications`, {
+            ...authHeaders(),
             method: "POST",
-            headers: authHeaders(),
             body: JSON.stringify({
               authorityId: draft.formData?.authority_id || "PUDA",
               serviceKey: draft.serviceKey,
@@ -1083,9 +1076,7 @@ export default function App() {
     setError(null);
     try {
       await loadApplicationDetail(draftConflictArn);
-      const freshRes = await fetch(`${apiBaseUrl}/api/v1/applications/${draftConflictArn}`, {
-        headers: authHeaders()
-      });
+      const freshRes = await fetch(`${apiBaseUrl}/api/v1/applications/${draftConflictArn}`, authHeaders());
       if (!freshRes.ok) throw new Error(`API error ${freshRes.status}`);
       const freshApp = await freshRes.json();
       setCurrentApplication({ ...freshApp, rowVersion: freshApp.rowVersion });
@@ -1129,8 +1120,8 @@ export default function App() {
       try {
         const qs = new URLSearchParams({ authorityId, upn });
         const res = await fetch(`${apiBaseUrl}/api/v1/ndc/payments/by-upn?${qs.toString()}`, {
+          ...authHeaders(),
           method: "POST",
-          headers: authHeaders(),
           body: JSON.stringify({ dueCode }),
         });
         const body = await res.json().catch(() => ({}));
@@ -1181,8 +1172,8 @@ export default function App() {
     setProfileEditorError(null);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/profile/me`, {
+        ...authHeaders(),
         method: "PATCH",
-        headers: authHeaders(),
         body: JSON.stringify({ applicant: profileDraft })
       });
       const body = await res.json().catch(() => ({}));
@@ -1592,8 +1583,8 @@ export default function App() {
     try {
       setError(null);
       const res = await fetch(`${apiBaseUrl}/api/v1/applications`, {
+        ...authHeaders(),
         method: "POST",
-        headers: authHeaders(),
         body: JSON.stringify({
           authorityId: formData.authority_id || "PUDA",
           serviceKey: selectedService.serviceKey,
@@ -1601,7 +1592,7 @@ export default function App() {
           data: formData
         })
       });
-      
+
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const app = await res.json();
       setCurrentApplication({ ...app, rowVersion: app.rowVersion });
@@ -1641,8 +1632,8 @@ export default function App() {
       if (currentApplication && currentApplication.state_id === "DRAFT") {
         // Update existing draft — send rowVersion for optimistic concurrency
         const res = await fetch(`${apiBaseUrl}/api/v1/applications/${currentApplication.arn}`, {
+          ...authHeaders(),
           method: "PUT",
-          headers: authHeaders(),
           body: JSON.stringify({
             data: formData,
             userId: user.user_id,
@@ -1678,8 +1669,8 @@ export default function App() {
         markSync();
       } else {
         const res = await fetch(`${apiBaseUrl}/api/v1/applications`, {
+          ...authHeaders(),
           method: "POST",
-          headers: authHeaders(),
           body: JSON.stringify({
             authorityId: formData.authority_id || "PUDA",
             serviceKey: selectedService.serviceKey,
@@ -1726,8 +1717,8 @@ export default function App() {
     try {
       setError(null);
       const res = await fetch(`${apiBaseUrl}/api/v1/applications/${currentApplication.arn}/submit`, {
+        ...authHeaders(),
         method: "POST",
-        headers: authHeaders(),
         body: JSON.stringify({
           userId: user.user_id
         })
@@ -1777,8 +1768,8 @@ export default function App() {
     if (!propertyRequired) {
       try {
         const res = await fetch(`${apiBaseUrl}/api/v1/applications/check-duplicate`, {
+          ...authHeaders(),
           method: "POST",
-          headers: authHeaders(),
           body: JSON.stringify({ serviceKey: service.serviceKey }),
         });
         if (res.ok) {
@@ -1836,7 +1827,7 @@ export default function App() {
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", `${apiBaseUrl}/api/v1/documents/upload`);
-        if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+        xhr.withCredentials = true;
         xhr.upload.addEventListener("progress", (e) => {
           if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
         });
@@ -1880,7 +1871,7 @@ export default function App() {
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", `${apiBaseUrl}/api/v1/citizens/me/documents/upload`);
-        if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+        xhr.withCredentials = true;
         xhr.upload.addEventListener("progress", (e) => {
           if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
         });
@@ -1912,8 +1903,8 @@ export default function App() {
     try {
       setError(null);
       const res = await fetch(`${apiBaseUrl}/api/v1/citizens/me/documents/reuse`, {
+        ...authHeaders(),
         method: "POST",
-        headers: authHeaders(),
         body: JSON.stringify({
           citizenDocId,
           arn: currentApplication.arn,
@@ -1942,7 +1933,7 @@ export default function App() {
     const cacheKey = applicationDetailCacheKey(user.user_id, arn);
     try {
       if (!isOffline) {
-        const res = await fetch(`${apiBaseUrl}/api/v1/applications/${arn}`, { headers: authHeaders() });
+        const res = await fetch(`${apiBaseUrl}/api/v1/applications/${arn}`, authHeaders());
         if (res.ok) {
           const appData = await res.json();
           setCurrentApplication({
@@ -2168,7 +2159,7 @@ export default function App() {
         onLookupUpn={async (upn) => {
           const res = await fetch(
             `${apiBaseUrl}/api/v1/citizens/me/property-lookup?upn=${encodeURIComponent(upn)}`,
-            { headers: authHeaders() }
+            authHeaders()
           );
           if (!res.ok) return null;
           const json = await res.json();

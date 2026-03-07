@@ -236,6 +236,8 @@ const te: Record<string, string> = {
   "common.title": "శీర్షిక",
 
   "error.boundary_title": "ఏదో తప్పు జరిగింది",
+  "error.reported_refresh": "ఈ లోపం నివేదించబడింది. పేజీని రిఫ్రెష్ చేయడానికి ప్రయత్నించండి.",
+  "error.refresh_page": "పేజీ రిఫ్రెష్ చేయండి",
   "a11y.skip_to_main": "ప్రధాన కంటెంట్‌కు వెళ్ళండి",
   "login.test_credentials": "పరీక్ష ఆధారాలు (పాస్‌వర్డ్: password123)",
   "alert.information_title": "హెచ్చరిక సమాచారం",

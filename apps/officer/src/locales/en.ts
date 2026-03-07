@@ -226,4 +226,7 @@ export default {
   "common.status": "Status",
   "common.loading": "Loading...",
   "common.error": "An error occurred",
+  "error.something_went_wrong": "Something went wrong",
+  "error.reported_refresh": "This error has been reported. Try refreshing the page.",
+  "error.refresh_page": "Refresh Page",
 };

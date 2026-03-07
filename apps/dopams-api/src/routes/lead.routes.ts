@@ -3,8 +3,16 @@ import { query } from "../db";
 import { sendError, send404 } from "../errors";
 import { executeTransition } from "../workflow-bridge";
 import { getAvailableTransitions } from "../workflow-bridge/transitions";
+import { createRoleGuard } from "@puda/api-core";
 
 export async function registerLeadRoutes(app: FastifyInstance): Promise<void> {
+  const requireLeadCreate = createRoleGuard([
+    "DISTRICT_OPERATOR", "TOLL_FREE_OPERATOR", "INTELLIGENCE_ANALYST", "ADMINISTRATOR",
+  ]);
+  const requireLeadTransition = createRoleGuard([
+    "SUPERVISORY_OFFICER", "INTELLIGENCE_ANALYST", "ADMINISTRATOR",
+  ]);
+
   app.get("/api/v1/leads", {
     schema: {
       querystring: {
@@ -61,6 +69,7 @@ export async function registerLeadRoutes(app: FastifyInstance): Promise<void> {
       geoLatitude: { type: "number" }, geoLongitude: { type: "number" },
     } } },
   }, async (request, reply) => {
+    if (!requireLeadCreate(request, reply)) return;
     const body = request.body as Record<string, unknown>;
     const { sourceType, summary, details } = body as { sourceType: string; summary: string; details?: string };
     const { userId } = request.authUser!;
@@ -145,22 +154,16 @@ export async function registerLeadRoutes(app: FastifyInstance): Promise<void> {
       body: { type: "object", additionalProperties: false, required: ["transitionId"], properties: { transitionId: { type: "string" }, remarks: { type: "string" } } },
     },
   }, async (request, reply) => {
+    if (!requireLeadTransition(request, reply)) return;
     const { id } = request.params as { id: string };
     const { transitionId, remarks } = request.body as { transitionId: string; remarks?: string };
     const { userId, roles } = request.authUser!;
-
-    // Validate transition is allowed from current state
-    const stateResult = await query(`SELECT state_id FROM lead WHERE lead_id = $1`, [id]);
-    if (stateResult.rows.length === 0) return send404(reply, "LEAD_NOT_FOUND", "Lead not found");
-    const available = getAvailableTransitions("dopams_lead", stateResult.rows[0].state_id);
-    if (!available.some((t) => t.transitionId === transitionId)) {
-      return sendError(reply, 400, "INVALID_TRANSITION", "Transition not allowed from current state");
-    }
 
     const result = await executeTransition(
       id, "dopams_lead", transitionId, userId, "OFFICER", roles, remarks,
     );
     if (!result.success) {
+      if (result.error === "ENTITY_NOT_FOUND") return send404(reply, "LEAD_NOT_FOUND", "Lead not found");
       return sendError(reply, 409, result.error || "TRANSITION_FAILED", "Lead transition failed");
     }
     return { success: true, newStateId: result.newStateId };

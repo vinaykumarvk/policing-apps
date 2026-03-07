@@ -87,7 +87,7 @@ interface CompareResult {
 // ---- Props ----
 
 interface ServiceConfigViewProps {
-  authHeaders: () => Record<string, string>;
+  authHeaders: () => RequestInit;
   isOffline: boolean;
   onBack: () => void;
 }
@@ -127,7 +127,7 @@ export default function ServiceConfigView({ authHeaders, isOffline, onBack }: Se
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${apiBaseUrl}/api/v1/config/services`, { headers: authHeaders() });
+      const res = await fetch(`${apiBaseUrl}/api/v1/config/services`, authHeaders());
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       setServices(data.services || []);
@@ -143,7 +143,7 @@ export default function ServiceConfigView({ authHeaders, isOffline, onBack }: Se
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${apiBaseUrl}/api/v1/config/services/${serviceKey}/versions`, { headers: authHeaders() });
+      const res = await fetch(`${apiBaseUrl}/api/v1/config/services/${serviceKey}/versions`, authHeaders());
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       setVersions(data.versions || []);
@@ -159,7 +159,7 @@ export default function ServiceConfigView({ authHeaders, isOffline, onBack }: Se
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${apiBaseUrl}/api/v1/config/services/${serviceKey}/versions/${version}`, { headers: authHeaders() });
+      const res = await fetch(`${apiBaseUrl}/api/v1/config/services/${serviceKey}/versions/${version}`, authHeaders());
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       setVersionDetail(data);
@@ -176,7 +176,7 @@ export default function ServiceConfigView({ authHeaders, isOffline, onBack }: Se
     try {
       const res = await fetch(
         `${apiBaseUrl}/api/v1/config/services/${selectedService}/versions/compare?v1=${compareV1}&v2=${compareV2}`,
-        { headers: authHeaders() }
+        authHeaders()
       );
       if (!res.ok) throw new Error(`API error ${res.status}`);
       setCompareResult(await res.json());
@@ -193,7 +193,7 @@ export default function ServiceConfigView({ authHeaders, isOffline, onBack }: Se
     try {
       const res = await fetch(
         `${apiBaseUrl}/api/v1/config/services/${selectedService}/versions/compare?v1=${listCompareV1}&v2=${listCompareV2}`,
-        { headers: authHeaders() }
+        authHeaders()
       );
       if (!res.ok) throw new Error(`API error ${res.status}`);
       setListCompareResult(await res.json());

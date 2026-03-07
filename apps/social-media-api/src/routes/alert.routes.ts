@@ -1,8 +1,11 @@
 import { FastifyInstance } from "fastify";
 import { query } from "../db";
 import { sendError, send404 } from "../errors";
+import { createRoleGuard } from "@puda/api-core";
 import { executeTransition } from "../workflow-bridge";
 import { getAvailableTransitions } from "../workflow-bridge/transitions";
+
+const requireAnalyst = createRoleGuard(["ANALYST", "SUPERVISOR", "PLATFORM_ADMINISTRATOR"]);
 
 export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/v1/alerts", {
@@ -102,18 +105,11 @@ export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
       const { transitionId, remarks } = request.body as { transitionId: string; remarks?: string };
       const { userId, roles } = request.authUser!;
 
-      // Validate transition is allowed from current state
-      const stateResult = await query(`SELECT state_id FROM sm_alert WHERE alert_id = $1`, [id]);
-      if (stateResult.rows.length === 0) return send404(reply, "ALERT_NOT_FOUND", "Alert not found");
-      const available = getAvailableTransitions("sm_alert", stateResult.rows[0].state_id);
-      if (!available.some((t) => t.transitionId === transitionId)) {
-        return sendError(reply, 400, "INVALID_TRANSITION", "Transition not allowed from current state");
-      }
-
       const result = await executeTransition(
         id, "sm_alert", transitionId, userId, "OFFICER", roles, remarks,
       );
       if (!result.success) {
+        if (result.error === "ENTITY_NOT_FOUND") return send404(reply, "ALERT_NOT_FOUND", "Alert not found");
         return sendError(reply, 409, result.error || "TRANSITION_FAILED", "Alert transition failed");
       }
       return { success: true, newStateId: result.newStateId };
@@ -141,6 +137,7 @@ export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
       },
     },
   }, async (request, reply) => {
+    if (!requireAnalyst(request, reply)) return;
     try {
       const { id } = request.params as { id: string };
       const { actionType, notes, assignTo, sharedWith, shareType } = request.body as {
@@ -359,6 +356,7 @@ export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
       },
     },
   }, async (request, reply) => {
+    if (!requireAnalyst(request, reply)) return;
     try {
       const { id } = request.params as { id: string };
       const { reason } = request.body as { reason: string };

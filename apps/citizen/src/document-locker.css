@@ -365,7 +365,7 @@
   align-items: center;
 }
 
-.locker-filter-chip:hover {
+.locker-filter-chip:hover, .locker-filter-chip:active {
   border-color: var(--color-brand);
 }
 

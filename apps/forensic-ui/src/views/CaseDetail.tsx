@@ -6,7 +6,7 @@ import { apiBaseUrl, ForensicCase, EvidenceSource, AIFinding, Report } from "../
 type View = Parameters<typeof import("../App")["default"]> extends never[] ? string : string;
 type Props = {
   id: string;
-  authHeaders: () => Record<string, string>;
+  authHeaders: () => RequestInit;
   isOffline: boolean;
   onBack: () => void;
   onNavigate: (view: any, id?: string) => void;
@@ -34,21 +34,21 @@ export default function CaseDetail({ id, authHeaders, isOffline, onBack, onNavig
   const [legalMappings, setLegalMappings] = useState<any[]>([]);
 
   const fetchTransitions = () => {
-    fetch(`${apiBaseUrl}/api/v1/cases/${id}/transitions`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/cases/${id}/transitions`, authHeaders())
       .then((r) => r.ok ? r.json() : { transitions: [] })
       .then((data) => setAvailableTransitions(data.transitions || []))
       .catch(() => setAvailableTransitions([]));
   };
 
   const fetchNotes = () => {
-    fetch(`${apiBaseUrl}/api/v1/cases/${id}/notes`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/cases/${id}/notes`, authHeaders())
       .then((r) => r.ok ? r.json() : { notes: [] })
       .then((data) => setNotes(data.notes || []))
       .catch(() => setNotes([]));
   };
 
   const fetchActivity = () => {
-    fetch(`${apiBaseUrl}/api/v1/cases/${id}/activity`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/cases/${id}/activity`, authHeaders())
       .then((r) => r.ok ? r.json() : { events: [] })
       .then((data) => setActivity(data.events || data.activity || []))
       .catch(() => setActivity([]));
@@ -59,7 +59,7 @@ export default function CaseDetail({ id, authHeaders, isOffline, onBack, onNavig
     setSubmittingNote(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/cases/${id}/notes`, {
-        method: "POST", headers: authHeaders(),
+        ...authHeaders(), method: "POST",
         body: JSON.stringify({ note_text: newNote }),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
@@ -73,10 +73,10 @@ export default function CaseDetail({ id, authHeaders, isOffline, onBack, onNavig
   useEffect(() => {
     const h = authHeaders();
     Promise.all([
-      fetch(`${apiBaseUrl}/api/v1/cases/${id}`, { headers: h }).then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); }),
-      fetch(`${apiBaseUrl}/api/v1/cases/${id}/evidence`, { headers: h }).then((r) => r.ok ? r.json() : { evidence: [] }).catch(() => ({ evidence: [] })),
-      fetch(`${apiBaseUrl}/api/v1/cases/${id}/findings`, { headers: h }).then((r) => r.ok ? r.json() : { findings: [] }).catch(() => ({ findings: [] })),
-      fetch(`${apiBaseUrl}/api/v1/cases/${id}/reports`, { headers: h }).then((r) => r.ok ? r.json() : { reports: [] }).catch(() => ({ reports: [] })),
+      fetch(`${apiBaseUrl}/api/v1/cases/${id}`, h).then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); }),
+      fetch(`${apiBaseUrl}/api/v1/cases/${id}/evidence`, h).then((r) => r.ok ? r.json() : { evidence: [] }).catch(() => ({ evidence: [] })),
+      fetch(`${apiBaseUrl}/api/v1/cases/${id}/findings`, h).then((r) => r.ok ? r.json() : { findings: [] }).catch(() => ({ findings: [] })),
+      fetch(`${apiBaseUrl}/api/v1/cases/${id}/reports`, h).then((r) => r.ok ? r.json() : { reports: [] }).catch(() => ({ reports: [] })),
     ])
       .then(([caseRes, evRes, findRes, repRes]) => {
         setCaseData(caseRes.case || caseRes);
@@ -93,11 +93,11 @@ export default function CaseDetail({ id, authHeaders, isOffline, onBack, onNavig
 
   useEffect(() => {
     if (!id) return;
-    fetch(`${apiBaseUrl}/api/v1/classify/case/${id}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/classify/case/${id}`, authHeaders())
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setClassification(data); })
       .catch(() => {});
-    fetch(`${apiBaseUrl}/api/v1/legal/mappings/case/${id}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/legal/mappings/case/${id}`, authHeaders())
       .then(r => r.ok ? r.json() : { mappings: [] })
       .then(data => setLegalMappings(data.mappings || []))
       .catch(() => {});
@@ -107,8 +107,7 @@ export default function CaseDetail({ id, authHeaders, isOffline, onBack, onNavig
     setClassifyLoading(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/classify/case/${id}`, {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        ...authHeaders(), method: "POST",
         body: JSON.stringify({}),
       });
       if (res.ok) {
@@ -124,10 +123,10 @@ export default function CaseDetail({ id, authHeaders, isOffline, onBack, onNavig
     setTransitioning(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/cases/${id}/transition`, {
-        method: "POST", headers: authHeaders(), body: JSON.stringify({ transitionId: selectedTransition, remarks }),
+        ...authHeaders(), method: "POST", body: JSON.stringify({ transitionId: selectedTransition, remarks }),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
-      const entityRes = await fetch(`${apiBaseUrl}/api/v1/cases/${id}`, { headers: authHeaders() });
+      const entityRes = await fetch(`${apiBaseUrl}/api/v1/cases/${id}`, authHeaders());
       if (entityRes.ok) { const d = await entityRes.json(); setCaseData(d.case || d); }
       setSelectedTransition(""); setRemarks("");
       fetchTransitions();

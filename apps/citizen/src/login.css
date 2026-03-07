@@ -45,7 +45,7 @@
   cursor: pointer;
 }
 
-.lang-toggle:hover {
+.lang-toggle:hover, .lang-toggle:active {
   background: var(--color-bg-elevated);
 }
 
@@ -69,7 +69,7 @@
   cursor: pointer;
 }
 
-.tab:hover {
+.tab:hover, .tab:active {
   background: var(--color-bg-elevated);
 }
 

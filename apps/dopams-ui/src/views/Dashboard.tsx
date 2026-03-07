@@ -36,8 +36,7 @@ export default function Dashboard({ authHeaders, isOffline, onNavigate }: Props)
 
   useEffect(() => {
     if (isOffline) { setLoading(false); return; }
-    const headers = authHeaders();
-    fetch(`${apiBaseUrl}/api/v1/dashboard/stats`, { headers })
+    fetch(`${apiBaseUrl}/api/v1/dashboard/stats`, authHeaders())
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();

@@ -8,7 +8,7 @@ const LIMIT = 20;
 type FacetEntry = { value: string; label?: string; count: number };
 type Facets = Record<string, FacetEntry[]>;
 
-type Props = { authHeaders: () => Record<string, string>; isOffline: boolean; onSelect: (id: string) => void };
+type Props = { authHeaders: () => RequestInit; isOffline: boolean; onSelect: (id: string) => void };
 
 function facetOptions(entries: FacetEntry[] | undefined, fallback: string[]) {
   if (entries && entries.length > 0) {
@@ -31,7 +31,7 @@ export default function CaseList({ authHeaders, isOffline, onSelect }: Props) {
 
   useEffect(() => {
     if (isOffline) return;
-    fetch(`${apiBaseUrl}/api/v1/cases/facets`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/cases/facets`, authHeaders())
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (data) setFacets(data.facets || {}); })
       .catch(() => {});
@@ -47,7 +47,7 @@ export default function CaseList({ authHeaders, isOffline, onSelect }: Props) {
     if (priorityFilter) params.set("priority", priorityFilter);
     if (typeFilter) params.set("case_type", typeFilter);
 
-    fetch(`${apiBaseUrl}/api/v1/cases?${params}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/cases?${params}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
       .then((data) => {
         setCases(data.cases || data || []);

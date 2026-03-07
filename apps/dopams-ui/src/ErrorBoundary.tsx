@@ -37,14 +37,14 @@ export class ErrorBoundary extends Component<Props, State> {
             {this.state.error.message}
           </pre>
           <p style={{ fontSize: "0.9rem", marginTop: "var(--space-4, 1rem)", color: "var(--color-text-muted, #666)" }}>
-            This error has been reported. Try refreshing the page.
+            {t("error.reported_refresh")}
           </p>
           <button
             type="button"
             onClick={() => window.location.reload()}
             style={{ marginTop: "var(--space-4, 1rem)", padding: "var(--space-2, 0.5rem) var(--space-4, 1rem)", borderRadius: "var(--radius-sm, 0.5rem)", border: "1px solid var(--color-border, #ccc)", cursor: "pointer", fontWeight: 600, minHeight: "2.75rem" }}
           >
-            Refresh Page
+            {t("error.refresh_page")}
           </button>
         </div>
         )}</Translation>

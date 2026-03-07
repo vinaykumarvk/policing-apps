@@ -21,8 +21,8 @@ export default function DrugDashboard({ authHeaders, isOffline }: Props) {
   useEffect(() => {
     if (isOffline) { setLoading(false); return; }
     Promise.all([
-      fetch(`${apiBaseUrl}/api/v1/drug-classify/distribution`, { headers: authHeaders() }).then(r => r.ok ? r.json() : { distribution: [] }),
-      fetch(`${apiBaseUrl}/api/v1/drug-classify/recidivists`, { headers: authHeaders() }).then(r => r.ok ? r.json() : { recidivists: [] }),
+      fetch(`${apiBaseUrl}/api/v1/drug-classify/distribution`, authHeaders()).then(r => r.ok ? r.json() : { distribution: [] }),
+      fetch(`${apiBaseUrl}/api/v1/drug-classify/recidivists`, authHeaders()).then(r => r.ok ? r.json() : { recidivists: [] }),
     ]).then(([distData, recData]) => {
       setDistribution(distData.distribution || []);
       setRecidivists(recData.recidivists || []);

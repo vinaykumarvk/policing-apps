@@ -169,7 +169,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     }
     const token = generateToken(user);
     setAuthCookie(reply, token);
-    return { user, token };
+    return { user };
   });
 
   app.post("/api/v1/auth/register", { schema: registerSchema }, async (request, reply) => {
@@ -214,7 +214,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     }
     const token = generateToken(user);
     setAuthCookie(reply, token);
-    return { user, token };
+    return { user };
     }
   );
 

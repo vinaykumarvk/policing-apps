@@ -1,6 +1,9 @@
 import { FastifyInstance } from "fastify";
 import { query } from "../db";
 import { sendError, send400, send404 } from "../errors";
+import { createRoleGuard } from "@puda/api-core";
+
+const requireAnalyst = createRoleGuard(["ANALYST", "SUPERVISOR", "PLATFORM_ADMINISTRATOR"]);
 
 export async function registerContentRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/v1/content", {
@@ -54,7 +57,7 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
     return { facets: { platform: platformRows.rows, category_id: categoryRows.rows } };
   });
 
-  // FR-03: POST /api/v1/content/ingest — Ingest content with legal basis and retention
+  // FR-03: POST /api/v1/content/ingest — Ingest content with legal basis and retention (ANALYST+)
   app.post("/api/v1/content/ingest", {
     schema: {
       body: {
@@ -77,6 +80,7 @@ export async function registerContentRoutes(app: FastifyInstance): Promise<void>
       },
     },
   }, async (request, reply) => {
+    if (!requireAnalyst(request, reply)) return;
     try {
       const body = request.body as {
         platform: string; platformPostId?: string; authorHandle?: string; authorName?: string;

@@ -23,21 +23,21 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
   const [ocrLoading, setOcrLoading] = useState(false);
 
   const fetchNotes = () => {
-    fetch(`${apiBaseUrl}/api/v1/evidence/${id}/notes`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/evidence/${id}/notes`, authHeaders())
       .then((r) => r.ok ? r.json() : { notes: [] })
       .then((data) => setNotes(data.notes || []))
       .catch(() => setNotes([]));
   };
 
   const fetchActivity = () => {
-    fetch(`${apiBaseUrl}/api/v1/evidence/${id}/activity`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/evidence/${id}/activity`, authHeaders())
       .then((r) => r.ok ? r.json() : { events: [] })
       .then((data) => setActivity(data.events || data.activity || []))
       .catch(() => setActivity([]));
   };
 
   useEffect(() => {
-    fetch(`${apiBaseUrl}/api/v1/evidence/${id}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/evidence/${id}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
       .then((data) => { setEvidence(data.evidence || data); fetchNotes(); fetchActivity(); })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed"))
@@ -49,7 +49,7 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
     setSubmittingNote(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/evidence/${id}/notes`, {
-        method: "POST", headers: authHeaders(),
+        ...authHeaders(), method: "POST",
         body: JSON.stringify({ note_text: newNote }),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
@@ -64,14 +64,14 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
     setOcrLoading(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/ocr/submit`, {
+        ...authHeaders(),
         method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ evidence_id: id }),
       });
       const data = await res.json();
       setOcrJobId(data.job_id);
       const pollInterval = setInterval(async () => {
-        const pollRes = await fetch(`${apiBaseUrl}/api/v1/ocr/${data.job_id}`, { headers: authHeaders() });
+        const pollRes = await fetch(`${apiBaseUrl}/api/v1/ocr/${data.job_id}`, authHeaders());
         const pollData = await pollRes.json();
         if (pollData.status === "COMPLETED") {
           setOcrResult(pollData.extracted_text);
@@ -96,16 +96,14 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
     try {
       const formData = new FormData();
       formData.append("file", pendingFile);
-      const hdrs = authHeaders();
-      delete hdrs["Content-Type"];
       const res = await fetch(`${apiBaseUrl}/api/v1/evidence/${id}/upload`, {
-        method: "POST", headers: hdrs, body: formData,
+        method: "POST", credentials: "include", body: formData,
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
       setUploadProgress(100);
       setPendingFile(null);
       showToast("success", t("evidence.upload_success"));
-      const entityRes = await fetch(`${apiBaseUrl}/api/v1/evidence/${id}`, { headers: authHeaders() });
+      const entityRes = await fetch(`${apiBaseUrl}/api/v1/evidence/${id}`, authHeaders());
       if (entityRes.ok) { const d = await entityRes.json(); setEvidence(d.evidence || d); }
     } catch { showToast("error", t("common.error")); }
     finally { setUploading(false); setUploadProgress(0); }

@@ -236,6 +236,8 @@ const en: Record<string, string> = {
   "common.title": "Title",
 
   "error.boundary_title": "Something went wrong",
+  "error.reported_refresh": "This error has been reported. Try refreshing the page.",
+  "error.refresh_page": "Refresh Page",
   "a11y.skip_to_main": "Skip to main content",
   "login.test_credentials": "Test Credentials (password: password123)",
   "alert.information_title": "Alert Information",

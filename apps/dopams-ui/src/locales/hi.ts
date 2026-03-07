@@ -236,6 +236,8 @@ const hi: Record<string, string> = {
   "common.title": "शीर्षक",
 
   "error.boundary_title": "कुछ गलत हो गया",
+  "error.reported_refresh": "इस त्रुटि की सूचना दे दी गई है। पेज रिफ्रेश करने का प्रयास करें।",
+  "error.refresh_page": "पेज रिफ्रेश करें",
   "a11y.skip_to_main": "मुख्य सामग्री पर जाएं",
   "login.test_credentials": "परीक्षण क्रेडेंशियल (पासवर्ड: password123)",
   "alert.information_title": "अलर्ट जानकारी",

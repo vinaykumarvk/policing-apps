@@ -30,7 +30,7 @@ export default function ContentList({ authHeaders, isOffline, onSelect }: Props)
 
   useEffect(() => {
     if (isOffline) return;
-    fetch(`${apiBaseUrl}/api/v1/content/facets`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/content/facets`, authHeaders())
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (data) setFacets(data.facets || {}); })
       .catch(() => {});
@@ -45,7 +45,7 @@ export default function ContentList({ authHeaders, isOffline, onSelect }: Props)
     if (platformFilter) params.set("platform", platformFilter);
     if (categoryFilter) params.set("category_id", categoryFilter);
 
-    fetch(`${apiBaseUrl}/api/v1/content?${params}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/content?${params}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
       .then((data) => {
         setContent(data.content || data || []);

@@ -23,7 +23,6 @@ const COUNTERS: CacheTelemetryCounter[] = [
 
 export type CacheTelemetryFlushOptions = {
   apiBaseUrl: string;
-  token?: string | null;
   userId?: string;
   keepalive?: boolean;
   fetchImpl?: typeof fetch;
@@ -256,11 +255,11 @@ export async function flushCacheTelemetry(
 
   const fetchFn = options.fetchImpl || fetch;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (options.token) headers.Authorization = `Bearer ${options.token}`;
 
   const response = await fetchFn(`${options.apiBaseUrl}/api/v1/client-telemetry/cache`, {
     method: "POST",
     headers,
+    credentials: "include" as RequestCredentials,
     keepalive: Boolean(options.keepalive),
     body: JSON.stringify({
       app: "citizen",

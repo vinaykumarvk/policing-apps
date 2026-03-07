@@ -35,7 +35,7 @@ export default function LeadList({ authHeaders, isOffline, onSelect }: Props) {
 
   useEffect(() => {
     if (isOffline) return;
-    fetch(`${apiBaseUrl}/api/v1/leads/facets`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/leads/facets`, authHeaders())
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (data) setFacets(data.facets || {}); })
       .catch(() => {});
@@ -51,7 +51,7 @@ export default function LeadList({ authHeaders, isOffline, onSelect }: Props) {
     if (priorityFilter) params.set("priority", priorityFilter);
     if (sourceFilter) params.set("source_type", sourceFilter);
 
-    fetch(`${apiBaseUrl}/api/v1/leads?${params}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/leads?${params}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
       .then((data) => {
         setLeads(data.leads || data || []);

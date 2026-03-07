@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Alert, Button, Field, Input, Select, Tabs, Textarea, useToast } from "@puda/shared";
 import { apiBaseUrl, AIFinding } from "../types";
 
-type Props = { id: string; authHeaders: () => Record<string, string>; isOffline: boolean; onBack: () => void };
+type Props = { id: string; authHeaders: () => RequestInit; isOffline: boolean; onBack: () => void };
 
 export default function FindingDetail({ id, authHeaders, isOffline, onBack }: Props) {
   const { t } = useTranslation();
@@ -24,21 +24,21 @@ export default function FindingDetail({ id, authHeaders, isOffline, onBack }: Pr
   const [translating, setTranslating] = useState(false);
 
   const fetchTransitions = () => {
-    fetch(`${apiBaseUrl}/api/v1/findings/${id}/transitions`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/findings/${id}/transitions`, authHeaders())
       .then((r) => r.ok ? r.json() : { transitions: [] })
       .then((data) => setAvailableTransitions(data.transitions || []))
       .catch(() => setAvailableTransitions([]));
   };
 
   const fetchNotes = () => {
-    fetch(`${apiBaseUrl}/api/v1/findings/${id}/notes`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/findings/${id}/notes`, authHeaders())
       .then((r) => r.ok ? r.json() : { notes: [] })
       .then((data) => setNotes(data.notes || []))
       .catch(() => setNotes([]));
   };
 
   const fetchActivity = () => {
-    fetch(`${apiBaseUrl}/api/v1/findings/${id}/activity`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/findings/${id}/activity`, authHeaders())
       .then((r) => r.ok ? r.json() : { events: [] })
       .then((data) => setActivity(data.events || data.activity || []))
       .catch(() => setActivity([]));
@@ -49,7 +49,7 @@ export default function FindingDetail({ id, authHeaders, isOffline, onBack }: Pr
     setSubmittingNote(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/findings/${id}/notes`, {
-        method: "POST", headers: authHeaders(),
+        ...authHeaders(), method: "POST",
         body: JSON.stringify({ note_text: newNote }),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
@@ -61,7 +61,7 @@ export default function FindingDetail({ id, authHeaders, isOffline, onBack }: Pr
   };
 
   useEffect(() => {
-    fetch(`${apiBaseUrl}/api/v1/findings/${id}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/findings/${id}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
       .then((data) => { setFinding(data.finding || data); fetchTransitions(); fetchNotes(); fetchActivity(); })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load finding"))
@@ -72,8 +72,7 @@ export default function FindingDetail({ id, authHeaders, isOffline, onBack }: Pr
     setTranslating(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/translate`, {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        ...authHeaders(), method: "POST",
         body: JSON.stringify({ text: sourceText, target_language: targetLang }),
       });
       if (res.ok) {
@@ -89,10 +88,10 @@ export default function FindingDetail({ id, authHeaders, isOffline, onBack }: Pr
     setTransitioning(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/findings/${id}/transition`, {
-        method: "POST", headers: authHeaders(), body: JSON.stringify({ transitionId: selectedTransition, remarks }),
+        ...authHeaders(), method: "POST", body: JSON.stringify({ transitionId: selectedTransition, remarks }),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
-      const entityRes = await fetch(`${apiBaseUrl}/api/v1/findings/${id}`, { headers: authHeaders() });
+      const entityRes = await fetch(`${apiBaseUrl}/api/v1/findings/${id}`, authHeaders());
       if (entityRes.ok) { const d = await entityRes.json(); setFinding(d.finding || d); }
       setSelectedTransition(""); setRemarks("");
       fetchTransitions();

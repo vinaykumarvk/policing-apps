@@ -1,8 +1,12 @@
 import { FastifyInstance } from "fastify";
 import { query } from "../db";
 import { sendError, send400, send403, send404 } from "../errors";
+import { createRoleGuard } from "@puda/api-core";
 import { executeTransition } from "../workflow-bridge";
 import { getAvailableTransitions } from "../workflow-bridge/transitions";
+
+const requireAnalyst = createRoleGuard(["ANALYST", "SUPERVISOR", "PLATFORM_ADMINISTRATOR"]);
+const requireSupervisor = createRoleGuard(["SUPERVISOR", "PLATFORM_ADMINISTRATOR"]);
 
 export async function registerCaseRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/v1/cases", {
@@ -54,6 +58,7 @@ export async function registerCaseRoutes(app: FastifyInstance): Promise<void> {
       dueAt: { type: "string", format: "date-time" }, closureReason: { type: "string" },
     } } },
   }, async (request, reply) => {
+    if (!requireAnalyst(request, reply)) return;
     const { title, description, alertId, dueAt } = request.body as { title: string; description?: string; alertId?: string; dueAt?: string };
     const { userId } = request.authUser!;
     const unitId = request.authUser?.unitId || null;
@@ -105,18 +110,11 @@ export async function registerCaseRoutes(app: FastifyInstance): Promise<void> {
     const { transitionId, remarks } = request.body as { transitionId: string; remarks?: string };
     const { userId, roles } = request.authUser!;
 
-    // Validate transition is allowed from current state
-    const stateResult = await query(`SELECT state_id FROM case_record WHERE case_id = $1`, [id]);
-    if (stateResult.rows.length === 0) return send404(reply, "CASE_NOT_FOUND", "Case not found");
-    const available = getAvailableTransitions("sm_case", stateResult.rows[0].state_id);
-    if (!available.some((t) => t.transitionId === transitionId)) {
-      return sendError(reply, 400, "INVALID_TRANSITION", "Transition not allowed from current state");
-    }
-
     const result = await executeTransition(
       id, "sm_case", transitionId, userId, "OFFICER", roles, remarks,
     );
     if (!result.success) {
+      if (result.error === "ENTITY_NOT_FOUND") return send404(reply, "CASE_NOT_FOUND", "Case not found");
       return sendError(reply, 409, result.error || "TRANSITION_FAILED", "Case transition failed");
     }
 
@@ -236,15 +234,11 @@ export async function registerCaseRoutes(app: FastifyInstance): Promise<void> {
       },
     },
   }, async (request, reply) => {
+    if (!requireSupervisor(request, reply)) return;
     try {
       const { id } = request.params as { id: string };
       const { justification } = request.body as { justification: string };
       const { userId, roles } = request.authUser!;
-
-      // Require SUPERVISOR or PLATFORM_ADMINISTRATOR role
-      if (!roles.includes("SUPERVISOR") && !roles.includes("PLATFORM_ADMINISTRATOR")) {
-        return send403(reply, "SUPERVISOR_REQUIRED", "Only supervisors can perform direct closure");
-      }
 
       // Verify case exists
       const caseResult = await query(

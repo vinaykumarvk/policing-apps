@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Alert, Button, Tabs, Textarea, useToast } from "@puda/shared";
 import { apiBaseUrl, ImportJob } from "../types";
 
-type Props = { id: string; authHeaders: () => Record<string, string>; isOffline: boolean; onBack: () => void };
+type Props = { id: string; authHeaders: () => RequestInit; isOffline: boolean; onBack: () => void };
 
 export default function ImportDetail({ id, authHeaders, isOffline, onBack }: Props) {
   const { t } = useTranslation();
@@ -17,14 +17,14 @@ export default function ImportDetail({ id, authHeaders, isOffline, onBack }: Pro
   const [submittingNote, setSubmittingNote] = useState(false);
 
   const fetchNotes = () => {
-    fetch(`${apiBaseUrl}/api/v1/imports/${id}/notes`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/imports/${id}/notes`, authHeaders())
       .then((r) => r.ok ? r.json() : { notes: [] })
       .then((data) => setNotes(data.notes || []))
       .catch(() => setNotes([]));
   };
 
   const fetchActivity = () => {
-    fetch(`${apiBaseUrl}/api/v1/imports/${id}/activity`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/imports/${id}/activity`, authHeaders())
       .then((r) => r.ok ? r.json() : { events: [] })
       .then((data) => setActivity(data.events || data.activity || []))
       .catch(() => setActivity([]));
@@ -35,7 +35,7 @@ export default function ImportDetail({ id, authHeaders, isOffline, onBack }: Pro
     setSubmittingNote(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/imports/${id}/notes`, {
-        method: "POST", headers: authHeaders(),
+        ...authHeaders(), method: "POST",
         body: JSON.stringify({ note_text: newNote }),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
@@ -47,7 +47,7 @@ export default function ImportDetail({ id, authHeaders, isOffline, onBack }: Pro
   };
 
   useEffect(() => {
-    fetch(`${apiBaseUrl}/api/v1/imports/${id}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/imports/${id}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
       .then((data) => { setJob(data.import || data); fetchNotes(); fetchActivity(); })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load import job"))

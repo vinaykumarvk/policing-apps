@@ -20,21 +20,21 @@ export default function ContentDetail({ id, authHeaders, isOffline, onBack }: Pr
   const [translating, setTranslating] = useState(false);
 
   const fetchNotes = () => {
-    fetch(`${apiBaseUrl}/api/v1/content/${id}/notes`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/content/${id}/notes`, authHeaders())
       .then((r) => r.ok ? r.json() : { notes: [] })
       .then((data) => setNotes(data.notes || []))
       .catch(() => setNotes([]));
   };
 
   const fetchActivity = () => {
-    fetch(`${apiBaseUrl}/api/v1/content/${id}/activity`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/content/${id}/activity`, authHeaders())
       .then((r) => r.ok ? r.json() : { events: [] })
       .then((data) => setActivity(data.events || data.activity || []))
       .catch(() => setActivity([]));
   };
 
   useEffect(() => {
-    fetch(`${apiBaseUrl}/api/v1/content/${id}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/content/${id}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
       .then((data) => { setItem(data.content || data); fetchNotes(); fetchActivity(); })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed"))
@@ -45,8 +45,8 @@ export default function ContentDetail({ id, authHeaders, isOffline, onBack }: Pr
     setTranslating(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/translate`, {
+        ...authHeaders(),
         method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ text: sourceText, target_language: targetLang }),
       });
       if (res.ok) {
@@ -62,7 +62,7 @@ export default function ContentDetail({ id, authHeaders, isOffline, onBack }: Pr
     setSubmittingNote(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/content/${id}/notes`, {
-        method: "POST", headers: authHeaders(),
+        ...authHeaders(), method: "POST",
         body: JSON.stringify({ note_text: newNote }),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);

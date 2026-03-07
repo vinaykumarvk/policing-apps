@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Field, Input, PasswordInput } from "@puda/shared";
+import { Bilingual } from "./Bilingual";
 import { useTheme } from "./theme";
 import type { ThemePreference } from "./theme";
 
@@ -54,7 +55,7 @@ export default function OfficerLogin({ onLogin }: OfficerLoginProps) {
       <main id="officer-login-main" className="panel officer-login-panel" role="main">
         <form onSubmit={handleSubmit} className="officer-login-form">
           {loginError ? <Alert variant="error">{loginError}</Alert> : null}
-          <Field label={t("login.user_id")} htmlFor="officer-login-id" required>
+          <Field label={<Bilingual tKey="login.user_id" />} htmlFor="officer-login-id" required>
             <Input
               id="officer-login-id"
               type="text"
@@ -65,7 +66,7 @@ export default function OfficerLogin({ onLogin }: OfficerLoginProps) {
               autoComplete="username"
             />
           </Field>
-          <Field label={t("login.password")} htmlFor="officer-login-password" required>
+          <Field label={<Bilingual tKey="login.password" />} htmlFor="officer-login-password" required>
             <PasswordInput
               id="officer-login-password"
               value={loginPassword}

@@ -227,4 +227,7 @@ export default {
   "common.status": "Status",
   "common.loading": "Loading...",
   "common.error": "An error occurred",
+  "error.something_went_wrong": "ਕੁਝ ਗਲਤ ਹੋ ਗਿਆ",
+  "error.reported_refresh": "ਇਸ ਗਲਤੀ ਦੀ ਰਿਪੋਰਟ ਕੀਤੀ ਗਈ ਹੈ। ਪੇਜ ਰਿਫ੍ਰੈਸ਼ ਕਰਨ ਦੀ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  "error.refresh_page": "ਪੇਜ ਰਿਫ੍ਰੈਸ਼ ਕਰੋ",
 };

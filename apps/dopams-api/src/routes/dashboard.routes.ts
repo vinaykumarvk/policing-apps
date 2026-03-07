@@ -2,8 +2,13 @@ import { FastifyInstance } from "fastify";
 import { query } from "../db";
 import { sendError } from "../errors";
 import { buildFilterClauses } from "@puda/api-integrations";
+import { createRoleGuard } from "@puda/api-core";
 
 export async function registerDashboardRoutes(app: FastifyInstance): Promise<void> {
+  const requireDashboardAccess = createRoleGuard([
+    "SUPERVISORY_OFFICER", "ZONAL_OFFICER", "INTELLIGENCE_ANALYST", "ADMINISTRATOR",
+  ]);
+
   app.get("/api/v1/dashboard/stats", {
     schema: {
       querystring: {
@@ -19,6 +24,7 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
       },
     },
   }, async (request, reply) => {
+    if (!requireDashboardAccess(request, reply)) return;
     try {
       const unitId = request.authUser?.unitId || null;
       const qs = request.query as Record<string, string | undefined>;
@@ -84,6 +90,7 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
       },
     },
   }, async (request, reply) => {
+    if (!requireDashboardAccess(request, reply)) return;
     const { reportType, reportName, cronExpression, config } = request.body as {
       reportType: string; reportName: string; cronExpression: string; config?: Record<string, unknown>;
     };
@@ -106,6 +113,7 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
       } },
     },
   }, async (request, reply) => {
+    if (!requireDashboardAccess(request, reply)) return;
     const { reportId } = request.params as { reportId: string };
     const body = request.body as Record<string, unknown>;
     const sets: string[] = [];

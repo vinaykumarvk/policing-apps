@@ -3,6 +3,7 @@ import { query } from "../db";
 import { send400, send404, sendError } from "../errors";
 import { executeTransition } from "../workflow-bridge";
 import { getAvailableTransitions } from "../workflow-bridge/transitions";
+import { createRoleGuard } from "@puda/api-core";
 
 const PRIVILEGED_ROLES = ["ADMINISTRATOR", "PLATFORM_ADMINISTRATOR", "INTELLIGENCE_ANALYST", "INVESTIGATING_OFFICER"];
 
@@ -15,6 +16,8 @@ function maskSubjectPII(row: Record<string, unknown>, userRoles: string[]): Reco
 }
 
 export async function registerSubjectRoutes(app: FastifyInstance): Promise<void> {
+  const requireSubjectWrite = createRoleGuard(["INTELLIGENCE_ANALYST", "SUPERVISORY_OFFICER", "ADMINISTRATOR"]);
+
   app.get("/api/v1/subjects", {
     schema: {
       querystring: {
@@ -119,6 +122,7 @@ export async function registerSubjectRoutes(app: FastifyInstance): Promise<void>
       sourceSystem: { type: "string" }, cctnsId: { type: "string" },
     } } },
   }, async (request, reply) => {
+    if (!requireSubjectWrite(request, reply)) return;
     const body = request.body as Record<string, unknown>;
     const { fullName, aliases, identifiers } = body as { fullName: string; aliases?: string[]; identifiers?: Record<string, unknown> };
     const { userId } = request.authUser!;
@@ -169,6 +173,7 @@ export async function registerSubjectRoutes(app: FastifyInstance): Promise<void>
       } },
     },
   }, async (request, reply) => {
+    if (!requireSubjectWrite(request, reply)) return;
     const { id } = request.params as { id: string };
     const body = request.body as Record<string, unknown>;
 
@@ -230,22 +235,16 @@ export async function registerSubjectRoutes(app: FastifyInstance): Promise<void>
       body: { type: "object", additionalProperties: false, required: ["transitionId"], properties: { transitionId: { type: "string" }, remarks: { type: "string" } } },
     },
   }, async (request, reply) => {
+    if (!requireSubjectWrite(request, reply)) return;
     const { id } = request.params as { id: string };
     const { transitionId, remarks } = request.body as { transitionId: string; remarks?: string };
     const { userId, roles } = request.authUser!;
-
-    // Validate transition is allowed from current state
-    const stateResult = await query(`SELECT state_id FROM subject_profile WHERE subject_id = $1`, [id]);
-    if (stateResult.rows.length === 0) return send404(reply, "SUBJECT_NOT_FOUND", "Subject not found");
-    const available = getAvailableTransitions("dopams_subject", stateResult.rows[0].state_id);
-    if (!available.some((t) => t.transitionId === transitionId)) {
-      return sendError(reply, 400, "INVALID_TRANSITION", "Transition not allowed from current state");
-    }
 
     const result = await executeTransition(
       id, "dopams_subject", transitionId, userId, "OFFICER", roles, remarks,
     );
     if (!result.success) {
+      if (result.error === "ENTITY_NOT_FOUND") return send404(reply, "SUBJECT_NOT_FOUND", "Subject not found");
       return sendError(reply, 409, result.error || "TRANSITION_FAILED", "Subject transition failed");
     }
     return { success: true, newStateId: result.newStateId };

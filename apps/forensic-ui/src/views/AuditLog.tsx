@@ -4,7 +4,7 @@ import { Alert, Button, Field, Input, Select } from "@puda/shared";
 import { apiBaseUrl } from "../types";
 
 type Props = {
-  authHeaders: () => Record<string, string>;
+  authHeaders: () => RequestInit;
   isOffline: boolean;
 };
 
@@ -47,7 +47,7 @@ export default function AuditLog({ authHeaders, isOffline }: Props) {
     if (entityType) params.set("entity_type", entityType);
     if (entityId) params.set("entity_id", entityId);
 
-    fetch(`${apiBaseUrl}/api/v1/admin/audit-log?${params}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/admin/audit-log?${params}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
       .then((data) => {
         const rows = data.entries || data.rows || [];

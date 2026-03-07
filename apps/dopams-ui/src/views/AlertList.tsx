@@ -35,7 +35,7 @@ export default function AlertList({ authHeaders, isOffline, onSelect }: Props) {
 
   useEffect(() => {
     if (isOffline) return;
-    fetch(`${apiBaseUrl}/api/v1/alerts/facets`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/alerts/facets`, authHeaders())
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (data) setFacets(data.facets || {}); })
       .catch(() => {});
@@ -51,7 +51,7 @@ export default function AlertList({ authHeaders, isOffline, onSelect }: Props) {
     if (severityFilter) params.set("severity", severityFilter);
     if (typeFilter) params.set("alert_type", typeFilter);
 
-    fetch(`${apiBaseUrl}/api/v1/alerts?${params}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/alerts?${params}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
       .then((data) => {
         setAlerts(data.alerts || data || []);

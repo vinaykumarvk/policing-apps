@@ -3,8 +3,13 @@ import { query } from "../db";
 import { sendError, send404 } from "../errors";
 import { executeTransition } from "../workflow-bridge";
 import { getAvailableTransitions } from "../workflow-bridge/transitions";
+import { createRoleGuard } from "@puda/api-core";
 
 export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
+  const requireAlertAction = createRoleGuard([
+    "SUPERVISORY_OFFICER", "ZONAL_OFFICER", "INTELLIGENCE_ANALYST", "ADMINISTRATOR",
+  ]);
+
   app.get("/api/v1/alerts", {
     schema: {
       querystring: {
@@ -76,22 +81,16 @@ export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
       body: { type: "object", additionalProperties: false, required: ["transitionId"], properties: { transitionId: { type: "string" }, remarks: { type: "string" } } },
     },
   }, async (request, reply) => {
+    if (!requireAlertAction(request, reply)) return;
     const { id } = request.params as { id: string };
     const { transitionId, remarks } = request.body as { transitionId: string; remarks?: string };
     const { userId, roles } = request.authUser!;
-
-    // Validate transition is allowed from current state
-    const stateResult = await query(`SELECT state_id FROM alert WHERE alert_id = $1`, [id]);
-    if (stateResult.rows.length === 0) return send404(reply, "ALERT_NOT_FOUND", "Alert not found");
-    const available = getAvailableTransitions("dopams_alert", stateResult.rows[0].state_id);
-    if (!available.some((t) => t.transitionId === transitionId)) {
-      return sendError(reply, 400, "INVALID_TRANSITION", "Transition not allowed from current state");
-    }
 
     const result = await executeTransition(
       id, "dopams_alert", transitionId, userId, "OFFICER", roles, remarks,
     );
     if (!result.success) {
+      if (result.error === "ENTITY_NOT_FOUND") return send404(reply, "ALERT_NOT_FOUND", "Alert not found");
       return sendError(reply, 409, result.error || "TRANSITION_FAILED", "Alert transition failed");
     }
     return { success: true, newStateId: result.newStateId };
@@ -130,6 +129,7 @@ export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
       },
     },
   }, async (request, reply) => {
+    if (!requireAlertAction(request, reply)) return;
     const { pattern, suppressUntil, reason } = request.body as { pattern: Record<string, unknown>; suppressUntil?: string; reason: string };
     const { userId } = request.authUser!;
     const result = await query(
@@ -145,6 +145,7 @@ export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/api/v1/alert-suppression-rules/:ruleId", {
     schema: { params: { type: "object", required: ["ruleId"], properties: { ruleId: { type: "string", format: "uuid" } } } },
   }, async (request, reply) => {
+    if (!requireAlertAction(request, reply)) return;
     const { ruleId } = request.params as { ruleId: string };
     const result = await query(
       `UPDATE alert_suppression_rule SET is_active = FALSE, updated_at = NOW() WHERE rule_id = $1 RETURNING rule_id`,

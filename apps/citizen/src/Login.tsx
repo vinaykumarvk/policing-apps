@@ -78,7 +78,7 @@ export default function Login() {
       }
 
       window.location.hash = "";
-      login(data.user, data.token);
+      login(data.user);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("login.login_failed"));
     } finally {
@@ -137,7 +137,7 @@ export default function Login() {
         throw new Error(t("login.access_denied"));
       }
 
-      login(data.user, data.token);
+      login(data.user);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("login.invalid_otp"));
     } finally {

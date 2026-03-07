@@ -34,7 +34,7 @@ export default function SubjectList({ authHeaders, isOffline, onSelect }: Props)
 
   useEffect(() => {
     if (isOffline) return;
-    fetch(`${apiBaseUrl}/api/v1/subjects/facets`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/subjects/facets`, authHeaders())
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (data) setFacets(data.facets || {}); })
       .catch(() => {});
@@ -49,7 +49,7 @@ export default function SubjectList({ authHeaders, isOffline, onSelect }: Props)
     if (stateFilter) params.set("state_id", stateFilter);
     if (genderFilter) params.set("gender", genderFilter);
 
-    fetch(`${apiBaseUrl}/api/v1/subjects?${params}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/subjects?${params}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
       .then((data) => {
         setSubjects(data.subjects || data || []);

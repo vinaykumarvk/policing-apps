@@ -289,18 +289,18 @@ export default function Dashboard({
         return;
       }
 
-      const hdrs = authHeaders();
+      const reqInit = authHeaders();
 
       // Load stats, applications, pending actions, notifications, and doc locker summary in parallel
       const [statsRes, appsRes, actionsRes, notifsRes, docsRes, complaintsRes, nudgesRes, processingStatsRes] = await Promise.all([
-        fetch(`${apiBaseUrl}/api/v1/applications/stats?userId=${user.user_id}`, { headers: hdrs }),
-        fetch(`${apiBaseUrl}/api/v1/applications?userId=${user.user_id}&limit=10`, { headers: hdrs }),
-        fetch(`${apiBaseUrl}/api/v1/applications/pending-actions?userId=${user.user_id}`, { headers: hdrs }),
-        fetch(`${apiBaseUrl}/api/v1/notifications?userId=${user.user_id}&limit=5&unreadOnly=true`, { headers: hdrs }),
-        fetch(`${apiBaseUrl}/api/v1/citizens/me/documents`, { headers: hdrs }),
-        fetch(`${apiBaseUrl}/api/v1/complaints?limit=100`, { headers: hdrs }),
-        fetch(`${apiBaseUrl}/api/v1/applications/nudges?userId=${user.user_id}`, { headers: hdrs }).catch(() => null),
-        fetch(`${apiBaseUrl}/api/v1/services/processing-stats`, { headers: hdrs }).catch(() => null),
+        fetch(`${apiBaseUrl}/api/v1/applications/stats?userId=${user.user_id}`, reqInit),
+        fetch(`${apiBaseUrl}/api/v1/applications?userId=${user.user_id}&limit=10`, reqInit),
+        fetch(`${apiBaseUrl}/api/v1/applications/pending-actions?userId=${user.user_id}`, reqInit),
+        fetch(`${apiBaseUrl}/api/v1/notifications?userId=${user.user_id}&limit=5&unreadOnly=true`, reqInit),
+        fetch(`${apiBaseUrl}/api/v1/citizens/me/documents`, reqInit),
+        fetch(`${apiBaseUrl}/api/v1/complaints?limit=100`, reqInit),
+        fetch(`${apiBaseUrl}/api/v1/applications/nudges?userId=${user.user_id}`, reqInit).catch(() => null),
+        fetch(`${apiBaseUrl}/api/v1/services/processing-stats`, reqInit).catch(() => null),
       ]);
 
       let nextStats: Stats | null = null;

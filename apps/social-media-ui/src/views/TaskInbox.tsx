@@ -13,7 +13,7 @@ export default function TaskInbox({ authHeaders, isOffline }: Props) {
 
   useEffect(() => {
     if (isOffline) { setLoading(false); return; }
-    fetch(`${apiBaseUrl}/api/v1/tasks/inbox`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/tasks/inbox`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
       .then((data) => setTasks(data.tasks || data || []))
       .catch((err) => setError(err instanceof Error ? err.message : "Failed"))

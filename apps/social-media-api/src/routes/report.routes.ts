@@ -1,10 +1,13 @@
 import { FastifyInstance } from "fastify";
 import { query } from "../db";
 import { sendError, send404 } from "../errors";
+import { createRoleGuard } from "@puda/api-core";
 import { executeTransition } from "../workflow-bridge";
 import { getAvailableTransitions } from "../workflow-bridge/transitions";
 import { createPdfGenerator, createDocxGenerator } from "@puda/api-integrations";
 import { generateAndLogWatermark } from "../services/watermark";
+
+const requireSupervisor = createRoleGuard(["SUPERVISOR", "PLATFORM_ADMINISTRATOR"]);
 
 function buildReportTemplate(report: Record<string, any>) {
   const content = report.content_jsonb || {};
@@ -158,6 +161,7 @@ export async function registerReportRoutes(app: FastifyInstance): Promise<void> 
       querystring: { type: "object", additionalProperties: false, properties: { format: { type: "string", enum: ["pdf", "docx"], default: "pdf" } } },
     },
   }, async (request, reply) => {
+    if (!requireSupervisor(request, reply)) return;
     try {
       const { id } = request.params as { id: string };
       const qs = request.query as { format?: string };
@@ -216,6 +220,7 @@ export async function registerReportRoutes(app: FastifyInstance): Promise<void> 
   app.get("/api/v1/reports/:id/pdf", {
     schema: { params: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
   }, async (request, reply) => {
+    if (!requireSupervisor(request, reply)) return;
     try {
       const { id } = request.params as { id: string };
       const result = await query(
@@ -254,6 +259,7 @@ export async function registerReportRoutes(app: FastifyInstance): Promise<void> 
   app.get("/api/v1/reports/:id/docx", {
     schema: { params: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
   }, async (request, reply) => {
+    if (!requireSupervisor(request, reply)) return;
     try {
       const { id } = request.params as { id: string };
       const result = await query(

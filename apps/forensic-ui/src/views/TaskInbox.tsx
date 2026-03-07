@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Alert, Badge } from "@puda/shared";
 import { apiBaseUrl, Task } from "../types";
 
-type Props = { authHeaders: () => Record<string, string>; isOffline: boolean };
+type Props = { authHeaders: () => RequestInit; isOffline: boolean };
 
 export default function TaskInbox({ authHeaders, isOffline }: Props) {
   const { t } = useTranslation();
@@ -13,7 +13,7 @@ export default function TaskInbox({ authHeaders, isOffline }: Props) {
 
   useEffect(() => {
     if (isOffline) { setLoading(false); return; }
-    fetch(`${apiBaseUrl}/api/v1/tasks/inbox`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/tasks/inbox`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
       .then((data) => setTasks(data.tasks || data || []))
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load tasks"))

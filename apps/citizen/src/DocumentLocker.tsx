@@ -122,7 +122,7 @@ type FilterOption = "all" | "valid" | "expired" | "mismatch" | "cancelled";
 
 export default function DocumentLocker({ onBack, isOffline, initialFilter }: DocumentLockerProps) {
   const { t } = useTranslation();
-  const { authHeaders, token } = useAuth();
+  const { authHeaders } = useAuth();
   const [documents, setDocuments] = useState<CitizenDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -174,9 +174,7 @@ export default function DocumentLocker({ onBack, isOffline, initialFilter }: Doc
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(`${apiBaseUrl}/api/v1/citizens/me/documents`, {
-        headers: authHeaders(),
-      });
+      const res = await fetch(`${apiBaseUrl}/api/v1/citizens/me/documents`, authHeaders());
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       setDocuments(data.documents || []);
@@ -205,7 +203,7 @@ export default function DocumentLocker({ onBack, isOffline, initialFilter }: Doc
     try {
       const res = await fetch(
         `${apiBaseUrl}/api/v1/citizens/me/documents/${encodeURIComponent(docTypeId)}/versions`,
-        { headers: authHeaders() }
+        authHeaders()
       );
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
@@ -221,7 +219,7 @@ export default function DocumentLocker({ onBack, isOffline, initialFilter }: Doc
     async (citizenDocId: string): Promise<{ url: string; mime: string }> => {
       const res = await fetch(
         `${apiBaseUrl}/api/v1/citizens/me/documents/${citizenDocId}/download`,
-        { headers: authHeaders() }
+        authHeaders()
       );
       if (!res.ok) throw new Error("Failed to fetch document");
       const mime = res.headers.get("content-type") || "application/octet-stream";
@@ -289,7 +287,7 @@ export default function DocumentLocker({ onBack, isOffline, initialFilter }: Doc
 
       const res = await fetch(`${apiBaseUrl}/api/v1/citizens/me/documents/upload`, {
         method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: "include",
         body: form,
       });
 

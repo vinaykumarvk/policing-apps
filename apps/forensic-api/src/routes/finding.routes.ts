@@ -3,6 +3,9 @@ import { query } from "../db";
 import { sendError, send404 } from "../errors";
 import { executeTransition } from "../workflow-bridge";
 import { getAvailableTransitions } from "../workflow-bridge/transitions";
+import { createRoleGuard } from "@puda/api-core";
+
+const requireFindingWrite = createRoleGuard(["EXAMINER", "REVIEWER", "ADMINISTRATOR", "PLATFORM_ADMINISTRATOR"]);
 
 export async function registerFindingRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/v1/cases/:caseId/findings", {
@@ -66,6 +69,7 @@ export async function registerFindingRoutes(app: FastifyInstance): Promise<void>
       body: { type: "object", additionalProperties: false, required: ["transitionId"], properties: { transitionId: { type: "string" }, remarks: { type: "string" } } },
     },
   }, async (request, reply) => {
+    if (!requireFindingWrite(request, reply)) return;
     try {
       const { id } = request.params as { id: string };
       const { transitionId, remarks } = request.body as { transitionId: string; remarks?: string };

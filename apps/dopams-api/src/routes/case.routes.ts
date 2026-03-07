@@ -102,18 +102,11 @@ export async function registerCaseRoutes(app: FastifyInstance): Promise<void> {
     const { transitionId, remarks } = request.body as { transitionId: string; remarks?: string };
     const { userId, roles } = request.authUser!;
 
-    // Validate transition is allowed from current state
-    const stateResult = await query(`SELECT state_id FROM dopams_case WHERE case_id = $1`, [id]);
-    if (stateResult.rows.length === 0) return send404(reply, "CASE_NOT_FOUND", "Case not found");
-    const available = getAvailableTransitions("dopams_case", stateResult.rows[0].state_id);
-    if (!available.some((t) => t.transitionId === transitionId)) {
-      return sendError(reply, 400, "INVALID_TRANSITION", "Transition not allowed from current state");
-    }
-
     const result = await executeTransition(
       id, "dopams_case", transitionId, userId, "OFFICER", roles, remarks,
     );
     if (!result.success) {
+      if (result.error === "ENTITY_NOT_FOUND") return send404(reply, "CASE_NOT_FOUND", "Case not found");
       return sendError(reply, 409, result.error || "TRANSITION_FAILED", "Case transition failed");
     }
     return { success: true, newStateId: result.newStateId };

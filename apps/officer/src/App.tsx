@@ -187,7 +187,7 @@ export default function App() {
       const authorityParam = authorities.length > 0 ? `&authorityId=${authorities[0]}` : "";
       const res = await fetch(
         `${apiBaseUrl}/api/v1/tasks/inbox?status=PENDING${authorityParam}`,
-        { headers: authHeaders() }
+        authHeaders()
       );
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
@@ -209,7 +209,7 @@ export default function App() {
       return;
     }
     try {
-      const res = await fetch(`${apiBaseUrl}/api/v1/applications/${arn}`, { headers: authHeaders() });
+      const res = await fetch(`${apiBaseUrl}/api/v1/applications/${arn}`, authHeaders());
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const app = await res.json();
       setApplication(app);
@@ -235,8 +235,8 @@ export default function App() {
     await loadApplication(task.arn);
     if (task.task_id) {
       await fetch(`${apiBaseUrl}/api/v1/tasks/${task.task_id}/assign`, {
+        ...authHeaders(),
         method: "POST",
-        headers: authHeaders(),
         body: JSON.stringify({}),
       }).catch(() => {});
     }
@@ -379,7 +379,7 @@ export default function App() {
       setFromSearch(isFromSearch);
       (async () => {
         try {
-          const res = await fetch(`${apiBaseUrl}/api/v1/tasks/${taskId}`, { headers: authHeaders() });
+          const res = await fetch(`${apiBaseUrl}/api/v1/tasks/${taskId}`, authHeaders());
           if (!res.ok) throw new Error(`Task not found`);
           const taskData = await res.json();
           setSelectedTask(taskData);
@@ -445,7 +445,7 @@ export default function App() {
         setFromSearch(isFromSearch);
         (async () => {
           try {
-            const res = await fetch(`${apiBaseUrl}/api/v1/tasks/${taskId}`, { headers: authHeaders() });
+            const res = await fetch(`${apiBaseUrl}/api/v1/tasks/${taskId}`, authHeaders());
             if (!res.ok) throw new Error("Not found");
             const taskData = await res.json();
             setSelectedTask(taskData);

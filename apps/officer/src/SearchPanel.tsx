@@ -4,7 +4,7 @@ import { Alert, Button, Card, Input, Select } from "@puda/shared";
 import { Application, apiBaseUrl } from "./types";
 
 interface SearchPanelProps {
-  authHeaders: () => Record<string, string>;
+  authHeaders: () => RequestInit;
   onSelectApplication: (app: Application) => void;
   isOffline: boolean;
 }
@@ -34,7 +34,7 @@ export default function SearchPanel({ authHeaders, onSelectApplication, isOfflin
     try {
       const params = new URLSearchParams({ searchTerm: searchTerm.trim(), limit: "50" });
       if (searchStatus) params.append("status", searchStatus);
-      const res = await fetch(`${apiBaseUrl}/api/v1/applications/search?${params}`, { headers: authHeaders() });
+      const res = await fetch(`${apiBaseUrl}/api/v1/applications/search?${params}`, authHeaders());
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       setSearchResults(data.applications || []);
@@ -56,9 +56,7 @@ export default function SearchPanel({ authHeaders, onSelectApplication, isOfflin
     const params = new URLSearchParams({ searchTerm: searchTerm.trim() });
     if (searchStatus) params.append("status", searchStatus);
     try {
-      const res = await fetch(`${apiBaseUrl}/api/v1/applications/export?${params}`, {
-        headers: authHeaders(),
-      });
+      const res = await fetch(`${apiBaseUrl}/api/v1/applications/export?${params}`, authHeaders());
       if (!res.ok) throw new Error(`API error ${res.status}`);
 
       const blob = await res.blob();

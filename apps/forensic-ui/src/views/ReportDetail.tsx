@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Alert, Button, Field, Input, Select, Tabs, Textarea, useToast } from "@puda/shared";
 import { apiBaseUrl, Report } from "../types";
 
-type Props = { id: string; authHeaders: () => Record<string, string>; isOffline: boolean; onBack: () => void };
+type Props = { id: string; authHeaders: () => RequestInit; isOffline: boolean; onBack: () => void };
 
 export default function ReportDetail({ id, authHeaders, isOffline, onBack }: Props) {
   const { t } = useTranslation();
@@ -22,21 +22,21 @@ export default function ReportDetail({ id, authHeaders, isOffline, onBack }: Pro
   const [exporting, setExporting] = useState(false);
 
   const fetchTransitions = () => {
-    fetch(`${apiBaseUrl}/api/v1/reports/${id}/transitions`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/reports/${id}/transitions`, authHeaders())
       .then((r) => r.ok ? r.json() : { transitions: [] })
       .then((data) => setAvailableTransitions(data.transitions || []))
       .catch(() => setAvailableTransitions([]));
   };
 
   const fetchNotes = () => {
-    fetch(`${apiBaseUrl}/api/v1/reports/${id}/notes`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/reports/${id}/notes`, authHeaders())
       .then((r) => r.ok ? r.json() : { notes: [] })
       .then((data) => setNotes(data.notes || []))
       .catch(() => setNotes([]));
   };
 
   const fetchActivity = () => {
-    fetch(`${apiBaseUrl}/api/v1/reports/${id}/activity`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/reports/${id}/activity`, authHeaders())
       .then((r) => r.ok ? r.json() : { events: [] })
       .then((data) => setActivity(data.events || data.activity || []))
       .catch(() => setActivity([]));
@@ -47,7 +47,7 @@ export default function ReportDetail({ id, authHeaders, isOffline, onBack }: Pro
     setSubmittingNote(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/reports/${id}/notes`, {
-        method: "POST", headers: authHeaders(),
+        ...authHeaders(), method: "POST",
         body: JSON.stringify({ note_text: newNote }),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
@@ -61,7 +61,7 @@ export default function ReportDetail({ id, authHeaders, isOffline, onBack }: Pro
   const handleExportPdf = async () => {
     setExporting(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/api/v1/reports/${id}/export`, { method: "POST", headers: authHeaders() });
+      const res = await fetch(`${apiBaseUrl}/api/v1/reports/${id}/export`, { ...authHeaders(), method: "POST" });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -73,7 +73,7 @@ export default function ReportDetail({ id, authHeaders, isOffline, onBack }: Pro
   };
 
   useEffect(() => {
-    fetch(`${apiBaseUrl}/api/v1/reports/${id}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/reports/${id}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
       .then((data) => { setReport(data.report || data); fetchTransitions(); fetchNotes(); fetchActivity(); })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load report"))
@@ -85,10 +85,10 @@ export default function ReportDetail({ id, authHeaders, isOffline, onBack }: Pro
     setTransitioning(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/reports/${id}/transition`, {
-        method: "POST", headers: authHeaders(), body: JSON.stringify({ transitionId: selectedTransition, remarks }),
+        ...authHeaders(), method: "POST", body: JSON.stringify({ transitionId: selectedTransition, remarks }),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
-      const entityRes = await fetch(`${apiBaseUrl}/api/v1/reports/${id}`, { headers: authHeaders() });
+      const entityRes = await fetch(`${apiBaseUrl}/api/v1/reports/${id}`, authHeaders());
       if (entityRes.ok) { const d = await entityRes.json(); setReport(d.report || d); }
       setSelectedTransition(""); setRemarks("");
       fetchTransitions();

@@ -36,6 +36,7 @@ export type { AuthMiddleware, AuthMiddlewareConfig } from "./middleware/auth-mid
 export { createAuditLogger } from "./middleware/audit-logger";
 export type { AuditLogger, AuditLoggerConfig } from "./middleware/audit-logger";
 export { createIdempotencyMiddleware } from "./middleware/idempotency";
+export { createRoleGuard } from "./middleware/role-guard";
 export type { IdempotencyMiddleware, IdempotencyMiddlewareConfig } from "./middleware/idempotency";
 
 // Scheduler

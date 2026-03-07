@@ -116,7 +116,7 @@ export default function App() {
   useEffect(() => {
     if (!auth) return;
     const fetchCount = () => {
-      fetch(`${apiBaseUrl}/api/v1/notifications/count`, { headers: authHeaders() })
+      fetch(`${apiBaseUrl}/api/v1/notifications/count`, authHeaders())
         .then((r) => r.ok ? r.json() : { count: 0 })
         .then((data) => setUnreadCount(data.count || 0))
         .catch(() => {});
@@ -141,7 +141,7 @@ export default function App() {
     if (!searchQuery.trim()) { setSearchResults([]); return; }
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
-      fetch(`${apiBaseUrl}/api/v1/search?q=${encodeURIComponent(searchQuery)}&limit=10`, { headers: authHeaders() })
+      fetch(`${apiBaseUrl}/api/v1/search?q=${encodeURIComponent(searchQuery)}&limit=10`, authHeaders())
         .then((r) => r.ok ? r.json() : { results: [] })
         .then((data) => setSearchResults(data.results || []))
         .catch(() => setSearchResults([]));
@@ -240,7 +240,7 @@ export default function App() {
 
   const handleNotifToggle = () => {
     if (!notifOpen) {
-      fetch(`${apiBaseUrl}/api/v1/notifications?unread=true&limit=10`, { headers: authHeaders() })
+      fetch(`${apiBaseUrl}/api/v1/notifications?unread=true&limit=10`, authHeaders())
         .then((r) => r.ok ? r.json() : { notifications: [] })
         .then((data) => setNotifications(data.notifications || []))
         .catch(() => setNotifications([]));
@@ -249,7 +249,7 @@ export default function App() {
   };
 
   const handleMarkRead = (notifId: string, entityType?: string, entityId?: string) => {
-    fetch(`${apiBaseUrl}/api/v1/notifications/${notifId}/read`, { method: "PATCH", headers: authHeaders() }).catch(() => {});
+    fetch(`${apiBaseUrl}/api/v1/notifications/${notifId}/read`, { ...authHeaders(), method: "PATCH" }).catch(() => {});
     setNotifications((prev) => prev.filter((n) => n.notification_id !== notifId));
     setUnreadCount((c) => Math.max(0, c - 1));
     setNotifOpen(false);

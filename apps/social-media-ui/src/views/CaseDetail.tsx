@@ -24,28 +24,28 @@ export default function CaseDetail({ id, authHeaders, isOffline, onBack }: Props
   const [legalMappings, setLegalMappings] = useState<any[]>([]);
 
   const fetchTransitions = () => {
-    fetch(`${apiBaseUrl}/api/v1/cases/${id}/transitions`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/cases/${id}/transitions`, authHeaders())
       .then((r) => r.ok ? r.json() : { transitions: [] })
       .then((data) => setAvailableTransitions(data.transitions || []))
       .catch(() => setAvailableTransitions([]));
   };
 
   const fetchNotes = () => {
-    fetch(`${apiBaseUrl}/api/v1/cases/${id}/notes`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/cases/${id}/notes`, authHeaders())
       .then((r) => r.ok ? r.json() : { notes: [] })
       .then((data) => setNotes(data.notes || []))
       .catch(() => setNotes([]));
   };
 
   const fetchActivity = () => {
-    fetch(`${apiBaseUrl}/api/v1/cases/${id}/activity`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/cases/${id}/activity`, authHeaders())
       .then((r) => r.ok ? r.json() : { events: [] })
       .then((data) => setActivity(data.events || data.activity || []))
       .catch(() => setActivity([]));
   };
 
   useEffect(() => {
-    fetch(`${apiBaseUrl}/api/v1/cases/${id}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/cases/${id}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
       .then((data) => { setCaseData(data.case || data); fetchTransitions(); fetchNotes(); fetchActivity(); })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed"))
@@ -54,11 +54,11 @@ export default function CaseDetail({ id, authHeaders, isOffline, onBack }: Props
 
   useEffect(() => {
     if (!id) return;
-    fetch(`${apiBaseUrl}/api/v1/classify/case/${id}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/classify/case/${id}`, authHeaders())
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setClassification(data); })
       .catch(() => {});
-    fetch(`${apiBaseUrl}/api/v1/legal/mappings/case/${id}`, { headers: authHeaders() })
+    fetch(`${apiBaseUrl}/api/v1/legal/mappings/case/${id}`, authHeaders())
       .then(r => r.ok ? r.json() : { mappings: [] })
       .then(data => setLegalMappings(data.mappings || []))
       .catch(() => {});
@@ -68,8 +68,8 @@ export default function CaseDetail({ id, authHeaders, isOffline, onBack }: Props
     setClassifyLoading(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/classify/case/${id}`, {
+        ...authHeaders(),
         method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
       if (res.ok) {
@@ -85,11 +85,11 @@ export default function CaseDetail({ id, authHeaders, isOffline, onBack }: Props
     setTransitioning(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/cases/${id}/transition`, {
-        method: "POST", headers: authHeaders(),
+        ...authHeaders(), method: "POST",
         body: JSON.stringify({ transitionId: selectedTransition, remarks }),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
-      const entityRes = await fetch(`${apiBaseUrl}/api/v1/cases/${id}`, { headers: authHeaders() });
+      const entityRes = await fetch(`${apiBaseUrl}/api/v1/cases/${id}`, authHeaders());
       if (entityRes.ok) { const d = await entityRes.json(); setCaseData(d.case || d); }
       setSelectedTransition(""); setRemarks("");
       fetchTransitions();
@@ -103,7 +103,7 @@ export default function CaseDetail({ id, authHeaders, isOffline, onBack }: Props
     setSubmittingNote(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/cases/${id}/notes`, {
-        method: "POST", headers: authHeaders(),
+        ...authHeaders(), method: "POST",
         body: JSON.stringify({ note_text: newNote }),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
