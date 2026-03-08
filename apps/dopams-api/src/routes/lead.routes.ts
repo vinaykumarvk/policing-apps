@@ -166,6 +166,26 @@ export async function registerLeadRoutes(app: FastifyInstance): Promise<void> {
       if (result.error === "ENTITY_NOT_FOUND") return send404(reply, "LEAD_NOT_FOUND", "Lead not found");
       return sendError(reply, 409, result.error || "TRANSITION_FAILED", "Lead transition failed");
     }
+
+    // FR-16 AC-04: Auto-generate memo when lead is ESCALATED
+    if (result.newStateId === "ESCALATED") {
+      try {
+        const leadData = await query(`SELECT summary FROM lead WHERE lead_id = $1`, [id]);
+        if (leadData.rows.length > 0) {
+          const summary = leadData.rows[0].summary;
+          const memoRef = await query(`SELECT 'DOP-MEMO-' || EXTRACT(YEAR FROM NOW())::text || '-' || LPAD(nextval('dopams_memo_ref_seq')::text, 6, '0') AS ref`);
+          await query(
+            `INSERT INTO memo (lead_id, memo_number, subject, body, created_by)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [id, memoRef.rows[0].ref, `Escalation memo: ${summary.substring(0, 100)}`, `Lead escalated.\n\nRemarks: ${remarks || "N/A"}\n\nSummary: ${summary}`, userId],
+          );
+          await query(`UPDATE lead SET auto_memo_generated = TRUE WHERE lead_id = $1`, [id]);
+        }
+      } catch (memoErr) {
+        request.log.warn(memoErr, "Auto-memo on escalation failed");
+      }
+    }
+
     return { success: true, newStateId: result.newStateId };
   });
 

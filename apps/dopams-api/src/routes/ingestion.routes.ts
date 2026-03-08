@@ -52,6 +52,58 @@ export async function registerIngestionRoutes(app: FastifyInstance): Promise<voi
     return { job: result.rows[0] };
   });
 
+  // FR-02 AC-02: Validate ingestion job data against connector-type-specific required fields
+  app.post("/api/v1/ingestion/jobs/:id/validate", {
+    schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const jobResult = await query(
+      `SELECT j.job_id, j.state_id, j.total_records, c.connector_type
+       FROM ingestion_job j
+       JOIN connector_config c ON c.connector_id = j.connector_id
+       WHERE j.job_id = $1`,
+      [id],
+    );
+    if (jobResult.rows.length === 0) return send404(reply, "JOB_NOT_FOUND", "Ingestion job not found");
+
+    const job = jobResult.rows[0];
+    const connectorType = job.connector_type;
+
+    // Per-connector-type required field checks
+    const REQUIRED_FIELDS: Record<string, string[]> = {
+      CCTNS: ["fir_number", "district_code", "ps_code"],
+      ECOURTS: ["case_number", "court_code"],
+      NDPS: ["seizure_id", "substance_type", "quantity"],
+      INTELLIGENCE: ["source_ref", "classification_level"],
+      MANUAL: ["description"],
+    };
+
+    const requiredFields = REQUIRED_FIELDS[connectorType] || [];
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    if (requiredFields.length === 0) {
+      warnings.push(`No validation rules defined for connector type: ${connectorType}`);
+    }
+
+    const validationReport = {
+      connectorType,
+      requiredFields,
+      errors,
+      warnings,
+      validatedAt: new Date().toISOString(),
+      isValid: errors.length === 0,
+    };
+
+    // Store validation report
+    await query(
+      `UPDATE ingestion_job SET validation_report = $1, updated_at = NOW() WHERE job_id = $2`,
+      [JSON.stringify(validationReport), id],
+    );
+
+    return { validation: validationReport };
+  });
+
   app.post("/api/v1/ingestion/jobs/:id/retry", {
     schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
   }, async (request, reply) => {

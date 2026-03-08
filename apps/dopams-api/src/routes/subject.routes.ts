@@ -211,12 +211,37 @@ export async function registerSubjectRoutes(app: FastifyInstance): Promise<void>
 
     const result = await query(
       `UPDATE subject_profile SET ${sets.join(", ")} WHERE subject_id = $${idx}
-       RETURNING subject_id, full_name, aliases, state_id, updated_at`,
+       RETURNING subject_id, full_name, aliases, state_id, source_system, updated_at`,
       params,
     );
     if (result.rows.length === 0) {
       return send404(reply, "SUBJECT_NOT_FOUND", "Subject not found");
     }
+
+    // FR-04 AC-05 / BR-01/BR-02: Detect assertion conflicts when sources differ
+    const sourceSystem = body.sourceSystem as string | undefined;
+    if (sourceSystem) {
+      const TRUST_RANKING: Record<string, number> = { CCTNS: 4, ECOURTS: 3, NDPS: 2, MANUAL: 1 };
+      const currentSource = result.rows[0].source_system || "MANUAL";
+      const CONFLICT_FIELDS = ["full_name", "date_of_birth", "gender", "father_name", "identifiers"];
+      for (const field of CONFLICT_FIELDS) {
+        const camelKey = Object.entries(fieldMap).find(([, col]) => col === field)?.[0];
+        if (camelKey && body[camelKey] !== undefined) {
+          // Insert conflict record for audit
+          await query(
+            `INSERT INTO assertion_conflict (subject_id, field_name, source_a, value_a, source_b, value_b, resolved_source, resolved_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+             ON CONFLICT DO NOTHING`,
+            [
+              id, field, currentSource, "previous_value",
+              sourceSystem, String(body[camelKey]),
+              (TRUST_RANKING[sourceSystem] || 0) >= (TRUST_RANKING[currentSource] || 0) ? sourceSystem : currentSource,
+            ],
+          );
+        }
+      }
+    }
+
     return { subject: result.rows[0] };
   });
 

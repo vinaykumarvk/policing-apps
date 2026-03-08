@@ -5,6 +5,8 @@ type DbRow = Record<string, unknown>;
 export interface OcrJobOptions {
   language?: string;
   confidenceThreshold?: number;
+  /** Lower bound for MANUAL_REVIEW tier. Defaults to confidenceThreshold * 0.5 */
+  lowThreshold?: number;
 }
 
 /**
@@ -19,6 +21,7 @@ export async function submitOcrJob(
 ): Promise<{ jobId: string }> {
   const language = options.language || "en";
   const confidenceThreshold = options.confidenceThreshold ?? 0.7;
+  const lowThreshold = options.lowThreshold ?? confidenceThreshold * 0.5;
 
   const result = await query(
     `INSERT INTO ocr_job (evidence_id, status, language, confidence_threshold, created_by)
@@ -29,14 +32,20 @@ export async function submitOcrJob(
   const jobId = result.rows[0].job_id;
 
   // Process asynchronously — fire-and-forget
-  processOcrJob(jobId, confidenceThreshold).catch((err) =>
+  processOcrJob(jobId, confidenceThreshold, lowThreshold).catch((err) =>
     console.error("OCR processing error:", err),
   );
 
   return { jobId };
 }
 
-async function processOcrJob(jobId: string, confidenceThreshold: number): Promise<void> {
+/**
+ * FR-03 AC-03/05: Three-tier OCR confidence routing
+ * - confidence >= highThreshold → COMPLETED (auto-accepted)
+ * - confidence >= lowThreshold → MANUAL_REVIEW (human verification needed)
+ * - confidence < lowThreshold → FAILED (too unreliable)
+ */
+async function processOcrJob(jobId: string, highThreshold: number, lowThreshold: number): Promise<void> {
   await query(
     `UPDATE ocr_job SET status = 'PROCESSING', updated_at = now() WHERE job_id = $1`,
     [jobId],
@@ -44,12 +53,21 @@ async function processOcrJob(jobId: string, confidenceThreshold: number): Promis
 
   try {
     // Stub: In production, integrate tesseract.js or an external OCR service.
-    // For now, mark as completed with a placeholder result.
     const stubConfidence = 0; // Placeholder; real OCR engine returns actual confidence
 
-    // FR-03: Confidence threshold routing — low confidence routes to NEEDS_REVIEW
-    const reviewStatus = stubConfidence < confidenceThreshold ? "NEEDS_REVIEW" : "COMPLETED";
-    const status = reviewStatus === "NEEDS_REVIEW" ? "NEEDS_REVIEW" : "COMPLETED";
+    // FR-03 AC-03: Three-tier confidence routing
+    let status: string;
+    let reviewStatus: string;
+    if (stubConfidence >= highThreshold) {
+      status = "COMPLETED";
+      reviewStatus = "COMPLETED";
+    } else if (stubConfidence >= lowThreshold) {
+      status = "NEEDS_REVIEW";
+      reviewStatus = "MANUAL_REVIEW";
+    } else {
+      status = "FAILED";
+      reviewStatus = "FAILED";
+    }
 
     await query(
       `UPDATE ocr_job
@@ -60,6 +78,15 @@ async function processOcrJob(jobId: string, confidenceThreshold: number): Promis
            updated_at = now()
        WHERE job_id = $1`,
       [jobId, status, stubConfidence, reviewStatus],
+    );
+
+    // FR-03 AC-05: Create versioned assertion for the OCR result
+    await query(
+      `INSERT INTO ocr_assertion (evidence_id, job_id, assertion_text, confidence, status, assertion_version)
+       SELECT evidence_id, $1, $3, $4, $5,
+              COALESCE((SELECT MAX(assertion_version) FROM ocr_assertion oa WHERE oa.evidence_id = oj.evidence_id), 0) + 1
+       FROM ocr_job oj WHERE oj.job_id = $1`,
+      [jobId, status, "[OCR assertion placeholder]", stubConfidence, reviewStatus],
     );
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);

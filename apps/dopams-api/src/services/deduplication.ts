@@ -144,6 +144,36 @@ export async function mergeSubjects(
       [survivorId, mergedId],
     );
 
+    // FR-25 AC-05: Re-link geofence hits
+    await client.query(
+      `UPDATE geofence_hit SET subject_id = $1 WHERE subject_id = $2`,
+      [survivorId, mergedId],
+    );
+
+    // FR-25 AC-05: Re-link watchlist subjects
+    await client.query(
+      `UPDATE watchlist_subject SET subject_id = $1 WHERE subject_id = $2
+       AND NOT EXISTS (SELECT 1 FROM watchlist_subject ws2 WHERE ws2.watchlist_id = watchlist_subject.watchlist_id AND ws2.subject_id = $1)`,
+      [survivorId, mergedId],
+    );
+    // Remove any duplicate watchlist links that couldn't be reassigned
+    await client.query(
+      `DELETE FROM watchlist_subject WHERE subject_id = $1 AND subject_id != $2`,
+      [mergedId, survivorId],
+    );
+
+    // FR-25 AC-05: Re-link evidence custody events
+    await client.query(
+      `UPDATE evidence_custody_event SET subject_id = $1 WHERE subject_id = $2`,
+      [survivorId, mergedId],
+    );
+
+    // FR-25 AC-05: Re-link content items
+    await client.query(
+      `UPDATE content_item SET subject_id = $1 WHERE subject_id = $2`,
+      [survivorId, mergedId],
+    );
+
     // Mark merged subject
     await client.query(
       `UPDATE subject_profile

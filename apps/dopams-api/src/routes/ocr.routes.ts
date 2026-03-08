@@ -2,6 +2,7 @@ import { FastifyInstance } from "fastify";
 import { submitOcrJob, getOcrJob, getOcrJobsByEvidence } from "../services/ocr-processor";
 import { sendError, send400, send404 } from "../errors";
 import { createRoleGuard } from "@puda/api-core";
+import { query } from "../db";
 
 export async function registerOcrRoutes(app: FastifyInstance): Promise<void> {
   const requireOcrSubmit = createRoleGuard(["INTELLIGENCE_ANALYST", "ADMINISTRATOR"]);
@@ -63,6 +64,33 @@ export async function registerOcrRoutes(app: FastifyInstance): Promise<void> {
       return job;
     } catch (err: unknown) {
       request.log.error(err, "Failed to get OCR job");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  // FR-03 AC-05: Get versioned OCR assertions for an evidence item
+  app.get("/api/v1/ocr/assertions/:evidenceId", {
+    schema: {
+      params: {
+        type: "object",
+        required: ["evidenceId"],
+        properties: { evidenceId: { type: "string", format: "uuid" } },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { evidenceId } = request.params as { evidenceId: string };
+      const result = await query(
+        `SELECT assertion_id, evidence_id, job_id, assertion_text, confidence, status,
+                assertion_version, previous_assertion_id, created_at
+         FROM ocr_assertion
+         WHERE evidence_id = $1
+         ORDER BY assertion_version DESC`,
+        [evidenceId],
+      );
+      return { assertions: result.rows };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to get OCR assertions");
       return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
     }
   });

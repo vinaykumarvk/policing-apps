@@ -261,10 +261,20 @@ export async function analyzeNetwork(maxDepth = 3): Promise<GraphAnalysis> {
   };
 }
 
-export async function getNodeAnalysis(entityId: string): Promise<DbRow | null> {
+export async function getNodeAnalysis(entityId: string, dateFrom?: string, dateTo?: string): Promise<DbRow | null> {
+  const params: unknown[] = [entityId];
+  let dateFilter = "";
+  if (dateFrom) {
+    params.push(dateFrom);
+    dateFilter += ` AND created_at >= $${params.length}::date`;
+  }
+  if (dateTo) {
+    params.push(dateTo);
+    dateFilter += ` AND created_at <= $${params.length}::date + INTERVAL '1 day'`;
+  }
   const result = await query(
-    `SELECT * FROM graph_analysis_result WHERE entity_id = $1 ORDER BY created_at DESC LIMIT 1`,
-    [entityId]
+    `SELECT * FROM graph_analysis_result WHERE entity_id = $1${dateFilter} ORDER BY created_at DESC LIMIT 1`,
+    params,
   );
   return result.rows[0] || null;
 }

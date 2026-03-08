@@ -63,7 +63,7 @@ export async function registerWatchlistRoutes(app: FastifyInstance): Promise<voi
     return { watchlist: result.rows[0], subjects: subjects.rows };
   });
 
-  // POST /api/v1/watchlists — Create
+  // POST /api/v1/watchlists — Create (FR-13 AC-01: priority_tier + alert_suppression_hours)
   app.post("/api/v1/watchlists", {
     schema: {
       body: {
@@ -75,6 +75,8 @@ export async function registerWatchlistRoutes(app: FastifyInstance): Promise<voi
           description: { type: "string" },
           criteria: { type: "object", additionalProperties: true },
           alertOnActivity: { type: "boolean" },
+          priorityTier: { type: "string", enum: ["LOW", "NORMAL", "HIGH", "CRITICAL"], default: "NORMAL" },
+          alertSuppressionHours: { type: "integer", minimum: 0, maximum: 720, default: 0 },
         },
       },
     },
@@ -85,11 +87,12 @@ export async function registerWatchlistRoutes(app: FastifyInstance): Promise<voi
       const unitId = request.authUser?.unitId || null;
 
       const result = await query(
-        `INSERT INTO watchlist (watchlist_name, description, criteria, alert_on_activity, owner_id, unit_id)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING watchlist_id, watchlist_name, is_active, created_at`,
+        `INSERT INTO watchlist (watchlist_name, description, criteria, alert_on_activity, owner_id, unit_id, priority_tier, alert_suppression_hours)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING watchlist_id, watchlist_name, is_active, priority_tier, alert_suppression_hours, created_at`,
         [body.watchlistName, body.description || null, JSON.stringify(body.criteria || {}),
-         body.alertOnActivity !== false, userId, unitId],
+         body.alertOnActivity !== false, userId, unitId,
+         body.priorityTier || "NORMAL", body.alertSuppressionHours || 0],
       );
       reply.code(201);
       return { watchlist: result.rows[0] };
@@ -97,6 +100,41 @@ export async function registerWatchlistRoutes(app: FastifyInstance): Promise<voi
       request.log.error(err, "Failed to create watchlist");
       return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
     }
+  });
+
+  // FR-13 AC-04: Check alert suppression before sending
+  app.post("/api/v1/watchlists/:id/check-alert", {
+    schema: {
+      params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } },
+      body: { type: "object", additionalProperties: false, required: ["subjectId"], properties: { subjectId: { type: "string", format: "uuid" } } },
+    },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { subjectId } = request.body as { subjectId: string };
+    const result = await query(
+      `SELECT w.alert_suppression_hours, w.priority_tier, ws.last_alerted_at
+       FROM watchlist w
+       JOIN watchlist_subject ws ON ws.watchlist_id = w.watchlist_id AND ws.subject_id = $2
+       WHERE w.watchlist_id = $1`,
+      [id, subjectId],
+    );
+    if (result.rows.length === 0) return send404(reply, "NOT_FOUND", "Watchlist-subject pair not found");
+
+    const row = result.rows[0];
+    const suppressionHours = row.alert_suppression_hours || 0;
+    const lastAlerted = row.last_alerted_at ? new Date(row.last_alerted_at) : null;
+    const suppressed = lastAlerted && suppressionHours > 0
+      && (Date.now() - lastAlerted.getTime()) < suppressionHours * 60 * 60 * 1000;
+
+    if (!suppressed) {
+      // Update last_alerted_at
+      await query(
+        `UPDATE watchlist_subject SET last_alerted_at = NOW() WHERE watchlist_id = $1 AND subject_id = $2`,
+        [id, subjectId],
+      );
+    }
+
+    return { shouldAlert: !suppressed, priorityTier: row.priority_tier, suppressionHours };
   });
 
   // POST /api/v1/watchlists/:id/subjects — Add subject to watchlist

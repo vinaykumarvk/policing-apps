@@ -51,11 +51,18 @@ export async function registerContentMonitoringRoutes(app: FastifyInstance): Pro
       }> };
       const userId = request.authUser?.userId || null;
 
+      // Load active monitoring rules for auto-evaluation
+      const rulesResult = await query(`SELECT rule_id, rule_type, pattern, platforms FROM monitoring_rule WHERE is_active = TRUE`);
+      const rules = rulesResult.rows as Array<{ rule_id: string; rule_type: string; pattern: string; platforms: string[] | string }>;
+
       const inserted: any[] = [];
+      let duplicateCount = 0;
       for (const item of items) {
+        // FR-02 AC-02: Content dedup — skip exact duplicates by (source_platform, md5(raw_text), captured_at)
         const result = await query(
           `INSERT INTO content_item (source_platform, content_type, raw_text, media_urls, author_handle, captured_at, classified_category, risk_score, created_by)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           ON CONFLICT ON CONSTRAINT uq_content_dedup DO NOTHING
            RETURNING *`,
           [
             item.sourcePlatform,
@@ -69,11 +76,42 @@ export async function registerContentMonitoringRoutes(app: FastifyInstance): Pro
             userId,
           ],
         );
-        inserted.push(result.rows[0]);
+        if (result.rows.length === 0) {
+          duplicateCount++;
+          continue;
+        }
+
+        const row = result.rows[0];
+
+        // FR-19: Auto-evaluate monitoring rules on ingest
+        for (const rule of rules) {
+          try {
+            const platforms = typeof rule.platforms === "string" ? JSON.parse(rule.platforms) : (rule.platforms || []);
+            if (platforms.length > 0 && !platforms.includes(item.sourcePlatform)) continue;
+
+            const regex = new RegExp(rule.pattern, "i");
+            if (regex.test(item.rawText)) {
+              // Match found — auto-transition to REVIEWING and bump risk_score
+              await query(
+                `UPDATE content_item SET state_id = 'REVIEWING',
+                   risk_score = GREATEST(COALESCE(risk_score, 0) + 10, risk_score),
+                   updated_at = NOW()
+                 WHERE content_id = $1 AND state_id = 'NEW'`,
+                [row.content_id],
+              );
+              row.state_id = "REVIEWING";
+              break; // One rule match is enough
+            }
+          } catch {
+            // Invalid regex pattern — skip silently
+          }
+        }
+
+        inserted.push(row);
       }
 
       reply.code(201);
-      return { ingested: inserted.length, items: inserted };
+      return { ingested: inserted.length, duplicates: duplicateCount, items: inserted };
     } catch (err: unknown) {
       request.log.error(err, "Failed to ingest content");
       return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
