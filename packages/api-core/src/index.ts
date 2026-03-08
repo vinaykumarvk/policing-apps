@@ -29,6 +29,8 @@ export {
 export type { OidcConfig } from "./auth/types";
 export { createOidcAuth } from "./auth/oidc-auth";
 export type { OidcAuth } from "./auth/oidc-auth";
+export { createLdapAuth } from "./auth/ldap-auth";
+export type { LdapAuth, LdapAuthConfig, LdapAuthResult } from "./auth/ldap-auth";
 
 // Middleware
 export { createAuthMiddleware } from "./middleware/auth-middleware";

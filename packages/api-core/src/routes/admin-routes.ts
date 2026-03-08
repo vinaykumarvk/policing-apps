@@ -69,11 +69,15 @@ export function createAdminRoutes(deps: AdminRouteDeps) {
     app.put("/api/v1/users/:id/role", {
       schema: {
         params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } },
-        body: { type: "object", additionalProperties: false, required: ["roleId"], properties: { roleId: { type: "string" }, action: { type: "string", enum: ["assign", "revoke"] } } },
+        body: { type: "object", additionalProperties: false, required: ["roleId"], properties: {
+          roleId: { type: "string" },
+          action: { type: "string", enum: ["assign", "revoke"] },
+          permissionSetJson: { type: "object", additionalProperties: true },
+        } },
       },
     }, async (request, reply) => {
       const { id } = request.params as { id: string };
-      const { roleId, action } = request.body as { roleId: string; action?: "assign" | "revoke" };
+      const { roleId, action, permissionSetJson } = request.body as { roleId: string; action?: "assign" | "revoke"; permissionSetJson?: Record<string, unknown> };
 
       if (id === request.authUser?.userId) {
         return send403(reply, "SELF_ROLE_CHANGE", "Cannot modify your own roles");
@@ -92,9 +96,11 @@ export function createAdminRoutes(deps: AdminRouteDeps) {
       if (action === "revoke") {
         await queryFn(`DELETE FROM user_role WHERE user_id = $1 AND role_id = $2`, [id, roleId]);
       } else {
+        // FR-14 AC-03: Support permission_set_json on role assignment
         await queryFn(
-          `INSERT INTO user_role (user_id, role_id) VALUES ($1, $2) ON CONFLICT (user_id, role_id) DO NOTHING`,
-          [id, roleId],
+          `INSERT INTO user_role (user_id, role_id, permission_set_json) VALUES ($1, $2, $3)
+           ON CONFLICT (user_id, role_id) DO UPDATE SET permission_set_json = COALESCE($3, user_role.permission_set_json)`,
+          [id, roleId, permissionSetJson ? JSON.stringify(permissionSetJson) : null],
         );
       }
 

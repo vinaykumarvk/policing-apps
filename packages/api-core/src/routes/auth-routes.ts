@@ -4,16 +4,49 @@ import type { QueryFn } from "../types";
 import { authenticate } from "../auth/local-auth";
 import { sendError } from "../errors";
 import type { AuthMiddleware } from "../middleware/auth-middleware";
+import type { LdapAuth } from "../auth/ldap-auth";
 
 export interface AuthRouteDeps {
   queryFn: QueryFn;
   auth: AuthMiddleware;
+  ldapAuth?: LdapAuth;
 }
 
 export function createAuthRoutes(deps: AuthRouteDeps) {
-  const { queryFn, auth } = deps;
+  const { queryFn, auth, ldapAuth } = deps;
 
   return async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
+    // LDAP login endpoint (only registered when ldapAuth is provided)
+    if (ldapAuth) {
+      app.post("/api/v1/auth/ldap/login", {
+        config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+        schema: { body: { type: "object", additionalProperties: false, properties: { username: { type: "string" }, password: { type: "string" } }, required: ["username", "password"] } },
+      }, async (request, reply) => {
+        const { username, password } = request.body as { username: string; password: string };
+        const result = await ldapAuth.authenticate(username, password);
+        if (!result.success) {
+          return sendError(reply, 401, "LDAP_AUTH_FAILED", result.error || "LDAP authentication failed");
+        }
+        // Look up the user in our DB to get roles/type
+        const userResult = await queryFn(
+          `SELECT user_id, user_type, unit_id FROM app_user WHERE user_id = $1 AND is_active = true`,
+          [result.userId]
+        );
+        if (userResult.rows.length === 0) {
+          return sendError(reply, 401, "LDAP_USER_NOT_PROVISIONED", "LDAP user exists but is not provisioned in this system");
+        }
+        const dbUser = userResult.rows[0];
+        const rolesResult = await queryFn(
+          `SELECT r.role_name FROM user_role ur JOIN role r ON r.role_id = ur.role_id WHERE ur.user_id = $1`,
+          [dbUser.user_id]
+        );
+        const roles = rolesResult.rows.map((r: any) => r.role_name);
+        const token = auth.generateToken({ user_id: dbUser.user_id, user_type: dbUser.user_type, roles, unit_id: dbUser.unit_id });
+        auth.setAuthCookie(reply, token);
+        return { user: { userId: dbUser.user_id, userType: dbUser.user_type, roles, unitId: dbUser.unit_id, displayName: result.displayName, email: result.email } };
+      });
+    }
+
     app.post("/api/v1/auth/login", {
       config: {
         rateLimit: {

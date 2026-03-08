@@ -9,7 +9,7 @@ export interface IdempotencyMiddlewareConfig {
 }
 
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-const DEFAULT_HEADER = "x-idempotency-key";
+const DEFAULT_HEADER = "idempotency-key";
 const DEFAULT_METHODS = ["POST", "PUT", "PATCH"];
 
 export function createIdempotencyMiddleware(config: IdempotencyMiddlewareConfig) {

@@ -70,7 +70,7 @@ describe("createIdempotencyMiddleware", () => {
     const res = await app.inject({
       method: "GET",
       url: "/items",
-      headers: { "x-idempotency-key": "get-key-123" },
+      headers: { "idempotency-key": "get-key-123" },
     });
 
     expect(res.statusCode).toBe(200);
@@ -99,7 +99,7 @@ describe("createIdempotencyMiddleware", () => {
       method: "POST",
       url: "/items",
       payload: { name: "Widget" },
-      headers: { "x-idempotency-key": "unique-key-abc" },
+      headers: { "idempotency-key": "unique-key-abc" },
     });
 
     expect(res1.statusCode).toBe(201);
@@ -116,7 +116,7 @@ describe("createIdempotencyMiddleware", () => {
       method: "POST",
       url: "/items",
       payload: { name: "Widget" },
-      headers: { "x-idempotency-key": "unique-key-abc" },
+      headers: { "idempotency-key": "unique-key-abc" },
     });
 
     expect(res2.statusCode).toBe(201);
@@ -136,7 +136,7 @@ describe("createIdempotencyMiddleware", () => {
       method: "POST",
       url: "/items",
       payload: { name: "Widget" },
-      headers: { "x-idempotency-key": longKey },
+      headers: { "idempotency-key": longKey },
     });
 
     expect(res.statusCode).toBe(400);
@@ -169,7 +169,7 @@ describe("createIdempotencyMiddleware", () => {
       method: "POST",
       url: "/items",
       payload: { name: "Widget" },
-      headers: { "x-idempotency-key": exactKey },
+      headers: { "idempotency-key": exactKey },
     });
 
     expect(res.statusCode).toBe(201);
@@ -191,7 +191,7 @@ describe("createIdempotencyMiddleware", () => {
       method: "POST",
       url: "/items",
       payload: { name: "Widget" },
-      headers: { "x-idempotency-key": "store-test-key" },
+      headers: { "idempotency-key": "store-test-key" },
     });
 
     // Find the INSERT call
@@ -220,7 +220,7 @@ describe("createIdempotencyMiddleware", () => {
       method: "POST",
       url: "/fail",
       payload: { bad: true },
-      headers: { "x-idempotency-key": "error-key-4xx" },
+      headers: { "idempotency-key": "error-key-4xx" },
     });
 
     expect(res.statusCode).toBe(422);
@@ -245,7 +245,7 @@ describe("createIdempotencyMiddleware", () => {
       method: "POST",
       url: "/server-error",
       payload: {},
-      headers: { "x-idempotency-key": "error-key-5xx" },
+      headers: { "idempotency-key": "error-key-5xx" },
     });
 
     expect(res.statusCode).toBe(500);
@@ -271,7 +271,7 @@ describe("createIdempotencyMiddleware", () => {
       method: "POST",
       url: "/items",
       payload: { name: "Widget" },
-      headers: { "x-idempotency-key": "resilience-key" },
+      headers: { "idempotency-key": "resilience-key" },
     });
 
     // Request should still succeed despite cache lookup failure
@@ -318,7 +318,7 @@ describe("createIdempotencyMiddleware", () => {
     const res = await app.inject({
       method: "GET",
       url: "/items",
-      headers: { "x-idempotency-key": "get-idem-key" },
+      headers: { "idempotency-key": "get-idem-key" },
     });
 
     expect(res.statusCode).toBe(200);
@@ -330,7 +330,7 @@ describe("createIdempotencyMiddleware", () => {
       method: "POST",
       url: "/items",
       payload: {},
-      headers: { "x-idempotency-key": "post-key-ignored" },
+      headers: { "idempotency-key": "post-key-ignored" },
     });
 
     expect(res2.statusCode).toBe(201);
