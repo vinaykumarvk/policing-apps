@@ -11,10 +11,18 @@ export interface SlangMatch {
  * Normalize text by replacing slang terms with their standard forms.
  * Returns the normalized text and matched slang entries.
  */
-export async function normalizeSlang(text: string): Promise<{ normalizedText: string; matches: SlangMatch[] }> {
+export async function normalizeSlang(text: string): Promise<{ normalizedText: string; matches: SlangMatch[]; dictionaryVersion: string }> {
   const result = await query(
     `SELECT term, normalized_form, category, risk_weight FROM slang_dictionary WHERE is_active = TRUE`,
   );
+
+  // FR-05 AC-04: Compute dictionary version from count + latest update timestamp
+  const versionResult = await query(
+    `SELECT COUNT(*)::int AS entry_count, MAX(updated_at) AS last_updated FROM slang_dictionary WHERE is_active = TRUE`,
+  );
+  const vCount = versionResult.rows[0]?.entry_count || 0;
+  const vDate = versionResult.rows[0]?.last_updated ? new Date(versionResult.rows[0].last_updated).toISOString().slice(0, 10) : "unknown";
+  const dictionaryVersion = `v${vCount}-${vDate}`;
 
   let normalizedText = text;
   const matches: SlangMatch[] = [];
@@ -33,7 +41,7 @@ export async function normalizeSlang(text: string): Promise<{ normalizedText: st
     }
   }
 
-  return { normalizedText, matches };
+  return { normalizedText, matches, dictionaryVersion };
 }
 
 /**

@@ -1,6 +1,7 @@
 import { createSlaScheduler } from "@puda/api-core";
 import { query, getClient } from "./db";
 import { executeTransition } from "./workflow-bridge";
+import { forwardToSiem, startSiemForwarder, stopSiemForwarder } from "./services/siem-forwarder";
 
 const scheduler = createSlaScheduler({
   lockId: 900_003,
@@ -9,8 +10,70 @@ const scheduler = createSlaScheduler({
   executeTransition,
 });
 
-export const startSlaScheduler = scheduler.start;
-export const stopSlaScheduler = scheduler.stop;
+const _origStart = scheduler.start;
+const _origStop = scheduler.stop;
+
+export function startSlaScheduler(): void {
+  _origStart();
+  startSiemForwarder();
+  startHighSeverityAlertForwarder();
+}
+
+export function stopSlaScheduler(): void {
+  _origStop();
+  stopSiemForwarder();
+  stopHighSeverityAlertForwarder();
+}
+
+// FR-15 AC-05: Periodically forward high-severity alerts to SIEM
+let siemAlertInterval: ReturnType<typeof setInterval> | null = null;
+
+async function forwardHighSeverityAlerts(): Promise<void> {
+  try {
+    const result = await query(
+      `SELECT alert_id, alert_ref, alert_type, priority, title, state_id, created_at
+       FROM sm_alert
+       WHERE priority IN ('CRITICAL', 'HIGH')
+         AND state_id NOT IN ('DISMISSED', 'FALSE_POSITIVE', 'CLOSED')
+         AND siem_forwarded_at IS NULL
+       ORDER BY created_at ASC
+       LIMIT 50`,
+    );
+
+    for (const alert of result.rows) {
+      forwardToSiem({
+        event_type: "HIGH_SEVERITY_ALERT",
+        entity_type: "sm_alert",
+        entity_id: alert.alert_id,
+        alert_ref: alert.alert_ref,
+        alert_type: alert.alert_type,
+        priority: alert.priority,
+        state_id: alert.state_id,
+        title: alert.title,
+        created_at: alert.created_at,
+      });
+
+      await query(
+        `UPDATE sm_alert SET siem_forwarded_at = NOW() WHERE alert_id = $1`,
+        [alert.alert_id],
+      );
+    }
+  } catch (err) {
+    console.error("[siem-alert-forwarder] Error:", err);
+  }
+}
+
+function startHighSeverityAlertForwarder(): void {
+  siemAlertInterval = setInterval(forwardHighSeverityAlerts, 60_000);
+  forwardHighSeverityAlerts().catch(() => {});
+}
+
+function stopHighSeverityAlertForwarder(): void {
+  if (siemAlertInterval) {
+    clearInterval(siemAlertInterval);
+    siemAlertInterval = null;
+  }
+}
 
 // Scheduled report runner
 let reportInterval: ReturnType<typeof setInterval> | null = null;

@@ -39,7 +39,8 @@ import { registerSavedSearchRoutes } from "./routes/saved-search.routes";
 import { registerSlangRoutes } from "./routes/slang.routes";
 import { registerTaxonomyRoutes } from "./routes/taxonomy.routes";
 import { registerReportTemplateRoutes } from "./routes/report-template.routes";
-import { createOidcAuth, createOidcRoutes, createAuthMiddleware, createConfigGovernanceRoutes, createIdempotencyMiddleware } from "@puda/api-core";
+import { registerQueueRoutingRoutes } from "./routes/queue-routing.routes";
+import { createOidcAuth, createOidcRoutes, createAuthMiddleware, createConfigGovernanceRoutes, createIdempotencyMiddleware, createLdapAuth, createAuthRoutes as createSharedAuthRoutes } from "@puda/api-core";
 import { query } from "./db";
 
 export async function buildApp(logger = true): Promise<FastifyInstance> {
@@ -230,10 +231,28 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
   await registerSlangRoutes(app);
   await registerTaxonomyRoutes(app);
   await registerReportTemplateRoutes(app);
+  await registerQueueRoutingRoutes(app);
 
   // Config governance routes
   const registerConfigGovernanceRoutes = createConfigGovernanceRoutes({ queryFn: query });
   await registerConfigGovernanceRoutes(app);
+
+  // LDAP auth (conditionally enabled via env)
+  if (process.env.LDAP_URL) {
+    const ldapAuth = createLdapAuth({
+      url: process.env.LDAP_URL,
+      baseDn: process.env.LDAP_BASE_DN || "",
+      bindDn: process.env.LDAP_BIND_DN,
+      bindPassword: process.env.LDAP_BIND_PASSWORD,
+    }, query);
+    const auth = createAuthMiddleware({
+      cookieName: "sm_auth",
+      defaultDevSecret: "sm-dev-secret-DO-NOT-USE-IN-PRODUCTION",
+      queryFn: query,
+    });
+    const registerLdapAuthRoutes = createSharedAuthRoutes({ queryFn: query, auth, ldapAuth });
+    await registerLdapAuthRoutes(app);
+  }
 
   // OIDC routes (conditionally enabled via env)
   if (process.env.OIDC_ISSUER_URL) {

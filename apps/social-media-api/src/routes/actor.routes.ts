@@ -2,6 +2,7 @@ import { FastifyInstance } from "fastify";
 import { query } from "../db";
 import { send400, send404, sendError } from "../errors";
 import { crossPlatformLink } from "../services/actor-aggregator";
+import { classifyContentWithTaxonomy } from "../services/classifier";
 
 export async function registerActorRoutes(app: FastifyInstance): Promise<void> {
   /**
@@ -133,6 +134,80 @@ export async function registerActorRoutes(app: FastifyInstance): Promise<void> {
       return { posts: result.rows.map(({ total_count, ...r }) => r), total };
     } catch (err: unknown) {
       request.log.error(err, "Failed to get actor posts");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  /**
+   * POST /api/v1/actors/:id/recalculate-risk — FR-07 AC-03/05
+   * Re-classify all content items for an actor and recalculate aggregate risk score.
+   */
+  app.post("/api/v1/actors/:id/recalculate-risk", {
+    schema: {
+      params: {
+        type: "object",
+        additionalProperties: false,
+        required: ["id"],
+        properties: { id: { type: "string", format: "uuid" } },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+
+      const actorCheck = await query(`SELECT actor_id, total_flagged_posts, is_repeat_offender FROM sm_actor WHERE actor_id = $1`, [id]);
+      if (actorCheck.rows.length === 0) {
+        return send404(reply, "ACTOR_NOT_FOUND", "Actor not found");
+      }
+
+      // Fetch all content items for this actor
+      const contentResult = await query(
+        `SELECT content_id, content_text, threat_score FROM content_item WHERE actor_id = $1`,
+        [id],
+      );
+
+      let totalRisk = 0;
+      let classifiedCount = 0;
+
+      for (const item of contentResult.rows) {
+        const classification = await classifyContentWithTaxonomy(item.content_text || "");
+        totalRisk += classification.riskScore;
+        classifiedCount++;
+
+        // Upsert classification_result for each content item
+        await query(
+          `INSERT INTO classification_result (entity_type, entity_id, category, risk_score, risk_factors, taxonomy_version_id)
+           VALUES ('sm_content', $1, $2, $3, $4, $5)
+           ON CONFLICT (entity_type, entity_id) DO UPDATE SET
+             category = $2, risk_score = $3, risk_factors = $4, taxonomy_version_id = $5, updated_at = now()`,
+          [item.content_id, classification.category, classification.riskScore, JSON.stringify(classification.factors), classification.taxonomyVersionId || null],
+        );
+      }
+
+      // Compute new aggregate risk score
+      const avgRisk = classifiedCount > 0 ? Math.round((totalRisk / classifiedCount) * 100) / 100 : 0;
+
+      // FR-07: Actor history bonus
+      const flaggedPosts = parseInt(actorCheck.rows[0].total_flagged_posts, 10) || 0;
+      const isRepeat = actorCheck.rows[0].is_repeat_offender === true;
+      const historyBonus = (isRepeat || flaggedPosts >= 3) ? Math.min(flaggedPosts * 5, 30) : 0;
+      const finalRisk = Math.min(100, Math.round((avgRisk + historyBonus) * 100) / 100);
+
+      // Update actor risk_score
+      await query(
+        `UPDATE sm_actor SET risk_score = $1, updated_at = NOW() WHERE actor_id = $2`,
+        [finalRisk, id],
+      );
+
+      return {
+        actorId: id,
+        classifiedItems: classifiedCount,
+        averageRisk: avgRisk,
+        historyBonus,
+        newRiskScore: finalRisk,
+      };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to recalculate actor risk");
       return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
     }
   });

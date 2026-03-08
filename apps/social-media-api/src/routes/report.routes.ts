@@ -305,6 +305,21 @@ export async function registerReportRoutes(app: FastifyInstance): Promise<void> 
       const { transitionId, remarks } = request.body as { transitionId: string; remarks?: string };
       const { userId, roles } = request.authUser!;
 
+      // FR-08 AC-05: Four-eyes check — approver must differ from report creator
+      const reportData = await query(`SELECT created_by, state_id FROM report_instance WHERE report_id = $1`, [id]);
+      if (reportData.rows.length === 0) {
+        return sendError(reply, 404, "REPORT_NOT_FOUND", "Report not found");
+      }
+      const availableTransitions = getAvailableTransitions("sm_report", reportData.rows[0].state_id);
+      const targetTransition = availableTransitions.find((t: any) => t.transitionId === transitionId);
+      if (targetTransition?.toStateId === "APPROVED") {
+        if (reportData.rows[0].created_by === userId) {
+          return sendError(reply, 403, "FOUR_EYES_VIOLATION", "Report creator cannot approve their own report");
+        }
+        // Set approved_by
+        await query(`UPDATE report_instance SET approved_by = $1, updated_at = NOW() WHERE report_id = $2`, [userId, id]);
+      }
+
       const result = await executeTransition(
         id, "sm_report", transitionId, userId, "OFFICER", roles, remarks,
       );

@@ -4,6 +4,7 @@ import { sendError, send404 } from "../errors";
 import { createRoleGuard } from "@puda/api-core";
 import { executeTransition } from "../workflow-bridge";
 import { getAvailableTransitions } from "../workflow-bridge/transitions";
+import { generateAndLogWatermark } from "../services/watermark";
 
 const requireAnalyst = createRoleGuard(["ANALYST", "SUPERVISOR", "PLATFORM_ADMINISTRATOR"]);
 
@@ -338,6 +339,53 @@ export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
       };
     } catch (err: unknown) {
       request.log.error(err, "Failed to recalculate alert score");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  // FR-10 AC-03: POST /api/v1/alerts/:id/export — Export alert with watermark
+  app.post("/api/v1/alerts/:id/export", {
+    schema: {
+      params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } },
+      querystring: { type: "object", additionalProperties: false, properties: { format: { type: "string", enum: ["json", "csv"], default: "json" } } },
+    },
+  }, async (request, reply) => {
+    if (!requireAnalyst(request, reply)) return;
+    try {
+      const { id } = request.params as { id: string };
+      const qs = request.query as { format?: string };
+      const { userId } = request.authUser!;
+
+      const result = await query(
+        `SELECT a.alert_id, a.alert_ref, a.alert_type, a.priority, a.title, a.description,
+                a.content_id, a.category_id, a.state_id, a.assigned_to, a.created_at, a.updated_at,
+                cr.category AS classification_category, cr.risk_score
+         FROM sm_alert a
+         LEFT JOIN classification_result cr ON cr.entity_type = 'sm_alert' AND cr.entity_id = a.alert_id
+         WHERE a.alert_id = $1`,
+        [id],
+      );
+      if (result.rows.length === 0) return send404(reply, "ALERT_NOT_FOUND", "Alert not found");
+
+      const alert = result.rows[0];
+
+      // Generate watermark for export tracking
+      const watermarkText = await generateAndLogWatermark(userId, "sm_alert", id, "ALERT_EXPORT");
+
+      if (qs.format === "csv") {
+        const headers = Object.keys(alert).join(",");
+        const values = Object.values(alert).map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",");
+        const csv = `${headers}\n${values}\n\nWatermark: ${watermarkText}`;
+        reply.header("Content-Type", "text/csv");
+        reply.header("Content-Disposition", `attachment; filename="alert-${id}.csv"`);
+        reply.header("X-Watermark", watermarkText);
+        return reply.send(csv);
+      }
+
+      reply.header("X-Watermark", watermarkText);
+      return { alert: { ...alert, watermark: watermarkText } };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to export alert");
       return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
     }
   });

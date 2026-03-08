@@ -13,6 +13,7 @@ interface ClassificationResult {
   category: string;
   riskScore: number;
   factors: RiskFactor[];
+  taxonomyVersionId?: string;
 }
 
 const KEYWORD_CATEGORIES: Record<string, string[]> = {
@@ -25,6 +26,76 @@ const KEYWORD_CATEGORIES: Record<string, string[]> = {
   CYBER_CRIME: ["hack", "malware", "ransomware", "phish", "ddos"],
 };
 
+/**
+ * FR-06 AC-02: Taxonomy-backed classification.
+ * Queries the active taxonomy_version + taxonomy_rule from DB first;
+ * falls back to hardcoded KEYWORD_CATEGORIES when no active taxonomy exists.
+ */
+export async function classifyContentWithTaxonomy(text: string): Promise<ClassificationResult> {
+  const lowerText = (text || "").toLowerCase();
+  const factors: RiskFactor[] = [];
+  let bestCategory = "UNCATEGORIZED";
+  let maxScore = 0;
+  let taxonomyVersionId: string | undefined;
+
+  // Try taxonomy rules from active version
+  const activeVersion = await query(
+    `SELECT tv.version_id FROM taxonomy_version tv WHERE tv.is_active = TRUE LIMIT 1`,
+  );
+
+  if (activeVersion.rows.length > 0) {
+    taxonomyVersionId = activeVersion.rows[0].version_id;
+    const rulesResult = await query(
+      `SELECT category, pattern, threshold, risk_weight FROM taxonomy_rule
+       WHERE version_id = $1 AND is_active = TRUE ORDER BY category`,
+      [taxonomyVersionId],
+    );
+
+    for (const rule of rulesResult.rows) {
+      try {
+        const regex = new RegExp(rule.pattern, "gi");
+        const matches = lowerText.match(regex);
+        if (matches && matches.length > 0) {
+          const score = Math.min(matches.length * 20, 100);
+          const weight = parseFloat(rule.risk_weight) || 0.3;
+          factors.push({
+            factor: `taxonomy_match_${rule.category.toLowerCase()}`,
+            weight,
+            score,
+            detail: `Taxonomy rule matched: ${matches.length} hit(s)`,
+          });
+          if (score * weight > maxScore) {
+            maxScore = score * weight;
+            bestCategory = rule.category;
+          }
+        }
+      } catch {
+        // Invalid regex in rule — skip silently
+      }
+    }
+  }
+
+  // Fall back to hardcoded categories if taxonomy produced no matches
+  if (factors.length === 0) {
+    const result = classifyContent(text);
+    return { ...result, taxonomyVersionId };
+  }
+
+  // Text length factor
+  if (lowerText.length > 500) {
+    factors.push({ factor: "lengthy_content", weight: 0.1, score: 30, detail: "Content exceeds 500 characters" });
+  }
+
+  const riskScore = factors.length > 0
+    ? Math.min(100, factors.reduce((sum, f) => sum + f.weight * f.score, 0) / factors.reduce((sum, f) => sum + f.weight, 0))
+    : 0;
+
+  return { category: bestCategory, riskScore: Math.round(riskScore * 100) / 100, factors, taxonomyVersionId };
+}
+
+/**
+ * Synchronous fallback classifier using hardcoded keyword categories.
+ */
 export function classifyContent(text: string): ClassificationResult {
   const lowerText = (text || "").toLowerCase();
   const factors: RiskFactor[] = [];
@@ -51,9 +122,6 @@ export function classifyContent(text: string): ClassificationResult {
   if (lowerText.length > 500) {
     factors.push({ factor: "lengthy_content", weight: 0.1, score: 30, detail: "Content exceeds 500 characters" });
   }
-
-  // Actor history risk bonus (FR-07) — will be applied if actorRiskBonus > 0
-  // This is a placeholder; callers can add actor-specific factors after calling classifyContent
 
   // Calculate weighted risk score
   const riskScore = factors.length > 0
@@ -109,16 +177,17 @@ export async function classifyEntity(entityType: string, entityId: string): Prom
   if (entityResult.rows.length === 0) throw new Error("Entity not found");
 
   const text = entityResult.rows[0][textColumn] || "";
-  const classification = classifyContent(text);
+  // FR-06 AC-02: Use taxonomy-backed classification
+  const classification = await classifyContentWithTaxonomy(text);
 
-  // Upsert classification result
+  // Upsert classification result with taxonomy_version_id
   const result = await query(
-    `INSERT INTO classification_result (entity_type, entity_id, category, risk_score, risk_factors)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO classification_result (entity_type, entity_id, category, risk_score, risk_factors, taxonomy_version_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (entity_type, entity_id) DO UPDATE SET
-       category = $3, risk_score = $4, risk_factors = $5, updated_at = now()
+       category = $3, risk_score = $4, risk_factors = $5, taxonomy_version_id = $6, updated_at = now()
      RETURNING *`,
-    [entityType, entityId, classification.category, classification.riskScore, JSON.stringify(classification.factors)],
+    [entityType, entityId, classification.category, classification.riskScore, JSON.stringify(classification.factors), classification.taxonomyVersionId || null],
   );
 
   return result.rows[0];
