@@ -1,4 +1,4 @@
-import { createSlaScheduler } from "@puda/api-core";
+import { createSlaScheduler, logError } from "@puda/api-core";
 import { query, getClient } from "./db";
 import { executeTransition } from "./workflow-bridge";
 
@@ -31,11 +31,11 @@ async function runScheduledReports(): Promise<void> {
           [report.report_id],
         );
       } catch (err) {
-        console.error(`[scheduled-report] Failed to process report ${report.report_id}:`, err);
+        logError("SCHEDULED_REPORT_FAILED", { reportId: report.report_id, error: String(err) });
       }
     }
   } catch (err) {
-    console.error("[scheduled-report] Scheduler error:", err);
+    logError("SCHEDULED_REPORT_SCHEDULER_ERROR", { error: String(err) });
   }
 }
 
@@ -79,7 +79,7 @@ async function scanMrFiles(): Promise<void> {
           [file.file_id],
         );
       } catch (err) {
-        console.error(`[mr-scanner] Failed to process MR file ${file.file_id}:`, err);
+        logError("MR_SCANNER_FILE_FAILED", { fileId: file.file_id, error: String(err) });
         await query(
           `UPDATE mr_upload SET processing_status = 'FAILED', error_message = $1, updated_at = NOW()
            WHERE file_id = $2`,
@@ -88,7 +88,7 @@ async function scanMrFiles(): Promise<void> {
       }
     }
   } catch (err) {
-    console.error("[mr-scanner] Scanner error:", err);
+    logError("MR_SCANNER_ERROR", { error: String(err) });
   }
 }
 

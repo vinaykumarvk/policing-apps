@@ -26,7 +26,7 @@ export async function findDuplicates(minSimilarity = 0.5): Promise<number> {
   // Use pg_trgm similarity() to find pairs above threshold; skip already-merged subjects
   // and pairs that already exist as candidates (any state).
   const result = await query(
-    `INSERT INTO dedup_candidate (subject_id_a, subject_id_b, similarity_score, match_reasons)
+    `INSERT INTO dedup_candidate (subject_id_a, subject_id_b, similarity_score, match_fields)
      SELECT
        a.subject_id,
        b.subject_id,
@@ -186,10 +186,10 @@ export async function mergeSubjects(
     const histResult = await client.query(
       `INSERT INTO merge_history (entity_type, survivor_id, merged_id, field_decisions, merged_by)
        VALUES ('subject', $1, $2, $3, $4)
-       RETURNING merge_history_id`,
+       RETURNING merge_id`,
       [survivorId, mergedId, JSON.stringify(fieldDecisions), userId],
     );
-    const mergeHistoryId: string = histResult.rows[0].merge_history_id;
+    const mergeHistoryId: string = histResult.rows[0].merge_id;
 
     // Mark any pending dedup candidates between these two as MERGED
     await client.query(
@@ -226,7 +226,7 @@ export async function unmergeSubjects(
     // Look up the merge history record
     const histResult = await client.query(
       `SELECT survivor_id, merged_id, field_decisions
-       FROM merge_history WHERE merge_history_id = $1`,
+       FROM merge_history WHERE merge_id = $1`,
       [mergeHistoryId],
     );
 

@@ -23,7 +23,7 @@ export async function upsertActor(
 ): Promise<string> {
   // Search for existing actor with this handle on this platform
   const existing = await query(
-    `SELECT actor_id FROM sm_actor
+    `SELECT actor_id FROM actor_account
      WHERE handles @> $1::jsonb`,
     [JSON.stringify([{ platform, handle }])],
   );
@@ -32,7 +32,7 @@ export async function upsertActor(
     // Update display_name if provided and not already set
     if (name) {
       await query(
-        `UPDATE sm_actor SET display_name = COALESCE(display_name, $1), last_seen_at = NOW()
+        `UPDATE actor_account SET display_name = COALESCE(display_name, $1), last_seen_at = NOW()
          WHERE actor_id = $2`,
         [name, existing.rows[0].actor_id],
       );
@@ -42,7 +42,7 @@ export async function upsertActor(
 
   // Create new actor
   const result = await query(
-    `INSERT INTO sm_actor (handles, display_name, first_seen_at, last_seen_at)
+    `INSERT INTO actor_account (handles, display_name, first_seen_at, last_seen_at)
      VALUES ($1, $2, NOW(), NOW())
      RETURNING actor_id`,
     [JSON.stringify([{ platform, handle }]), name || null],
@@ -75,7 +75,7 @@ export async function updateActorStats(actorId: string): Promise<{ totalFlaggedP
   const isRepeatOffender = totalFlaggedPosts >= 3;
 
   await query(
-    `UPDATE sm_actor
+    `UPDATE actor_account
      SET total_flagged_posts = $1, is_repeat_offender = $2, last_seen_at = NOW()
      WHERE actor_id = $3`,
     [totalFlaggedPosts, isRepeatOffender, actorId],
@@ -96,7 +96,7 @@ export async function crossPlatformLink(actorIdA: string, actorIdB: string): Pro
 
     const actorsResult = await client.query(
       `SELECT actor_id, handles, display_name, first_seen_at
-       FROM sm_actor WHERE actor_id = ANY($1::uuid[])`,
+       FROM actor_account WHERE actor_id = ANY($1::uuid[])`,
       [[actorIdA, actorIdB]],
     );
 
@@ -129,7 +129,7 @@ export async function crossPlatformLink(actorIdA: string, actorIdB: string): Pro
 
     // Update survivor
     await client.query(
-      `UPDATE sm_actor
+      `UPDATE actor_account
        SET handles = $1, display_name = COALESCE(display_name, $2),
            first_seen_at = LEAST(first_seen_at, $3), last_seen_at = NOW()
        WHERE actor_id = $4`,
@@ -144,7 +144,7 @@ export async function crossPlatformLink(actorIdA: string, actorIdB: string): Pro
 
     // Soft-delete absorbed actor
     await client.query(
-      `UPDATE sm_actor SET is_active = FALSE WHERE actor_id = $1`,
+      `UPDATE actor_account SET is_active = FALSE WHERE actor_id = $1`,
       [absorbedId],
     );
 

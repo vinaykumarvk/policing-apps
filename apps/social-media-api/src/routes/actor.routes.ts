@@ -36,7 +36,7 @@ export async function registerActorRoutes(app: FastifyInstance): Promise<void> {
         `SELECT actor_id, handles, display_name, risk_score, total_flagged_posts,
                 is_repeat_offender, is_active, first_seen_at, last_seen_at, created_at,
                 COUNT(*) OVER() AS total_count
-         FROM sm_actor
+         FROM actor_account
          WHERE is_active = TRUE
            AND ($1::boolean IS NULL OR is_repeat_offender = $1)
            AND risk_score >= $2
@@ -72,7 +72,7 @@ export async function registerActorRoutes(app: FastifyInstance): Promise<void> {
         `SELECT actor_id, handles, display_name, risk_score, total_flagged_posts,
                 is_repeat_offender, is_active, first_seen_at, last_seen_at,
                 metadata_jsonb, created_at, updated_at
-         FROM sm_actor WHERE actor_id = $1`,
+         FROM actor_account WHERE actor_id = $1`,
         [id],
       );
       if (result.rows.length === 0) {
@@ -114,7 +114,7 @@ export async function registerActorRoutes(app: FastifyInstance): Promise<void> {
       const offset = Math.max(rawOffset ?? 0, 0);
 
       // Verify actor exists
-      const actorCheck = await query(`SELECT actor_id FROM sm_actor WHERE actor_id = $1`, [id]);
+      const actorCheck = await query(`SELECT actor_id FROM actor_account WHERE actor_id = $1`, [id]);
       if (actorCheck.rows.length === 0) {
         return send404(reply, "ACTOR_NOT_FOUND", "Actor not found");
       }
@@ -155,33 +155,42 @@ export async function registerActorRoutes(app: FastifyInstance): Promise<void> {
     try {
       const { id } = request.params as { id: string };
 
-      const actorCheck = await query(`SELECT actor_id, total_flagged_posts, is_repeat_offender FROM sm_actor WHERE actor_id = $1`, [id]);
+      const actorCheck = await query(`SELECT actor_id, total_flagged_posts, is_repeat_offender FROM actor_account WHERE actor_id = $1`, [id]);
       if (actorCheck.rows.length === 0) {
         return send404(reply, "ACTOR_NOT_FOUND", "Actor not found");
       }
 
-      // Fetch all content items for this actor
+      // Fetch content items for this actor (capped at 2000 to prevent unbounded queries)
       const contentResult = await query(
-        `SELECT content_id, content_text, threat_score FROM content_item WHERE actor_id = $1`,
+        `SELECT content_id, content_text, threat_score FROM content_item WHERE actor_id = $1 ORDER BY published_at DESC LIMIT 2000`,
         [id],
       );
 
       let totalRisk = 0;
       let classifiedCount = 0;
 
-      for (const item of contentResult.rows) {
-        const classification = await classifyContentWithTaxonomy(item.content_text || "");
-        totalRisk += classification.riskScore;
-        classifiedCount++;
-
-        // Upsert classification_result for each content item
-        await query(
-          `INSERT INTO classification_result (entity_type, entity_id, category, risk_score, risk_factors, taxonomy_version_id)
-           VALUES ('sm_content', $1, $2, $3, $4, $5)
-           ON CONFLICT (entity_type, entity_id) DO UPDATE SET
-             category = $2, risk_score = $3, risk_factors = $4, taxonomy_version_id = $5, updated_at = now()`,
-          [item.content_id, classification.category, classification.riskScore, JSON.stringify(classification.factors), classification.taxonomyVersionId || null],
+      // Process in batches to avoid N+1 query storm
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < contentResult.rows.length; i += BATCH_SIZE) {
+        const batch = contentResult.rows.slice(i, i + BATCH_SIZE);
+        const classifications = await Promise.all(
+          batch.map(item => classifyContentWithTaxonomy(item.content_text || "")),
         );
+
+        for (let j = 0; j < batch.length; j++) {
+          const item = batch[j];
+          const classification = classifications[j];
+          totalRisk += classification.riskScore;
+          classifiedCount++;
+
+          await query(
+            `INSERT INTO classification_result (entity_type, entity_id, category, risk_score, risk_factors, taxonomy_version_id)
+             VALUES ('sm_content', $1, $2, $3, $4, $5)
+             ON CONFLICT (entity_type, entity_id) DO UPDATE SET
+               category = $2, risk_score = $3, risk_factors = $4, taxonomy_version_id = $5, updated_at = now()`,
+            [item.content_id, classification.category, classification.riskScore, JSON.stringify(classification.factors), classification.taxonomyVersionId || null],
+          );
+        }
       }
 
       // Compute new aggregate risk score
@@ -195,7 +204,7 @@ export async function registerActorRoutes(app: FastifyInstance): Promise<void> {
 
       // Update actor risk_score
       await query(
-        `UPDATE sm_actor SET risk_score = $1, updated_at = NOW() WHERE actor_id = $2`,
+        `UPDATE actor_account SET risk_score = $1, updated_at = NOW() WHERE actor_id = $2`,
         [finalRisk, id],
       );
 

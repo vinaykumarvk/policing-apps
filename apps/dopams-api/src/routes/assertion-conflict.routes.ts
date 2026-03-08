@@ -29,7 +29,7 @@ export async function registerAssertionConflictRoutes(app: FastifyInstance): Pro
 
       const result = await query(
         `SELECT conflict_id, subject_id, field_name, source_a, value_a, source_b, value_b,
-                resolved_source, resolved_by, resolved_at, created_at,
+                resolution, resolved_by, resolved_at, created_at,
                 COUNT(*) OVER() AS total_count
          FROM assertion_conflict
          WHERE subject_id = $1
@@ -69,9 +69,9 @@ export async function registerAssertionConflictRoutes(app: FastifyInstance): Pro
 
       const result = await query(
         `UPDATE assertion_conflict
-         SET resolved_source = $1, resolved_by = $2, resolved_at = NOW()
+         SET resolution = $1, resolved_by = $2, resolved_at = NOW()
          WHERE conflict_id = $3
-         RETURNING conflict_id, subject_id, field_name, resolved_source`,
+         RETURNING conflict_id, subject_id, field_name, resolution`,
         [resolvedSource, userId, conflictId],
       );
       if (result.rows.length === 0) {

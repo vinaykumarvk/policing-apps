@@ -29,7 +29,7 @@ export function createAuthRoutes(deps: AuthRouteDeps) {
         }
         // Look up the user in our DB to get roles/type
         const userResult = await queryFn(
-          `SELECT user_id, user_type, unit_id FROM app_user WHERE user_id = $1 AND is_active = true`,
+          `SELECT user_id, user_type, unit_id FROM user_account WHERE user_id = $1 AND is_active = true`,
           [result.userId]
         );
         if (userResult.rows.length === 0) {
@@ -37,10 +37,10 @@ export function createAuthRoutes(deps: AuthRouteDeps) {
         }
         const dbUser = userResult.rows[0];
         const rolesResult = await queryFn(
-          `SELECT r.role_name FROM user_role ur JOIN role r ON r.role_id = ur.role_id WHERE ur.user_id = $1`,
+          `SELECT r.role_key FROM user_role ur JOIN role r ON r.role_id = ur.role_id WHERE ur.user_id = $1`,
           [dbUser.user_id]
         );
-        const roles = rolesResult.rows.map((r: any) => r.role_name);
+        const roles = rolesResult.rows.map((r: any) => r.role_key);
         const token = auth.generateToken({ user_id: dbUser.user_id, user_type: dbUser.user_type, roles, unit_id: dbUser.unit_id });
         auth.setAuthCookie(reply, token);
         return { user: { userId: dbUser.user_id, userType: dbUser.user_type, roles, unitId: dbUser.unit_id, displayName: result.displayName, email: result.email } };

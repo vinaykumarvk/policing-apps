@@ -52,14 +52,14 @@ export function createLdapAuth(config: LdapAuthConfig, queryFn: QueryFn): LdapAu
 
     try {
       const result = await queryFn(
-        `SELECT user_id, display_name, email FROM app_user
-         WHERE username = $1 AND auth_source = 'ldap' AND is_active = true
+        `SELECT user_id, full_name, username FROM user_account
+         WHERE username = $1 AND is_active = true
          LIMIT 1`,
         [username]
       );
 
       if (result.rows.length === 0) {
-        return { success: false, error: "User not found or not LDAP-enabled" };
+        return { success: false, error: "User not found or not provisioned" };
       }
 
       const user = result.rows[0];
@@ -67,8 +67,8 @@ export function createLdapAuth(config: LdapAuthConfig, queryFn: QueryFn): LdapAu
       return {
         success: true,
         userId: user.user_id,
-        displayName: user.display_name,
-        email: user.email,
+        displayName: user.full_name,
+        email: user.username,
         groups: [],
       };
     } catch (err) {

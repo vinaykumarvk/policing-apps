@@ -53,7 +53,10 @@ export async function classifyContentWithTaxonomy(text: string): Promise<Classif
 
     for (const rule of rulesResult.rows) {
       try {
-        const regex = new RegExp(rule.pattern, "gi");
+        // Guard against ReDoS: reject patterns with nested quantifiers or excessive length
+        const pattern = String(rule.pattern);
+        if (pattern.length > 200 || /(\+|\*|\{)\??\)(\+|\*|\{)/.test(pattern)) continue;
+        const regex = new RegExp(pattern, "gi");
         const matches = lowerText.match(regex);
         if (matches && matches.length > 0) {
           const score = Math.min(matches.length * 20, 100);

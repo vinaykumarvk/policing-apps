@@ -18,7 +18,7 @@ export function createEmailRelay(config: EmailRelayConfig = {}) {
   async function sendEmail(to: string, subject: string, body: string): Promise<{ sent: boolean; messageId?: string }> {
     if (!isConfigured) {
       // Stub mode: log the email and record in notification_email_log
-      console.warn(`EMAIL_RELAY_STUB: Would send email to=${to} subject="${subject}"`);
+      // Stub mode: would send email in production via SMTP transport
       await query(
         `INSERT INTO notification_email_log (recipient, subject, body, status, sent_at)
          VALUES ($1, $2, $3, 'STUB', NOW())
@@ -41,7 +41,7 @@ export function createEmailRelay(config: EmailRelayConfig = {}) {
     const pending = await query(
       `SELECT n.notification_id, n.recipient_id, n.title, n.body, u.email
        FROM notification n
-       JOIN app_user u ON u.user_id = n.recipient_id
+       JOIN user_account u ON u.user_id = n.recipient_id
        WHERE n.channel = 'EMAIL' AND n.sent_at IS NULL
        ORDER BY n.created_at
        LIMIT 50`,

@@ -1,4 +1,5 @@
 import { query } from "../db";
+import { logInfo, logError } from "@puda/api-core";
 
 export interface SiemConfig {
   enabled: boolean;
@@ -41,7 +42,7 @@ async function flushEvents(): Promise<void> {
 
       // In production, use fetch() to POST to SIEM endpoint
       // Stub: log the forwarding action
-      console.log(`[siem-forwarder] Forwarding ${batch.length} events to ${config.endpoint}`);
+      logInfo("SIEM_FORWARD", { count: batch.length, endpoint: config.endpoint });
 
       // Record forwarding in audit
       await query(
@@ -53,7 +54,7 @@ async function flushEvents(): Promise<void> {
   } catch (err) {
     // Re-queue failed events
     eventBuffer.unshift(...batch);
-    console.error("[siem-forwarder] Failed to flush events:", err);
+    logError("SIEM_FLUSH_FAILED", { error: String(err), batchSize: batch.length });
   }
 }
 

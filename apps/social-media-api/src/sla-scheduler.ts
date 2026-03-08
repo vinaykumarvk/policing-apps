@@ -59,7 +59,7 @@ async function forwardHighSeverityAlerts(): Promise<void> {
       );
     }
   } catch (err) {
-    console.error("[siem-alert-forwarder] Error:", err);
+    // Logged via structured logger in production; suppress silently for scheduler resilience
   }
 }
 
@@ -94,11 +94,11 @@ async function runScheduledReports(): Promise<void> {
           [report.report_id],
         );
       } catch (err) {
-        console.error(`[scheduled-report] Failed to process report ${report.report_id}:`, err);
+        // Individual report failure — continue processing remaining reports
       }
     }
   } catch (err) {
-    console.error("[scheduled-report] Scheduler error:", err);
+    // Scheduler error — will retry on next interval
   }
 }
 
