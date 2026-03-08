@@ -39,6 +39,9 @@ const SlaDashboard = lazy(() => import("./views/SlaDashboard"));
 const SupervisorAudit = lazy(() => import("./views/SupervisorAudit"));
 const EarlyWarningDashboard = lazy(() => import("./views/EarlyWarningDashboard"));
 const PlatformCooperation = lazy(() => import("./views/PlatformCooperation"));
+const ReportEditor = lazy(() => import("./views/ReportEditor"));
+const TemplateAdmin = lazy(() => import("./views/TemplateAdmin"));
+const LegalRuleAdmin = lazy(() => import("./views/LegalRuleAdmin"));
 
 type View =
   | "dashboard" | "alerts" | "alert-detail"
@@ -50,13 +53,15 @@ type View =
   | "audit-log"
   | "monitoring-config"
   | "escalation-queue" | "sla-dashboard" | "supervisor-audit"
-  | "early-warning" | "platform-cooperation";
+  | "early-warning" | "platform-cooperation"
+  | "report-editor" | "template-admin" | "legal-rules";
 
 const VALID_VIEWS = [
   "", "dashboard", "alerts", "cases", "content", "evidence", "watchlists", "reports", "inbox",
   "query-assistant", "network-graph", "model-admin",
   "settings", "admin", "slang-admin", "detection-dictionary", "audit-log", "monitoring-config",
   "escalation-queue", "sla-dashboard", "supervisor-audit", "early-warning", "platform-cooperation",
+  "report-editor", "template-admin", "legal-rules",
 ] as const;
 
 const NAV_ITEMS: { view: View; key: string; icon: string }[] = [
@@ -204,6 +209,9 @@ export default function App() {
     if (view === "supervisor-audit") return buildHash("supervisor-audit");
     if (view === "early-warning") return buildHash("early-warning");
     if (view === "platform-cooperation") return buildHash("platform-cooperation");
+    if (view === "report-editor" && resourceId) return buildHash("report-editor", resourceId);
+    if (view === "template-admin") return buildHash("template-admin");
+    if (view === "legal-rules") return buildHash("legal-rules");
     return buildHash("dashboard");
   }, [view, resourceId]);
 
@@ -217,10 +225,10 @@ export default function App() {
     const parsed = parseHash(hash);
     const v = validateView(parsed.view, VALID_VIEWS, "dashboard");
     if (parsed.resourceId) {
-      const dm: Record<string, View> = { alerts: "alert-detail", cases: "case-detail", content: "content-detail", evidence: "evidence-detail", reports: "report-detail" };
+      const dm: Record<string, View> = { alerts: "alert-detail", cases: "case-detail", content: "content-detail", evidence: "evidence-detail", reports: "report-detail", "report-editor": "report-editor" };
       if (dm[v]) { setView(dm[v]); setResourceId(parsed.resourceId); return; }
     }
-    const sm: Record<string, View> = { dashboard: "dashboard", alerts: "alerts", cases: "cases", content: "content", watchlists: "watchlists", inbox: "inbox", "query-assistant": "query-assistant", "network-graph": "network-graph", "model-admin": "model-admin", settings: "settings", admin: "admin", "slang-admin": "slang-admin", "detection-dictionary": "detection-dictionary", "audit-log": "audit-log", "monitoring-config": "monitoring-config", "escalation-queue": "escalation-queue", "sla-dashboard": "sla-dashboard", "supervisor-audit": "supervisor-audit", "early-warning": "early-warning", "platform-cooperation": "platform-cooperation" };
+    const sm: Record<string, View> = { dashboard: "dashboard", alerts: "alerts", cases: "cases", content: "content", watchlists: "watchlists", inbox: "inbox", "query-assistant": "query-assistant", "network-graph": "network-graph", "model-admin": "model-admin", settings: "settings", admin: "admin", "slang-admin": "slang-admin", "detection-dictionary": "detection-dictionary", "audit-log": "audit-log", "monitoring-config": "monitoring-config", "escalation-queue": "escalation-queue", "sla-dashboard": "sla-dashboard", "supervisor-audit": "supervisor-audit", "early-warning": "early-warning", "platform-cooperation": "platform-cooperation", "template-admin": "template-admin", "legal-rules": "legal-rules" };
     setView(sm[v] || "dashboard");
   }, [auth]);
 
@@ -231,10 +239,10 @@ export default function App() {
       const parsed = parseHash(window.location.hash);
       const v = validateView(parsed.view, VALID_VIEWS, "dashboard");
       if (parsed.resourceId) {
-        const dm: Record<string, View> = { alerts: "alert-detail", cases: "case-detail", content: "content-detail", evidence: "evidence-detail", reports: "report-detail" };
+        const dm: Record<string, View> = { alerts: "alert-detail", cases: "case-detail", content: "content-detail", evidence: "evidence-detail", reports: "report-detail", "report-editor": "report-editor" };
         if (dm[v]) { setView(dm[v]); setResourceId(parsed.resourceId); return; }
       }
-      const sm: Record<string, View> = { dashboard: "dashboard", alerts: "alerts", cases: "cases", content: "content", watchlists: "watchlists", inbox: "inbox", "query-assistant": "query-assistant", "network-graph": "network-graph", "model-admin": "model-admin", settings: "settings", admin: "admin", "slang-admin": "slang-admin", "detection-dictionary": "detection-dictionary", "audit-log": "audit-log", "monitoring-config": "monitoring-config", "escalation-queue": "escalation-queue", "sla-dashboard": "sla-dashboard", "supervisor-audit": "supervisor-audit", "early-warning": "early-warning", "platform-cooperation": "platform-cooperation" };
+      const sm: Record<string, View> = { dashboard: "dashboard", alerts: "alerts", cases: "cases", content: "content", watchlists: "watchlists", inbox: "inbox", "query-assistant": "query-assistant", "network-graph": "network-graph", "model-admin": "model-admin", settings: "settings", admin: "admin", "slang-admin": "slang-admin", "detection-dictionary": "detection-dictionary", "audit-log": "audit-log", "monitoring-config": "monitoring-config", "escalation-queue": "escalation-queue", "sla-dashboard": "sla-dashboard", "supervisor-audit": "supervisor-audit", "early-warning": "early-warning", "platform-cooperation": "platform-cooperation", "template-admin": "template-admin", "legal-rules": "legal-rules" };
       setView(sm[v] || "dashboard"); setResourceId(null);
     };
     window.addEventListener("popstate", handle);
@@ -394,6 +402,18 @@ export default function App() {
               <span>{t("nav.audit_log")}</span>
             </button>
           </li>
+          <li>
+            <button className={`sidebar__item ${view === "template-admin" ? "sidebar__item--active" : ""}`} onClick={() => navigate("template-admin")} title={t("nav.template_admin")} type="button">
+              <span className="sidebar__item-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg></span>
+              <span>{t("nav.template_admin")}</span>
+            </button>
+          </li>
+          <li>
+            <button className={`sidebar__item ${view === "legal-rules" ? "sidebar__item--active" : ""}`} onClick={() => navigate("legal-rules")} title={t("nav.legal_rules")} type="button">
+              <span className="sidebar__item-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></span>
+              <span>{t("nav.legal_rules")}</span>
+            </button>
+          </li>
           </>
         )}
       </ul>
@@ -528,6 +548,9 @@ export default function App() {
               {view === "supervisor-audit" && <SupervisorAudit authHeaders={authHeaders} isOffline={isOffline} />}
               {view === "early-warning" && <EarlyWarningDashboard authHeaders={authHeaders} isOffline={isOffline} />}
               {view === "platform-cooperation" && <PlatformCooperation authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "report-editor" && resourceId && <ReportEditor id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => navigate("report-detail", resourceId)} />}
+              {view === "template-admin" && <TemplateAdmin authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "legal-rules" && <LegalRuleAdmin authHeaders={authHeaders} isOffline={isOffline} />}
             </Suspense>
           </main>
         </div>

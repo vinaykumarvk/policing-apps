@@ -1,5 +1,6 @@
 import { query } from "../db";
 import { classifyNarcotics, type NarcoticsClassificationResult } from "./narcotics-scorer";
+import { llmComplete } from "./llm-provider";
 
 type DbRow = Record<string, unknown>;
 
@@ -167,6 +168,61 @@ export function classifyContentWithActorHistory(
   }
 
   return base;
+}
+
+/**
+ * LLM-enhanced classifier: tries LLM first, falls back to rules on any failure.
+ * Returns result with llmUsed flag and optional llmConfidence.
+ */
+export async function classifyContentWithLlm(
+  text: string,
+  actorFlaggedPosts = 0,
+  isRepeatOffender = false,
+): Promise<ClassificationResult & { narcoticsResult?: NarcoticsClassificationResult; llmUsed: boolean; llmConfidence?: number }> {
+  // Always run the rule-based pipeline (narcotics + standard)
+  const rulesResult = await classifyContentEnhanced(text, actorFlaggedPosts, isRepeatOffender);
+
+  // Try LLM classification
+  try {
+    const llmResult = await llmComplete({
+      messages: [{ role: "user", content: text }],
+      useCase: "CLASSIFICATION",
+    });
+
+    if (llmResult) {
+      const parsed = JSON.parse(llmResult.content);
+      const llmScore = typeof parsed.risk_score === "number" ? parsed.risk_score : 0;
+      const llmConfidence = typeof parsed.confidence === "number" ? parsed.confidence : undefined;
+
+      // Use whichever scores higher (LLM or rules)
+      if (llmScore > rulesResult.riskScore) {
+        const llmFactors: RiskFactor[] = Array.isArray(parsed.factors)
+          ? parsed.factors.map((f: Record<string, unknown>) => ({
+              factor: String(f.factor || "llm_factor"),
+              weight: 1.0,
+              score: llmScore,
+              detail: String(f.detail || "LLM classification"),
+            }))
+          : [{ factor: "llm_classification", weight: 1.0, score: llmScore, detail: `LLM classified as ${parsed.category}` }];
+
+        return {
+          category: parsed.category || rulesResult.category,
+          riskScore: llmScore,
+          factors: llmFactors,
+          narcoticsResult: rulesResult.narcoticsResult,
+          llmUsed: true,
+          llmConfidence,
+        };
+      }
+
+      // Rules scored higher, but still mark LLM as consulted
+      return { ...rulesResult, llmUsed: true, llmConfidence };
+    }
+  } catch {
+    // LLM failed — fall through to rules
+  }
+
+  return { ...rulesResult, llmUsed: false };
 }
 
 /**

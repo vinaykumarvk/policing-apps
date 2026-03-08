@@ -274,5 +274,95 @@ export type PlatformResponse = {
   details: string | null;
 };
 
+export type LlmProviderConfig = {
+  config_id: string;
+  provider: string;
+  display_name: string;
+  api_base_url: string;
+  api_key_enc: string;
+  model_id: string;
+  is_active: boolean;
+  is_default: boolean;
+  max_tokens: number;
+  temperature: number;
+  timeout_ms: number;
+  max_retries: number;
+  config_jsonb: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LlmSystemPrompt = {
+  prompt_id: string;
+  use_case: string;
+  version: number;
+  prompt_text: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LlmPredictionLog = {
+  log_id: string;
+  provider: string;
+  model_name: string;
+  prompt_tokens: number | null;
+  output_tokens: number | null;
+  use_case: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
+  latency_ms: number;
+  fallback_used: boolean;
+  created_at: string;
+};
+
+export type LegalMappingRule = {
+  rule_id: string;
+  rule_code: string;
+  law_name: string;
+  provision_code: string;
+  rule_expression: {
+    operator: "AND" | "OR";
+    conditions: Array<{
+      field: string;
+      op: string;
+      value?: number | string;
+      values?: string[];
+    }>;
+  };
+  severity_weight: number;
+  version_no: number;
+  approval_status: string;
+  effective_from: string | null;
+  effective_to: string | null;
+  created_by: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LegalMappingResult = {
+  mapping_id: string;
+  entity_type: string;
+  entity_id: string;
+  statute_id: string;
+  mapping_source: string;
+  confidence: number;
+  rule_id: string | null;
+  provision_code: string | null;
+  rationale_text: string | null;
+  confidence_score: number | null;
+  reviewer_status: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  act_name: string;
+  section: string;
+  description: string;
+  penalty_summary: string;
+  rule_code: string | null;
+  rule_law_name: string | null;
+};
+
 export const apiBaseUrl =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3010";

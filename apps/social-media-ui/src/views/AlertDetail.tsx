@@ -27,6 +27,10 @@ export default function AlertDetail({ id, authHeaders, isOffline, onBack }: Prop
   const [translating, setTranslating] = useState(false);
   const [escalationReason, setEscalationReason] = useState("");
   const [escalating, setEscalating] = useState(false);
+  const [generatingNarrative, setGeneratingNarrative] = useState(false);
+  const [riskNarrative, setRiskNarrative] = useState<string | null>(null);
+  const [narrativeProvider, setNarrativeProvider] = useState<string | null>(null);
+  const [autoMapping, setAutoMapping] = useState(false);
 
   const fetchTransitions = () => {
     fetch(`${apiBaseUrl}/api/v1/alerts/${id}/transitions`, authHeaders())
@@ -63,7 +67,7 @@ export default function AlertDetail({ id, authHeaders, isOffline, onBack }: Prop
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setClassification(data); })
       .catch(() => {});
-    fetch(`${apiBaseUrl}/api/v1/legal/mappings/alert/${id}`, authHeaders())
+    fetch(`${apiBaseUrl}/api/v1/legal/mappings/sm_alert/${id}`, authHeaders())
       .then(r => r.ok ? r.json() : { mappings: [] })
       .then(data => setLegalMappings(data.mappings || []))
       .catch(() => {});
@@ -99,6 +103,54 @@ export default function AlertDetail({ id, authHeaders, isOffline, onBack }: Prop
       }
     } catch { /* silent */ }
     setTranslating(false);
+  };
+
+  const handleGenerateNarrative = async () => {
+    setGeneratingNarrative(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/v1/llm/risk-narrative`, {
+        ...authHeaders(), method: "POST",
+        body: JSON.stringify({ entity_type: "alert", entity_id: id, text: alert?.description || "" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRiskNarrative(data.narrative || data.content);
+        setNarrativeProvider(data.provider || null);
+        showToast("success", t("llm.narrative_generated"));
+      }
+    } catch { showToast("error", t("common.error")); }
+    setGeneratingNarrative(false);
+  };
+
+  const handleAutoMapLegal = async () => {
+    setAutoMapping(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/v1/legal/map`, {
+        ...authHeaders(), method: "POST",
+        body: JSON.stringify({ entity_type: "sm_alert", entity_id: id }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLegalMappings(data.mappings || []);
+        showToast("success", t("legal.mapping_complete"));
+      }
+    } catch { showToast("error", t("common.error")); }
+    finally { setAutoMapping(false); }
+  };
+
+  const handleReviewMapping = async (mappingId: string, decision: "APPROVED" | "REJECTED") => {
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/v1/legal/mappings/${mappingId}/review`, {
+        ...authHeaders(), method: "PATCH",
+        body: JSON.stringify({ decision }),
+      });
+      if (res.ok) {
+        showToast("success", t("legal.mapping_reviewed"));
+        // Refresh mappings
+        const mapRes = await fetch(`${apiBaseUrl}/api/v1/legal/mappings/sm_alert/${id}`, authHeaders());
+        if (mapRes.ok) { const d = await mapRes.json(); setLegalMappings(d.mappings || []); }
+      }
+    } catch { showToast("error", t("common.error")); }
   };
 
   const handleEscalate = async () => {
@@ -203,16 +255,58 @@ export default function AlertDetail({ id, authHeaders, isOffline, onBack }: Prop
                 </Button>
               )}
             </div>
-            {legalMappings.length > 0 && (
-              <div className="detail-section">
+            <div className="detail-section">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "var(--space-2)" }}>
                 <h3 className="detail-section__title">{t("legal.applicable_statutes")}</h3>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
+                <Button size="sm" variant="secondary" onClick={handleAutoMapLegal} disabled={isOffline || autoMapping}>
+                  {autoMapping ? t("common.loading") : t("legal.auto_map_legal")}
+                </Button>
+              </div>
+              {legalMappings.length === 0 ? (
+                <p style={{ color: "var(--color-text-muted)", marginTop: "var(--space-2)" }}>{t("reports.no_legal")}</p>
+              ) : (
+                <div style={{ display: "grid", gap: "var(--space-3)", marginTop: "var(--space-3)" }}>
                   {legalMappings.map((m: any, i: number) => (
-                    <Badge key={i} variant="info">{m.statute_code} — {m.statute_name}</Badge>
+                    <div key={m.mapping_id || i} style={{ padding: "var(--space-3)", background: "var(--color-surface-alt)", borderRadius: "var(--radius-md)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "var(--space-2)" }}>
+                        <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center", flexWrap: "wrap" }}>
+                          <Badge variant="info">{m.act_name || m.statute_code} {m.section ? `§${m.section}` : ""}</Badge>
+                          {m.rule_code && <Badge variant="default">{m.rule_code}</Badge>}
+                          {m.mapping_source && <small style={{ color: "var(--color-text-muted)" }}>{m.mapping_source}</small>}
+                        </div>
+                        <div style={{ display: "flex", gap: "var(--space-1)", alignItems: "center" }}>
+                          {m.reviewer_status && (
+                            <Badge variant={m.reviewer_status === "APPROVED" ? "success" : m.reviewer_status === "REJECTED" ? "danger" : "warning"}>
+                              {m.reviewer_status === "PENDING" ? t("legal.review_pending") : m.reviewer_status === "APPROVED" ? t("legal.review_approved") : t("legal.review_rejected")}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      {m.description && <p style={{ fontSize: "0.875rem", marginTop: "var(--space-1)", color: "var(--color-text-muted)" }}>{m.description}</p>}
+                      {(m.confidence_score != null || m.confidence != null) && (
+                        <div style={{ marginTop: "var(--space-2)" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                            <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>{t("legal.confidence")}: {m.confidence_score ?? m.confidence}%</span>
+                          </div>
+                          <ProgressBar current={Math.round(m.confidence_score ?? m.confidence ?? 0)} total={100} />
+                        </div>
+                      )}
+                      {m.rationale_text && (
+                        <p style={{ fontSize: "0.8rem", marginTop: "var(--space-1)", color: "var(--color-text-muted)" }}>
+                          <strong>{t("legal.rationale")}:</strong> {m.rationale_text}
+                        </p>
+                      )}
+                      {m.reviewer_status === "PENDING" && m.mapping_id && (
+                        <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
+                          <Button size="sm" variant="primary" onClick={() => handleReviewMapping(m.mapping_id, "APPROVED")}>{t("legal.approve")}</Button>
+                          <Button size="sm" variant="danger" onClick={() => handleReviewMapping(m.mapping_id, "REJECTED")}>{t("legal.reject")}</Button>
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
             <div className="detail-section">
               <h3 className="detail-section__title">{t("translate.title")}</h3>
               <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center", marginBottom: "var(--space-2)" }}>
@@ -256,6 +350,19 @@ export default function AlertDetail({ id, authHeaders, isOffline, onBack }: Prop
                   {escalating ? t("common.loading") : t("escalation.request")}
                 </Button>
               </div>
+            </div>
+            <div className="detail-section">
+              <h3 className="detail-section__title">{t("llm.risk_narrative")}</h3>
+              <Button onClick={handleGenerateNarrative} disabled={isOffline || generatingNarrative} variant="secondary">
+                {generatingNarrative ? t("llm.generating_narrative") : t("llm.risk_narrative")}
+              </Button>
+              {riskNarrative && (
+                <div style={{ marginTop: "var(--space-2)", padding: "var(--space-3)", background: "var(--color-surface-alt)", borderRadius: "var(--radius-md)" }}>
+                  <strong>{t("llm.ai_result")}</strong>
+                  <p style={{ marginTop: "var(--space-1)", fontSize: "0.875rem", whiteSpace: "pre-wrap" }}>{riskNarrative}</p>
+                  {narrativeProvider && <small style={{ color: "var(--color-text-muted)" }}>{t("llm.powered_by")} {narrativeProvider}</small>}
+                </div>
+              )}
             </div>
           </>
         )},

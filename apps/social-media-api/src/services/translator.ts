@@ -1,4 +1,5 @@
 import { query } from "../db";
+import { llmComplete } from "./llm-provider";
 
 type DbRow = Record<string, unknown>;
 
@@ -93,6 +94,37 @@ export async function translateText(params: {
     return existing.rows[0];
   }
 
+  // Try LLM translation first
+  try {
+    const llmResult = await llmComplete({
+      messages: [{ role: "user", content: `Translate to ${targetLanguage}:\n\n${text}` }],
+      useCase: "TRANSLATION",
+    });
+
+    if (llmResult) {
+      let translatedText = llmResult.content;
+      try {
+        const parsed = JSON.parse(llmResult.content);
+        if (parsed.translated_text) translatedText = parsed.translated_text;
+      } catch {
+        // Use raw content as translation
+      }
+
+      const result = await query(
+        `INSERT INTO translation_record
+          (source_entity_type, source_entity_id, source_language, target_language, source_text, translated_text, status, provider, created_by, detected_lang, lang_confidence, llm_model, llm_tokens)
+         VALUES ($1, $2, $3, $4, $5, $6, 'COMPLETED', $7, $8, $9, $10, $11, $12)
+         RETURNING *`,
+        [sourceEntityType, sourceEntityId, sourceLang, targetLanguage, text, translatedText, llmResult.provider, createdBy || null, detectedLang || sourceLang, langConfidence ?? null, llmResult.model, (llmResult.promptTokens || 0) + (llmResult.outputTokens || 0)],
+      );
+
+      return result.rows[0];
+    }
+  } catch {
+    // LLM failed — fall through to dictionary
+  }
+
+  // Dictionary fallback
   try {
     const translated = dictionaryTranslate(text, sourceLang, targetLanguage);
 

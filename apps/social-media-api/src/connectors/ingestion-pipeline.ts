@@ -1,10 +1,12 @@
 import { query } from "../db";
 import { logInfo, logError } from "../logger";
-import { classifyContentEnhanced } from "../services/classifier";
+import { classifyContentWithLlm } from "../services/classifier";
+import { translateText } from "../services/translator";
 import { extractAndStore } from "../services/entity-extractor";
 import { enqueueScreenshot, isScreenshotServiceReady } from "../services/screenshot-capture";
 import { autoRedactNonTargetPii, logRedactions } from "../services/pii-minimizer";
 import { recordDetection } from "../services/trend-analyzer";
+import { autoMapEntityWithRules } from "../services/legal-rule-evaluator";
 import type { FetchedItem } from "./types";
 
 const ALERT_THREAT_THRESHOLD = Number(process.env.ALERT_THREAT_THRESHOLD) || 40;
@@ -59,8 +61,8 @@ export async function ingestItems(
         }
       }
 
-      // 3. Enhanced classification (standard + narcotics pipeline)
-      const classification = await classifyContentEnhanced(
+      // 3. LLM-enhanced classification (LLM first, rules fallback)
+      const classification = await classifyContentWithLlm(
         item.contentText,
         actorFlaggedPosts,
         actorRepeatOffender,
@@ -108,13 +110,13 @@ export async function ingestItems(
         }
       }
 
-      // 4c. Insert classification result with review status
+      // 4c. Insert classification result with review status + LLM metadata
       try {
         await query(
-          `INSERT INTO classification_result (entity_type, entity_id, category, risk_score, risk_factors, review_status)
-           VALUES ('content_item', $1, $2, $3, $4, $5)
-           ON CONFLICT (entity_type, entity_id) DO UPDATE SET risk_score = EXCLUDED.risk_score, review_status = EXCLUDED.review_status, updated_at = NOW()`,
-          [contentId, classification.category, classification.riskScore, JSON.stringify(classification.factors || []), reviewStatus],
+          `INSERT INTO classification_result (entity_type, entity_id, category, risk_score, risk_factors, review_status, classified_by_llm, llm_confidence)
+           VALUES ('content_item', $1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (entity_type, entity_id) DO UPDATE SET risk_score = EXCLUDED.risk_score, review_status = EXCLUDED.review_status, classified_by_llm = EXCLUDED.classified_by_llm, llm_confidence = EXCLUDED.llm_confidence, updated_at = NOW()`,
+          [contentId, classification.category, classification.riskScore, JSON.stringify(classification.factors || []), reviewStatus, classification.llmUsed, classification.llmConfidence ?? null],
         );
       } catch (err) {
         logError("Classification result insert failed", { contentId, error: String(err) });
@@ -129,6 +131,21 @@ export async function ingestItems(
         }
       } catch (err) {
         logError("PII redaction failed", { contentId, error: String(err) });
+      }
+
+      // 4f. Auto-translate non-English content to English
+      if (item.language && item.language !== "en") {
+        try {
+          await translateText({
+            sourceEntityType: "content_item",
+            sourceEntityId: contentId,
+            text: item.contentText,
+            targetLanguage: "en",
+            detectedLang: item.language,
+          });
+        } catch (err) {
+          logError("Auto-translation failed", { contentId, language: item.language, error: String(err) });
+        }
       }
 
       // 4e. Record detections for trend analysis (Phase 4: Early Warning)
@@ -167,13 +184,14 @@ export async function ingestItems(
 
           const targetedPrefix = item.metadata?.source_tier === "TIER_1" ? "[TARGETED] " : "";
 
-          await query(
+          const alertInsertResult = await query(
             `INSERT INTO sm_alert
                (alert_type, priority, title, description, content_id, state_id,
                 alert_ref)
              VALUES
                ('AUTO_DETECTED', $1, $2, $3, $4, 'NEW',
-                'SM-ALERT-' || to_char(now(), 'YYYY') || '-' || lpad(nextval('sm_alert_ref_seq')::text, 6, '0'))`,
+                'SM-ALERT-' || to_char(now(), 'YYYY') || '-' || lpad(nextval('sm_alert_ref_seq')::text, 6, '0'))
+             RETURNING alert_id`,
             [
               priority,
               `${targetedPrefix}[${classification.category}] ${item.platform} — ${(item.contentText || "").slice(0, 100)}`,
@@ -187,6 +205,20 @@ export async function ingestItems(
           if (item.contentUrl && isScreenshotServiceReady()) {
             enqueueScreenshot(contentId, item.contentUrl, connectorId);
           }
+
+          // Auto legal mapping using rule engine — non-blocking for both alert and content
+          try {
+            const alertId = alertInsertResult.rows[0].alert_id as string;
+            await autoMapEntityWithRules("sm_alert", alertId);
+          } catch (legalErr) {
+            logError("Legal auto-mapping failed for alert", { contentId, error: String(legalErr) });
+          }
+          // Also map the content item for broader statute coverage
+          Promise.resolve().then(() =>
+            autoMapEntityWithRules("content_item", contentId),
+          ).catch((mapErr) => {
+            logError("Legal auto-mapping failed for content", { contentId, error: String(mapErr) });
+          });
         } catch (err) {
           logError("Auto-alert creation failed", { contentId, error: String(err) });
         }

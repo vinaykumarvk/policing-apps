@@ -22,6 +22,11 @@ export default function ContentDetail({ id, authHeaders, isOffline, onBack }: Pr
   const [translating, setTranslating] = useState(false);
   const [showJustification, setShowJustification] = useState(false);
   const [justified, setJustified] = useState(false);
+  const [reclassifying, setReclassifying] = useState(false);
+  const [aiClassification, setAiClassification] = useState<any>(null);
+  const [aiTranslating, setAiTranslating] = useState(false);
+  const [aiTranslatedText, setAiTranslatedText] = useState<string | null>(null);
+  const [aiTranslateProvider, setAiTranslateProvider] = useState<string | null>(null);
 
   const fetchNotes = () => {
     fetch(`${apiBaseUrl}/api/v1/content/${id}/notes`, authHeaders())
@@ -72,6 +77,39 @@ export default function ContentDetail({ id, authHeaders, isOffline, onBack }: Pr
     setTranslating(false);
   };
 
+  const handleReclassifyAi = async () => {
+    setReclassifying(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/v1/llm/classify`, {
+        ...authHeaders(), method: "POST",
+        body: JSON.stringify({ text: item?.content_text || "", entity_type: "content_item", entity_id: id }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAiClassification(data);
+        showToast("success", t("llm.reclassify_success"));
+      }
+    } catch { showToast("error", t("common.error")); }
+    setReclassifying(false);
+  };
+
+  const handleAiTranslate = async () => {
+    setAiTranslating(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/v1/llm/translate`, {
+        ...authHeaders(), method: "POST",
+        body: JSON.stringify({ text: item?.content_text || "", target_language: targetLang }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAiTranslatedText(data.translated_text);
+        setAiTranslateProvider(data.provider || null);
+        showToast("success", t("llm.translate_ai_success"));
+      }
+    } catch { showToast("error", t("common.error")); }
+    setAiTranslating(false);
+  };
+
   const handleAddNote = async () => {
     if (!newNote.trim() || isOffline) return;
     setSubmittingNote(true);
@@ -119,6 +157,26 @@ export default function ContentDetail({ id, authHeaders, isOffline, onBack }: Pr
               {item.content_url && <a href={item.content_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-brand)" }}>{t("content.view_original")}</a>}
             </div>
             <div className="detail-section">
+              <h3 className="detail-section__title">{t("classify.risk_score")}</h3>
+              <Button onClick={handleReclassifyAi} disabled={isOffline || reclassifying} variant="secondary">
+                {reclassifying ? t("llm.reclassifying") : t("llm.reclassify_ai")}
+              </Button>
+              {aiClassification && (
+                <div style={{ marginTop: "var(--space-2)", padding: "var(--space-3)", background: "var(--color-surface-alt)", borderRadius: "var(--radius-md)" }}>
+                  <strong>{t("llm.ai_result")}</strong>
+                  <p style={{ marginTop: "var(--space-1)", fontSize: "0.875rem" }}>
+                    {aiClassification.category} — {t("content.threat_label")}: {aiClassification.risk_score}
+                  </p>
+                  {aiClassification.factors?.length > 0 && (
+                    <ul style={{ marginTop: "var(--space-1)", paddingLeft: "var(--space-4)", fontSize: "0.875rem" }}>
+                      {aiClassification.factors.map((f: string, i: number) => <li key={i}>{f}</li>)}
+                    </ul>
+                  )}
+                  {aiClassification.provider && <small style={{ color: "var(--color-text-muted)" }}>{t("llm.powered_by")} {aiClassification.provider}</small>}
+                </div>
+              )}
+            </div>
+            <div className="detail-section">
               <h3 className="detail-section__title">{t("translate.title")}</h3>
               <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center", marginBottom: "var(--space-2)" }}>
                 <Select value={targetLang} onChange={(e) => setTargetLang(e.target.value)}>
@@ -128,6 +186,9 @@ export default function ContentDetail({ id, authHeaders, isOffline, onBack }: Pr
                 </Select>
                 <Button onClick={() => handleTranslate(item?.content_text || item?.description || "")} disabled={isOffline || translating} variant="secondary">
                   {translating ? t("common.loading") : t("translate.translate")}
+                </Button>
+                <Button onClick={handleAiTranslate} disabled={isOffline || aiTranslating} variant="secondary">
+                  {aiTranslating ? t("llm.translating_ai") : t("llm.translate_ai")}
                 </Button>
               </div>
               {translatedText && (
@@ -140,6 +201,13 @@ export default function ContentDetail({ id, authHeaders, isOffline, onBack }: Pr
                     <strong>{t("translate.translated")}</strong>
                     <p style={{ marginTop: "var(--space-1)", fontSize: "0.875rem" }}>{translatedText}</p>
                   </div>
+                </div>
+              )}
+              {aiTranslatedText && (
+                <div style={{ marginTop: "var(--space-2)", padding: "var(--space-3)", background: "var(--color-surface-alt)", borderRadius: "var(--radius-md)" }}>
+                  <strong>{t("llm.ai_result")}</strong>
+                  <p style={{ marginTop: "var(--space-1)", fontSize: "0.875rem" }}>{aiTranslatedText}</p>
+                  {aiTranslateProvider && <small style={{ color: "var(--color-text-muted)" }}>{t("llm.powered_by")} {aiTranslateProvider}</small>}
                 </div>
               )}
             </div>

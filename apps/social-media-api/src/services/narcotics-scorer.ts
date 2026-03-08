@@ -16,6 +16,7 @@ import { normalizeText, KNOWN_DRUG_TERMS } from "./text-normalizer";
 import { analyzeEmojis } from "./emoji-drug-decoder";
 import { detectTransactionSignals } from "./transaction-signal-detector";
 import { normalizeSlangCached, calculateSlangRiskBonus } from "./slang-normalizer";
+import { llmComplete } from "./llm-provider";
 
 export interface NarcoticsRiskFactor {
   factor: string;
@@ -242,6 +243,35 @@ export async function classifyNarcotics(
 
   // 6. Cap at 100
   narcoticsScore = Math.min(Math.round(narcoticsScore * 100) / 100, 100);
+
+  // 7. LLM enhancement for ambiguous scores (20-60 range)
+  if (narcoticsScore >= 20 && narcoticsScore <= 60) {
+    try {
+      const llmResult = await llmComplete({
+        messages: [{ role: "user", content: text }],
+        useCase: "NARCOTICS_ANALYSIS",
+      });
+
+      if (llmResult) {
+        const parsed = JSON.parse(llmResult.content);
+        const llmScore = typeof parsed.narcotics_score === "number" ? parsed.narcotics_score : 0;
+
+        if (llmScore > narcoticsScore) {
+          narcoticsScore = Math.min(llmScore, 100);
+          if (parsed.substance_category && !substanceCategory) {
+            substanceCategory = parsed.substance_category;
+          }
+          riskFactors.push({
+            factor: "llm_narcotics_analysis",
+            contribution: llmScore - narcoticsScore,
+            detail: `LLM analysis elevated score (${parsed.activity_type || "N/A"})`,
+          });
+        }
+      }
+    } catch {
+      // LLM failed — keep rule-based score
+    }
+  }
 
   return {
     narcoticsScore,

@@ -5,7 +5,10 @@ import { createRoleGuard } from "@puda/api-core";
 import { executeTransition } from "../workflow-bridge";
 import { getAvailableTransitions } from "../workflow-bridge/transitions";
 import { createPdfGenerator, createDocxGenerator } from "@puda/api-integrations";
+import type { ReportTemplate } from "@puda/api-integrations";
 import { generateAndLogWatermark } from "../services/watermark";
+import { interpolateTemplate } from "../services/template-interpolator";
+import { getMappings } from "../services/legal-mapper";
 
 const requireSupervisor = createRoleGuard(["SUPERVISOR", "PLATFORM_ADMINISTRATOR"]);
 
@@ -40,7 +43,22 @@ function buildReportTemplate(report: Record<string, any>) {
     sections.push({ type: "text" as const, title: "Conclusion", content: content.conclusion });
   }
 
-  const knownKeys = new Set(["summary", "alerts", "conclusion"]);
+  if (content.legal_provisions && Array.isArray(content.legal_provisions)) {
+    sections.push({
+      type: "table" as const,
+      title: "Applicable Legal Provisions",
+      headers: ["Act", "Section", "Offence", "Max Penalty", "Confidence"],
+      rows: content.legal_provisions.map((lp: any) => [
+        lp.act_name || "N/A",
+        lp.section || "N/A",
+        lp.description || "N/A",
+        lp.penalty_summary || "N/A",
+        lp.confidence != null ? `${lp.confidence}%` : "N/A",
+      ]),
+    });
+  }
+
+  const knownKeys = new Set(["summary", "alerts", "conclusion", "legal_provisions", "findings", "methodology", "recommendations", "evidence_items", "timeline"]);
   const extraKeys = Object.keys(content).filter((k) => !knownKeys.has(k));
   if (extraKeys.length > 0) {
     const extra = Object.fromEntries(extraKeys.map((k) => [k, content[k]]));
@@ -140,6 +158,199 @@ export async function registerReportRoutes(app: FastifyInstance): Promise<void> 
     }
   });
 
+  // PATCH /reports/:id — update report content (DRAFT state only)
+  app.patch("/api/v1/reports/:id", {
+    schema: {
+      params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } },
+      body: { type: "object", additionalProperties: false, properties: { content_jsonb: { type: "object" }, title: { type: "string" } } },
+    },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const { content_jsonb, title } = request.body as { content_jsonb?: Record<string, unknown>; title?: string };
+      const { userId } = request.authUser!;
+
+      const existing = await query(`SELECT state_id, template_id FROM report_instance WHERE report_id = $1`, [id]);
+      if (existing.rows.length === 0) return send404(reply, "REPORT_NOT_FOUND", "Report not found");
+      if (existing.rows[0].state_id !== "DRAFT") {
+        return sendError(reply, 409, "NOT_DRAFT", "Only DRAFT reports can be edited");
+      }
+
+      const updates: string[] = [];
+      const params: unknown[] = [];
+      let paramIdx = 1;
+
+      if (content_jsonb !== undefined) {
+        updates.push(`content_jsonb = $${paramIdx++}`);
+        params.push(JSON.stringify(content_jsonb));
+      }
+      if (title !== undefined) {
+        updates.push(`title = $${paramIdx++}`);
+        params.push(title);
+      }
+      if (updates.length === 0) {
+        return sendError(reply, 400, "NO_CHANGES", "No fields to update");
+      }
+      updates.push(`updated_at = NOW()`);
+      params.push(id);
+
+      const result = await query(
+        `UPDATE report_instance SET ${updates.join(", ")} WHERE report_id = $${paramIdx}
+         RETURNING report_id, report_ref, title, content_jsonb, state_id, updated_at`,
+        params,
+      );
+
+      // Audit log
+      await query(
+        `INSERT INTO audit_log (user_id, action, entity_type, entity_id, details)
+         VALUES ($1, 'REPORT_CONTENT_UPDATED', 'report_instance', $2, $3)`,
+        [userId, id, JSON.stringify({ fields: Object.keys(request.body as Record<string, unknown>) })],
+      ).catch(() => {});
+
+      return { report: result.rows[0] };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to update report");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  // POST /reports/:id/populate — auto-populate report content from linked case data
+  app.post("/api/v1/reports/:id/populate", {
+    schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+
+      const reportRes = await query(
+        `SELECT report_id, case_id, template_id, state_id, content_jsonb, created_by, report_ref
+         FROM report_instance WHERE report_id = $1`,
+        [id],
+      );
+      if (reportRes.rows.length === 0) return send404(reply, "REPORT_NOT_FOUND", "Report not found");
+      const report = reportRes.rows[0];
+
+      if (report.state_id !== "DRAFT") {
+        return sendError(reply, 409, "NOT_DRAFT", "Only DRAFT reports can be populated");
+      }
+
+      const caseId = report.case_id;
+      const content: Record<string, unknown> = report.content_jsonb || {};
+
+      // Gather evidence items linked to the case
+      const evidenceRes = await query(
+        `SELECT evidence_id, evidence_ref, hash_sha256, capture_timestamp, source_platform, source_url, description
+         FROM evidence_item WHERE case_id = $1 ORDER BY capture_timestamp DESC`,
+        [caseId],
+      );
+      if (evidenceRes.rows.length > 0) {
+        content.evidence_items = evidenceRes.rows.map((e: any) => ({
+          evidence_ref: e.evidence_ref || e.evidence_id,
+          hash_sha256: e.hash_sha256 || "N/A",
+          platform: e.source_platform || "N/A",
+          capture_date: e.capture_timestamp ? new Date(e.capture_timestamp).toISOString().split("T")[0] : "N/A",
+          source_url: e.source_url || "",
+          description: e.description || "",
+        }));
+      }
+
+      // Gather alerts linked to the case
+      const alertRes = await query(
+        `SELECT alert_id, title, priority, state_id, created_at
+         FROM sm_alert WHERE case_id = $1 ORDER BY created_at DESC`,
+        [caseId],
+      );
+      if (alertRes.rows.length > 0) {
+        content.alerts = alertRes.rows.map((a: any) => ({
+          title: a.title,
+          priority: a.priority,
+          state_id: a.state_id,
+        }));
+      }
+
+      // Gather legal entity mappings for the case
+      const legalRes = await query(
+        `SELECT lm.confidence, lm.mapping_source, lm.confirmed,
+                sl.act_name, sl.section, sl.description, sl.penalty_summary
+         FROM legal_mapping lm
+         JOIN statute_library sl ON sl.statute_id = lm.statute_id
+         WHERE lm.entity_type = 'case_record' AND lm.entity_id = $1
+         ORDER BY lm.confidence DESC`,
+        [caseId],
+      );
+      if (legalRes.rows.length > 0) {
+        content.legal_provisions = legalRes.rows;
+      }
+
+      // Gather timeline from content items
+      const timelineRes = await query(
+        `SELECT content_id, platform, content_text, threat_score, published_at
+         FROM content_item WHERE content_id IN (
+           SELECT content_id FROM sm_alert WHERE case_id = $1
+         ) ORDER BY published_at ASC`,
+        [caseId],
+      );
+      if (timelineRes.rows.length > 0) {
+        content.timeline = timelineRes.rows.map((c: any) => ({
+          date: c.published_at ? new Date(c.published_at).toISOString() : "N/A",
+          platform: c.platform,
+          snippet: (c.content_text || "").slice(0, 200),
+          threat_score: c.threat_score,
+        }));
+      }
+
+      // If template_id is set, try to interpolate template placeholders
+      if (report.template_id) {
+        const tmplRes = await query(
+          `SELECT content_jsonb FROM report_template WHERE template_id = $1`,
+          [report.template_id],
+        );
+        if (tmplRes.rows.length > 0 && tmplRes.rows[0].content_jsonb) {
+          const tmplContent = tmplRes.rows[0].content_jsonb;
+          // Build variables from gathered data
+          const vars: Record<string, string> = {
+            case_number: caseId,
+            case_title: content.summary as string || "",
+            report_ref: report.report_ref || "",
+            report_date: new Date().toISOString().split("T")[0],
+            officer_name: report.created_by || "",
+          };
+          try {
+            const interpolated = interpolateTemplate(tmplContent as ReportTemplate, vars);
+            content._template_interpolated = interpolated;
+          } catch { /* template interpolation is best-effort */ }
+        }
+      }
+
+      await query(
+        `UPDATE report_instance SET content_jsonb = $1, updated_at = NOW() WHERE report_id = $2`,
+        [JSON.stringify(content), id],
+      );
+
+      return { report: { report_id: id, content_jsonb: content }, populated: true };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to populate report");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  // GET /reports/:id/legal-mappings — legal provisions linked to the report's case
+  app.get("/api/v1/reports/:id/legal-mappings", {
+    schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const reportRes = await query(`SELECT case_id FROM report_instance WHERE report_id = $1`, [id]);
+      if (reportRes.rows.length === 0) return send404(reply, "REPORT_NOT_FOUND", "Report not found");
+      const mappings = await getMappings("case_record", reportRes.rows[0].case_id);
+      return { mappings };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to get legal mappings");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  // report-template routes are in report-template.routes.ts
+
   app.get("/api/v1/reports/:id/transitions", {
     schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
   }, async (request, reply) => {
@@ -185,8 +396,36 @@ export async function registerReportRoutes(app: FastifyInstance): Promise<void> 
       const { userId } = request.authUser!;
       const watermarkText = await generateAndLogWatermark(userId, "sm_report", id, `REPORT_EXPORT_${format.toUpperCase()}`);
 
-      // Set watermark on the template
-      const template = buildReportTemplate(report);
+      // Template-driven export: if report has a template_id, use its structure
+      let template: ReportTemplate & { watermark?: string };
+      if (report.template_id) {
+        const tmplRes = await query(`SELECT content_jsonb FROM report_template WHERE template_id = $1`, [report.template_id]);
+        if (tmplRes.rows.length > 0 && tmplRes.rows[0].content_jsonb) {
+          const tmplContent = tmplRes.rows[0].content_jsonb as ReportTemplate;
+          const vars: Record<string, string> = {
+            report_ref: report.report_ref || "",
+            report_date: new Date().toISOString().split("T")[0],
+            officer_name: report.created_by || "",
+          };
+          // Merge any content_jsonb string fields as template variables
+          const content = report.content_jsonb || {};
+          for (const [k, v] of Object.entries(content)) {
+            if (typeof v === "string") vars[k] = v;
+          }
+          template = interpolateTemplate(tmplContent, vars);
+          // Add populated data sections from content_jsonb
+          const fallback = buildReportTemplate(report);
+          for (const sec of fallback.sections) {
+            if (sec.title && !template.sections.some((s) => s.title === sec.title)) {
+              template.sections.push(sec);
+            }
+          }
+        } else {
+          template = buildReportTemplate(report);
+        }
+      } else {
+        template = buildReportTemplate(report);
+      }
       template.watermark = watermarkText;
 
       // Record export timestamp

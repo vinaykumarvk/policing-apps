@@ -22,6 +22,9 @@ export default function CaseDetail({ id, authHeaders, isOffline, onBack }: Props
   const [classification, setClassification] = useState<any>(null);
   const [classifyLoading, setClassifyLoading] = useState(false);
   const [legalMappings, setLegalMappings] = useState<any[]>([]);
+  const [generatingSummary, setGeneratingSummary] = useState(false);
+  const [investigationSummary, setInvestigationSummary] = useState<string | null>(null);
+  const [summaryProvider, setSummaryProvider] = useState<string | null>(null);
 
   const fetchTransitions = () => {
     fetch(`${apiBaseUrl}/api/v1/cases/${id}/transitions`, authHeaders())
@@ -78,6 +81,23 @@ export default function CaseDetail({ id, authHeaders, isOffline, onBack }: Props
       }
     } catch { /* silent */ }
     setClassifyLoading(false);
+  };
+
+  const handleGenerateSummary = async () => {
+    setGeneratingSummary(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/v1/llm/investigation-summary`, {
+        ...authHeaders(), method: "POST",
+        body: JSON.stringify({ entity_type: "case", entity_id: id, text: caseData?.description || "" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setInvestigationSummary(data.summary || data.content);
+        setSummaryProvider(data.provider || null);
+        showToast("success", t("llm.summary_generated"));
+      }
+    } catch { showToast("error", t("common.error")); }
+    setGeneratingSummary(false);
   };
 
   const handleTransition = async () => {
@@ -174,6 +194,19 @@ export default function CaseDetail({ id, authHeaders, isOffline, onBack }: Props
                 </div>
               </div>
             )}
+            <div className="detail-section">
+              <h3 className="detail-section__title">{t("llm.investigation_summary")}</h3>
+              <Button onClick={handleGenerateSummary} disabled={isOffline || generatingSummary} variant="secondary">
+                {generatingSummary ? t("llm.generating_summary") : t("llm.investigation_summary")}
+              </Button>
+              {investigationSummary && (
+                <div style={{ marginTop: "var(--space-2)", padding: "var(--space-3)", background: "var(--color-surface-alt)", borderRadius: "var(--radius-md)" }}>
+                  <strong>{t("llm.ai_result")}</strong>
+                  <p style={{ marginTop: "var(--space-1)", fontSize: "0.875rem", whiteSpace: "pre-wrap" }}>{investigationSummary}</p>
+                  {summaryProvider && <small style={{ color: "var(--color-text-muted)" }}>{t("llm.powered_by")} {summaryProvider}</small>}
+                </div>
+              )}
+            </div>
           </>
         )},
         { key: "notes", label: t("detail.tab_notes"), content: (

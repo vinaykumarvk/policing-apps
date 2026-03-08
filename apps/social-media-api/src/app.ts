@@ -45,6 +45,7 @@ import { registerEscalationRoutes } from "./routes/escalation.routes";
 import { registerPrivacyRoutes } from "./routes/privacy.routes";
 import { registerEarlyWarningRoutes } from "./routes/early-warning.routes";
 import { registerPlatformCooperationRoutes } from "./routes/platform-cooperation.routes";
+import { registerLlmRoutes } from "./routes/llm.routes";
 import { createOidcAuth, createOidcRoutes, createAuthMiddleware, createConfigGovernanceRoutes, createIdempotencyMiddleware, createLdapAuth, createAuthRoutes as createSharedAuthRoutes } from "@puda/api-core";
 import { query } from "./db";
 
@@ -247,6 +248,7 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
   await registerPrivacyRoutes(app);
   await registerEarlyWarningRoutes(app);
   await registerPlatformCooperationRoutes(app);
+  await registerLlmRoutes(app);
 
   // Config governance routes
   const registerConfigGovernanceRoutes = createConfigGovernanceRoutes({ queryFn: query });
