@@ -42,6 +42,11 @@ const PlatformCooperation = lazy(() => import("./views/PlatformCooperation"));
 const ReportEditor = lazy(() => import("./views/ReportEditor"));
 const TemplateAdmin = lazy(() => import("./views/TemplateAdmin"));
 const LegalRuleAdmin = lazy(() => import("./views/LegalRuleAdmin"));
+const ControlRoomDashboard = lazy(() => import("./views/ControlRoomDashboard"));
+const LeadershipDashboard = lazy(() => import("./views/LeadershipDashboard"));
+const GeoDashboard = lazy(() => import("./views/GeoDashboard"));
+const SupervisorDashboard = lazy(() => import("./views/SupervisorDashboard"));
+const PendencyDashboard = lazy(() => import("./views/PendencyDashboard"));
 
 type View =
   | "dashboard" | "alerts" | "alert-detail"
@@ -54,7 +59,9 @@ type View =
   | "monitoring-config"
   | "escalation-queue" | "sla-dashboard" | "supervisor-audit"
   | "early-warning" | "platform-cooperation"
-  | "report-editor" | "template-admin" | "legal-rules";
+  | "report-editor" | "template-admin" | "legal-rules"
+  | "control-room-dashboard" | "leadership-dashboard" | "geo-dashboard"
+  | "supervisor-dashboard" | "pendency-dashboard";
 
 const VALID_VIEWS = [
   "", "dashboard", "alerts", "cases", "content", "evidence", "watchlists", "reports", "inbox",
@@ -62,6 +69,8 @@ const VALID_VIEWS = [
   "settings", "admin", "slang-admin", "detection-dictionary", "audit-log", "monitoring-config",
   "escalation-queue", "sla-dashboard", "supervisor-audit", "early-warning", "platform-cooperation",
   "report-editor", "template-admin", "legal-rules",
+  "control-room-dashboard", "leadership-dashboard", "geo-dashboard",
+  "supervisor-dashboard", "pendency-dashboard",
 ] as const;
 
 const NAV_ITEMS: { view: View; key: string; icon: string }[] = [
@@ -212,6 +221,11 @@ export default function App() {
     if (view === "report-editor" && resourceId) return buildHash("report-editor", resourceId);
     if (view === "template-admin") return buildHash("template-admin");
     if (view === "legal-rules") return buildHash("legal-rules");
+    if (view === "control-room-dashboard") return buildHash("control-room-dashboard");
+    if (view === "leadership-dashboard") return buildHash("leadership-dashboard");
+    if (view === "geo-dashboard") return buildHash("geo-dashboard");
+    if (view === "supervisor-dashboard") return buildHash("supervisor-dashboard");
+    if (view === "pendency-dashboard") return buildHash("pendency-dashboard");
     return buildHash("dashboard");
   }, [view, resourceId]);
 
@@ -228,7 +242,7 @@ export default function App() {
       const dm: Record<string, View> = { alerts: "alert-detail", cases: "case-detail", content: "content-detail", evidence: "evidence-detail", reports: "report-detail", "report-editor": "report-editor" };
       if (dm[v]) { setView(dm[v]); setResourceId(parsed.resourceId); return; }
     }
-    const sm: Record<string, View> = { dashboard: "dashboard", alerts: "alerts", cases: "cases", content: "content", watchlists: "watchlists", inbox: "inbox", "query-assistant": "query-assistant", "network-graph": "network-graph", "model-admin": "model-admin", settings: "settings", admin: "admin", "slang-admin": "slang-admin", "detection-dictionary": "detection-dictionary", "audit-log": "audit-log", "monitoring-config": "monitoring-config", "escalation-queue": "escalation-queue", "sla-dashboard": "sla-dashboard", "supervisor-audit": "supervisor-audit", "early-warning": "early-warning", "platform-cooperation": "platform-cooperation", "template-admin": "template-admin", "legal-rules": "legal-rules" };
+    const sm: Record<string, View> = { dashboard: "dashboard", alerts: "alerts", cases: "cases", content: "content", watchlists: "watchlists", inbox: "inbox", "query-assistant": "query-assistant", "network-graph": "network-graph", "model-admin": "model-admin", settings: "settings", admin: "admin", "slang-admin": "slang-admin", "detection-dictionary": "detection-dictionary", "audit-log": "audit-log", "monitoring-config": "monitoring-config", "escalation-queue": "escalation-queue", "sla-dashboard": "sla-dashboard", "supervisor-audit": "supervisor-audit", "early-warning": "early-warning", "platform-cooperation": "platform-cooperation", "template-admin": "template-admin", "legal-rules": "legal-rules", "control-room-dashboard": "control-room-dashboard", "leadership-dashboard": "leadership-dashboard", "geo-dashboard": "geo-dashboard", "supervisor-dashboard": "supervisor-dashboard", "pendency-dashboard": "pendency-dashboard" };
     setView(sm[v] || "dashboard");
   }, [auth]);
 
@@ -242,7 +256,7 @@ export default function App() {
         const dm: Record<string, View> = { alerts: "alert-detail", cases: "case-detail", content: "content-detail", evidence: "evidence-detail", reports: "report-detail", "report-editor": "report-editor" };
         if (dm[v]) { setView(dm[v]); setResourceId(parsed.resourceId); return; }
       }
-      const sm: Record<string, View> = { dashboard: "dashboard", alerts: "alerts", cases: "cases", content: "content", watchlists: "watchlists", inbox: "inbox", "query-assistant": "query-assistant", "network-graph": "network-graph", "model-admin": "model-admin", settings: "settings", admin: "admin", "slang-admin": "slang-admin", "detection-dictionary": "detection-dictionary", "audit-log": "audit-log", "monitoring-config": "monitoring-config", "escalation-queue": "escalation-queue", "sla-dashboard": "sla-dashboard", "supervisor-audit": "supervisor-audit", "early-warning": "early-warning", "platform-cooperation": "platform-cooperation", "template-admin": "template-admin", "legal-rules": "legal-rules" };
+      const sm: Record<string, View> = { dashboard: "dashboard", alerts: "alerts", cases: "cases", content: "content", watchlists: "watchlists", inbox: "inbox", "query-assistant": "query-assistant", "network-graph": "network-graph", "model-admin": "model-admin", settings: "settings", admin: "admin", "slang-admin": "slang-admin", "detection-dictionary": "detection-dictionary", "audit-log": "audit-log", "monitoring-config": "monitoring-config", "escalation-queue": "escalation-queue", "sla-dashboard": "sla-dashboard", "supervisor-audit": "supervisor-audit", "early-warning": "early-warning", "platform-cooperation": "platform-cooperation", "template-admin": "template-admin", "legal-rules": "legal-rules", "control-room-dashboard": "control-room-dashboard", "leadership-dashboard": "leadership-dashboard", "geo-dashboard": "geo-dashboard", "supervisor-dashboard": "supervisor-dashboard", "pendency-dashboard": "pendency-dashboard" };
       setView(sm[v] || "dashboard"); setResourceId(null);
     };
     window.addEventListener("popstate", handle);
@@ -351,6 +365,31 @@ export default function App() {
             <span>{t("nav.platform_cooperation")}</span>
           </button>
         </li>
+        <li className="sidebar__divider" role="separator" aria-hidden="true" />
+        <li>
+          <button className={`sidebar__item ${view === "control-room-dashboard" ? "sidebar__item--active" : ""}`} onClick={() => navigate("control-room-dashboard")} title={t("nav.control_room")} type="button">
+            <span className="sidebar__item-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+            <span>{t("nav.control_room")}</span>
+          </button>
+        </li>
+        <li>
+          <button className={`sidebar__item ${view === "leadership-dashboard" ? "sidebar__item--active" : ""}`} onClick={() => navigate("leadership-dashboard")} title={t("nav.leadership")} type="button">
+            <span className="sidebar__item-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
+            <span>{t("nav.leadership")}</span>
+          </button>
+        </li>
+        <li>
+          <button className={`sidebar__item ${view === "geo-dashboard" ? "sidebar__item--active" : ""}`} onClick={() => navigate("geo-dashboard")} title={t("nav.geo_dashboard")} type="button">
+            <span className="sidebar__item-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="10" r="3"/><path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 1 0-16 0c0 3 2.7 7 8 11.7z"/></svg></span>
+            <span>{t("nav.geo_dashboard")}</span>
+          </button>
+        </li>
+        <li>
+          <button className={`sidebar__item ${view === "pendency-dashboard" ? "sidebar__item--active" : ""}`} onClick={() => navigate("pendency-dashboard")} title={t("nav.pendency")} type="button">
+            <span className="sidebar__item-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+            <span>{t("nav.pendency")}</span>
+          </button>
+        </li>
         <li className="sidebar__divider" role="separator" />
         <li>
           <button className={`sidebar__item ${view === "settings" ? "sidebar__item--active" : ""}`} onClick={() => navigate("settings")} title={t("nav.settings")} type="button">
@@ -406,6 +445,12 @@ export default function App() {
             <button className={`sidebar__item ${view === "template-admin" ? "sidebar__item--active" : ""}`} onClick={() => navigate("template-admin")} title={t("nav.template_admin")} type="button">
               <span className="sidebar__item-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg></span>
               <span>{t("nav.template_admin")}</span>
+            </button>
+          </li>
+          <li>
+            <button className={`sidebar__item ${view === "supervisor-dashboard" ? "sidebar__item--active" : ""}`} onClick={() => navigate("supervisor-dashboard")} title={t("nav.supervisor_dashboard")} type="button">
+              <span className="sidebar__item-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+              <span>{t("nav.supervisor_dashboard")}</span>
             </button>
           </li>
           <li>
@@ -527,7 +572,10 @@ export default function App() {
               {view === "alerts" && <AlertList authHeaders={authHeaders} isOffline={isOffline} onSelect={(id) => navigate("alert-detail", id)} />}
               {view === "alert-detail" && resourceId && <AlertDetail id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => navigate("alerts")} />}
               {view === "cases" && <CaseList authHeaders={authHeaders} isOffline={isOffline} onSelect={(id) => navigate("case-detail", id)} />}
-              {view === "case-detail" && resourceId && <CaseDetail id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => navigate("cases")} />}
+              {view === "case-detail" && resourceId && <CaseDetail id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => navigate("cases")} onNavigate={(entityType, entityId) => {
+                if (entityType === "alert") navigate("alert-detail", entityId);
+                if (entityType === "content") navigate("content-detail", entityId);
+              }} />}
               {view === "content" && <ContentList authHeaders={authHeaders} isOffline={isOffline} onSelect={(id) => navigate("content-detail", id)} />}
               {view === "content-detail" && resourceId && <ContentDetail id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => navigate("content")} />}
               {view === "evidence-detail" && resourceId && <EvidenceDetail id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => window.history.back()} />}
@@ -551,6 +599,11 @@ export default function App() {
               {view === "report-editor" && resourceId && <ReportEditor id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => navigate("report-detail", resourceId)} />}
               {view === "template-admin" && <TemplateAdmin authHeaders={authHeaders} isOffline={isOffline} />}
               {view === "legal-rules" && <LegalRuleAdmin authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "control-room-dashboard" && <ControlRoomDashboard authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
+              {view === "leadership-dashboard" && <LeadershipDashboard authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
+              {view === "geo-dashboard" && <GeoDashboard authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
+              {view === "supervisor-dashboard" && <SupervisorDashboard authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
+              {view === "pendency-dashboard" && <PendencyDashboard authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
             </Suspense>
           </main>
         </div>

@@ -1,61 +1,112 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert } from "@puda/shared";
 import { apiBaseUrl } from "../types";
-
-type AlertByState = { state_id: string; count: number };
-type RecentAlert = { alert_id: string; title: string; priority: string; state_id: string; created_at: string };
-
-type RetentionStats = { totalPolicies: number; nearingExpiry: number; expired: number; legalHolds: number };
-
-type DashboardStats = {
-  alertsByState: AlertByState[];
-  totalCases: number;
-  totalContent: number;
-  activeWatchlists: number;
-  recentAlerts: RecentAlert[];
-};
+import DashboardFilters, { FilterState, defaultFilters } from "../components/DashboardFilters";
+import { TrendLineChart, DonutChart, FunnelChart, Sparkline, HeatMapGrid, GaugeChart } from "../charts";
 
 type Props = { authHeaders: () => Record<string, string>; isOffline: boolean; onNavigate: (view: string) => void };
 
-const STATE_COLORS: Record<string, string> = {
-  NEW: "var(--color-state-open)",
-  OPEN: "var(--color-state-pending)",
-  IN_PROGRESS: "var(--color-brand)",
-  ESCALATED: "var(--color-state-critical)",
-  RESOLVED: "var(--color-state-active)",
-  CLOSED: "var(--color-state-closed)",
+type Analytics = {
+  alertTrends: { bucket: string; priority: string; count: number }[];
+  caseStages: { state_id: string; count: number; avg_hours: number }[];
+  alertStages: { state_id: string; count: number; avg_hours: number }[];
+  platformDistribution: { platform: string; count: number }[];
+  categoryDistribution: { category: string; count: number }[];
+  districtComparison: { district: string; unit_id: string; alert_count: number; case_count: number; breached: number }[];
+  topActors: { actor_id: string; canonical_name: string; display_name: string; risk_score: number; total_flagged_posts: number; is_repeat_offender: boolean }[];
+  sla: { on_track: number; at_risk: number; breached: number };
+  conversion: { total_alerts: number; converted: number };
+  avgResolutionHours: number;
 };
+
+type HeatmapData = { districts: string[]; categories: string[]; values: number[][] };
+
+type RecentAlert = { alert_id: string; title: string; priority: string; state_id: string; created_at: string };
+
+const PRIORITY_COLORS: Record<string, string> = {
+  CRITICAL: "#dc2626", HIGH: "#ef4444", MEDIUM: "#f59e0b", LOW: "#3b82f6",
+};
+
+const STAGE_COLORS: Record<string, string> = {
+  NEW: "#3b82f6", TRIAGED: "#8b5cf6", INVESTIGATING: "#f59e0b", ESCALATED: "#ef4444",
+  CONVERTED_TO_CASE: "#10b981", IN_REVIEW: "#06b6d4",
+  ASSIGNED: "#8b5cf6", UNDER_INVESTIGATION: "#f59e0b", PENDING_REVIEW: "#06b6d4",
+};
+
+const PLATFORM_COLORS: Record<string, string> = {
+  Twitter: "#1da1f2", Facebook: "#1877f2", Instagram: "#e4405f",
+  Telegram: "#0088cc", YouTube: "#ff0000", WhatsApp: "#25d366",
+};
+
+function pivotTrends(rows: { bucket: string; priority: string; count: number }[]) {
+  const byBucket = new Map<string, Record<string, number>>();
+  for (const r of rows) {
+    const key = r.bucket?.slice(0, 10) || "";
+    if (!byBucket.has(key)) byBucket.set(key, {});
+    byBucket.get(key)![r.priority] = r.count;
+  }
+  return [...byBucket.entries()].map(([bucket, vals]) => ({ bucket, ...vals }));
+}
 
 export default function Dashboard({ authHeaders, isOffline, onNavigate }: Props) {
   const { t } = useTranslation();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [filters, setFilters] = useState<FilterState>(defaultFilters);
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [heatmap, setHeatmap] = useState<HeatmapData | null>(null);
+  const [recentAlerts, setRecentAlerts] = useState<RecentAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [retention, setRetention] = useState<RetentionStats | null>(null);
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     if (isOffline) { setLoading(false); return; }
-    fetch(`${apiBaseUrl}/api/v1/dashboard/stats`, authHeaders())
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
+    setLoading(true);
+    setError(null);
+    const params = new URLSearchParams({ dateFrom: filters.dateFrom, dateTo: filters.dateTo, granularity: filters.granularity });
+    if (filters.district) params.set("district", filters.district);
+    if (filters.priority) params.set("priority", filters.priority);
+
+    Promise.all([
+      fetch(`${apiBaseUrl}/api/v1/dashboard/analytics?${params}`, authHeaders()).then(r => r.ok ? r.json() : null),
+      fetch(`${apiBaseUrl}/api/v1/dashboard/heatmap?dateFrom=${filters.dateFrom}`, authHeaders()).then(r => r.ok ? r.json() : null),
+      fetch(`${apiBaseUrl}/api/v1/dashboard/stats?dateFrom=${filters.dateFrom}&dateTo=${filters.dateTo}`, authHeaders()).then(r => r.ok ? r.json() : null),
+    ])
+      .then(([analyticsData, heatmapData, statsData]) => {
+        if (analyticsData) setAnalytics(analyticsData);
+        if (heatmapData) setHeatmap(heatmapData);
+        setRecentAlerts(statsData?.recentAlerts || []);
       })
-      .then((data: DashboardStats) => setStats(data))
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load dashboard"))
+      .catch(err => setError(err instanceof Error ? err.message : "Failed to load dashboard"))
       .finally(() => setLoading(false));
-    fetch(`${apiBaseUrl}/api/v1/evidence/dashboard/retention`, authHeaders())
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => { if (data) setRetention(data); })
-      .catch(() => {});
-  }, [authHeaders, isOffline]);
+  }, [authHeaders, isOffline, filters]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   if (loading) return <div className="loading-center">{t("common.loading")}</div>;
 
-  const alertsByState = stats?.alertsByState || [];
-  const maxAlertCount = Math.max(1, ...alertsByState.map((s) => s.count));
-  const totalAlerts = alertsByState.reduce((sum, s) => sum + s.count, 0);
-  const recentAlerts = stats?.recentAlerts || [];
+  const slaTotal = analytics ? analytics.sla.on_track + analytics.sla.at_risk + analytics.sla.breached : 0;
+  const slaPct = slaTotal > 0 ? Math.round((analytics!.sla.on_track / slaTotal) * 100) : 0;
+  const convPct = analytics?.conversion.total_alerts ? Math.round((analytics.conversion.converted / analytics.conversion.total_alerts) * 100) : 0;
+  const totalOpenAlerts = analytics?.alertStages.reduce((s, st) => s + st.count, 0) || 0;
+  const totalOpenCases = analytics?.caseStages.reduce((s, st) => s + st.count, 0) || 0;
+
+  const trendData = analytics ? pivotTrends(analytics.alertTrends) : [];
+  const trendSeries = Object.keys(PRIORITY_COLORS).map(p => ({ key: p, color: PRIORITY_COLORS[p], label: p }));
+
+  const platformData = (analytics?.platformDistribution || []).map(p => ({
+    name: p.platform || "Unknown", value: p.count, color: PLATFORM_COLORS[p.platform] || "#6b7280",
+  }));
+
+  const alertFunnel = (analytics?.alertStages || []).map(s => ({
+    label: s.state_id.replace(/_/g, " "), count: s.count, color: STAGE_COLORS[s.state_id] || "#6b7280", avgHours: parseFloat(String(s.avg_hours)) || 0,
+  }));
+
+  const caseFunnel = (analytics?.caseStages || []).map(s => ({
+    label: s.state_id.replace(/_/g, " "), count: s.count, color: STAGE_COLORS[s.state_id] || "#6b7280", avgHours: parseFloat(String(s.avg_hours)) || 0,
+  }));
+
+  // Sparkline data from trends — aggregate by bucket
+  const alertSparkline = trendData.map(d => Object.values(d).reduce((sum, v) => sum + (typeof v === "number" ? v : 0), 0));
 
   return (
     <>
@@ -63,105 +114,177 @@ export default function Dashboard({ authHeaders, isOffline, onNavigate }: Props)
         <h1>{t("app.page_dashboard")}</h1>
         <p className="subtitle">{t("app.subtitle")}</p>
       </div>
+
       {error && <Alert variant="error">{error}</Alert>}
-      <div className="dashboard-grid">
+
+      {/* Row 1: Filters */}
+      <DashboardFilters value={filters} onChange={setFilters} authHeaders={authHeaders} showGranularity />
+
+      {/* Row 2: KPI Cards */}
+      <div className="kpi-grid" style={{ marginBottom: "var(--space-4)" }}>
         <button type="button" className="stat-card stat-card--clickable" onClick={() => onNavigate("alerts")}>
           <p className="stat-card__label">{t("dashboard.alert_queue")}</p>
-          <p className="stat-card__value">{totalAlerts}</p>
+          <p className="stat-card__value">{totalOpenAlerts}</p>
+          <div className="stat-card__trend">
+            <Sparkline data={alertSparkline} color="#3b82f6" />
+          </div>
         </button>
+
         <button type="button" className="stat-card stat-card--clickable" onClick={() => onNavigate("cases")}>
           <p className="stat-card__label">{t("dashboard.open_cases")}</p>
-          <p className="stat-card__value">{stats?.totalCases ?? 0}</p>
+          <p className="stat-card__value">{totalOpenCases}</p>
         </button>
-        <button type="button" className="stat-card stat-card--clickable" onClick={() => onNavigate("content")}>
-          <p className="stat-card__label">{t("dashboard.content_volume")}</p>
-          <p className="stat-card__value">{stats?.totalContent ?? 0}</p>
-        </button>
-        <button type="button" className="stat-card stat-card--clickable" onClick={() => onNavigate("watchlists")}>
-          <p className="stat-card__label">{t("dashboard.active_watchlists")}</p>
-          <p className="stat-card__value">{stats?.activeWatchlists ?? 0}</p>
-        </button>
+
+        <div className="stat-card">
+          <p className="stat-card__label">{t("dashboard.sla_compliance")}</p>
+          <p className="stat-card__value" style={{ color: slaPct >= 80 ? "var(--color-success)" : slaPct >= 60 ? "var(--color-warning)" : "var(--color-danger)" }}>
+            {slaPct}%
+          </p>
+        </div>
+
+        <div className="stat-card">
+          <p className="stat-card__label">{t("dashboard.conversion_rate")}</p>
+          <p className="stat-card__value">{convPct}%</p>
+        </div>
+
+        <div className="stat-card">
+          <p className="stat-card__label">{t("dashboard.avg_resolution")}</p>
+          <p className="stat-card__value">{analytics?.avgResolutionHours?.toFixed(1) || "—"}h</p>
+        </div>
+
+        <div className="stat-card">
+          <p className="stat-card__label">{t("dashboard.active_investigations")}</p>
+          <p className="stat-card__value">{analytics?.caseStages.find(s => s.state_id === "UNDER_INVESTIGATION")?.count || 0}</p>
+        </div>
       </div>
 
-      {retention && (
-        <div className="detail-section" style={{ marginTop: "var(--space-5)" }}>
-          <h2 className="detail-section__title">{t("dashboard.retention_status")}</h2>
-          <div className="dashboard-grid">
-            <div className="stat-card">
-              <p className="stat-card__label">{t("dashboard.retention_policies")}</p>
-              <p className="stat-card__value">{retention.totalPolicies}</p>
-            </div>
-            <div className="stat-card">
-              <p className="stat-card__label">{t("dashboard.nearing_expiry")}</p>
-              <p className="stat-card__value" style={{ color: retention.nearingExpiry > 0 ? "var(--color-state-critical)" : undefined }}>{retention.nearingExpiry}</p>
-            </div>
-            <div className="stat-card">
-              <p className="stat-card__label">{t("dashboard.expired_items")}</p>
-              <p className="stat-card__value">{retention.expired}</p>
-            </div>
-            <div className="stat-card">
-              <p className="stat-card__label">{t("dashboard.legal_holds")}</p>
-              <p className="stat-card__value">{retention.legalHolds}</p>
-            </div>
+      {/* Row 3: Trend Charts (2-column) */}
+      <div className="dashboard-row dashboard-row--2col">
+        <div className="chart-section">
+          <h2 className="chart-section__title">{t("dashboard.alert_volume_trend")}</h2>
+          <TrendLineChart data={trendData} series={trendSeries} areaFill height={260} />
+        </div>
+        <div className="chart-section">
+          <h2 className="chart-section__title">{t("dashboard.platform_distribution")}</h2>
+          <DonutChart data={platformData} />
+        </div>
+      </div>
+
+      {/* Row 4: Stage Distribution (2-column) */}
+      <div className="dashboard-row dashboard-row--2col">
+        <div className="chart-section">
+          <h2 className="chart-section__title">{t("dashboard.alert_pipeline")}</h2>
+          <FunnelChart stages={alertFunnel} />
+        </div>
+        <div className="chart-section">
+          <h2 className="chart-section__title">{t("dashboard.case_pipeline")}</h2>
+          <FunnelChart stages={caseFunnel} />
+        </div>
+      </div>
+
+      {/* Row 5: District Comparison */}
+      {analytics && analytics.districtComparison.length > 0 && (
+        <div className="chart-section" style={{ marginBottom: "var(--space-4)" }}>
+          <h2 className="chart-section__title">{t("dashboard.district_comparison")}</h2>
+          <div className="table-scroll">
+            <table className="entity-table entity-table--compact">
+              <thead>
+                <tr>
+                  <th>{t("dashboard.district")}</th>
+                  <th>{t("dashboard.alerts")}</th>
+                  <th>{t("dashboard.cases_col")}</th>
+                  <th>{t("dashboard.breached_col")}</th>
+                  <th>{t("dashboard.sla_col")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analytics.districtComparison.slice(0, 10).map(d => {
+                  const dTotal = d.alert_count || 1;
+                  const dSlaPct = Math.round(((dTotal - d.breached) / dTotal) * 100);
+                  return (
+                    <tr key={d.unit_id}>
+                      <td data-label={t("dashboard.district")}>{d.district}</td>
+                      <td data-label={t("dashboard.alerts")}>{d.alert_count}</td>
+                      <td data-label={t("dashboard.cases_col")}>{d.case_count}</td>
+                      <td data-label={t("dashboard.breached_col")}>
+                        <span className={d.breached > 0 ? "badge badge--critical" : "badge badge--success"}>{d.breached}</span>
+                      </td>
+                      <td data-label={t("dashboard.sla_col")}>
+                        <span style={{ color: dSlaPct >= 80 ? "var(--color-success)" : dSlaPct >= 60 ? "var(--color-warning)" : "var(--color-danger)", fontWeight: 700 }}>
+                          {dSlaPct}%
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {alertsByState.length > 0 && (
-        <div className="detail-section" style={{ marginTop: "var(--space-5)" }}>
-          <h2 className="detail-section__title">{t("dashboard.alerts_by_state")}</h2>
-          <div className="chart-bar-group">
-            {alertsByState.map((s) => (
-              <div className="chart-bar" key={s.state_id}>
-                <span className="chart-bar__label">{s.state_id}</span>
-                <div className="chart-bar__track">
-                  <div
-                    className="chart-bar__fill"
-                    style={{
-                      width: `${(s.count / maxAlertCount) * 100}%`,
-                      background: STATE_COLORS[s.state_id] || "var(--color-text-muted)",
-                    }}
-                  />
+      {/* Row 6: Category Heat Map */}
+      {heatmap && heatmap.districts.length > 0 && (
+        <div className="chart-section" style={{ marginBottom: "var(--space-4)" }}>
+          <h2 className="chart-section__title">{t("dashboard.category_heatmap")}</h2>
+          <HeatMapGrid rows={heatmap.districts} columns={heatmap.categories} values={heatmap.values} />
+        </div>
+      )}
+
+      {/* Row 7: Top Actors + Recent Alerts (2-column) */}
+      <div className="dashboard-row dashboard-row--2col">
+        {analytics && analytics.topActors.length > 0 && (
+          <div className="chart-section">
+            <h2 className="chart-section__title">{t("dashboard.top_actors")}</h2>
+            {analytics.topActors.map((actor, i) => (
+              <div className="actor-row" key={actor.actor_id}>
+                <span className="actor-row__rank">{i + 1}</span>
+                <div className="actor-row__info">
+                  <div className="actor-row__name">{actor.display_name || actor.canonical_name}</div>
+                  <div className="actor-row__meta">
+                    {actor.total_flagged_posts} {t("dashboard.flagged_posts")}
+                    {actor.is_repeat_offender && <span className="badge badge--critical" style={{ marginLeft: "var(--space-1)" }}>{t("dashboard.repeat")}</span>}
+                  </div>
                 </div>
-                <span className="chart-bar__value">{s.count}</span>
+                <span className="actor-row__score">{actor.risk_score?.toFixed(0) || "—"}</span>
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      <div className="detail-section" style={{ marginTop: "var(--space-5)" }}>
-        <h2 className="detail-section__title">{t("dashboard.recent_alerts")}</h2>
-        {recentAlerts.length === 0 ? (
-          <p style={{ color: "var(--color-text-muted)" }}>{t("dashboard.no_activity")}</p>
-        ) : (
-          <table className="entity-table">
-            <thead>
-              <tr>
-                <th>{t("alerts.priority")}</th>
-                <th>{t("common.title")}</th>
-                <th>{t("alerts.status")}</th>
-                <th>{t("alerts.created")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentAlerts.map((a) => (
-                <tr key={a.alert_id}>
-                  <td data-label={t("alerts.priority")}>
-                    <span className={`badge badge--${a.priority?.toLowerCase() || "default"}`}>{a.priority}</span>
-                  </td>
-                  <td data-label={t("common.title")}>{a.title}</td>
-                  <td data-label={t("alerts.status")}>
-                    <span className="badge badge--default">{a.state_id}</span>
-                  </td>
-                  <td data-label={t("alerts.created")}>
-                    {a.created_at ? new Date(a.created_at).toLocaleDateString() : "\u2014"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         )}
+
+        <div className="chart-section">
+          <h2 className="chart-section__title">{t("dashboard.recent_alerts")}</h2>
+          {recentAlerts.length === 0 ? (
+            <p style={{ color: "var(--color-text-muted)" }}>{t("dashboard.no_activity")}</p>
+          ) : (
+            <table className="entity-table entity-table--compact">
+              <thead>
+                <tr>
+                  <th>{t("alerts.priority")}</th>
+                  <th>{t("common.title")}</th>
+                  <th>{t("alerts.status")}</th>
+                  <th>{t("alerts.created")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentAlerts.map(a => (
+                  <tr key={a.alert_id} className="entity-table__clickable" onClick={() => onNavigate("alert-detail")}>
+                    <td data-label={t("alerts.priority")}>
+                      <span className={`badge badge--${a.priority?.toLowerCase() || "default"}`}>{a.priority}</span>
+                    </td>
+                    <td data-label={t("common.title")}>{a.title}</td>
+                    <td data-label={t("alerts.status")}>
+                      <span className="badge badge--default">{a.state_id}</span>
+                    </td>
+                    <td data-label={t("alerts.created")}>
+                      {a.created_at ? new Date(a.created_at).toLocaleDateString() : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
     </>
   );
