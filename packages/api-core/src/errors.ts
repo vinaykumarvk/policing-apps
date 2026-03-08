@@ -2,10 +2,9 @@ import { resolve } from "node:path";
 import { FastifyReply } from "fastify";
 import type { ApiError } from "./types";
 
-export function sendError(reply: FastifyReply, statusCode: number, error: string, message?: string): ApiError {
+export function sendError(reply: FastifyReply, statusCode: number, error: string, message?: string): void {
   const body: ApiError = { error, message: message || error, statusCode };
   reply.code(statusCode).send(body);
-  return body;
 }
 
 export function send400(reply: FastifyReply, error: string, message?: string) {
