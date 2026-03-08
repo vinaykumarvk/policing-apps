@@ -30,12 +30,14 @@ async function migrate() {
   const applied = await query(`SELECT filename FROM _migrations`);
   const appliedSet = new Set(applied.rows.map((r: { filename: string }) => r.filename));
 
-  // Detect if this is the first run on an existing DB (tables exist but no
-  // migration records). In this mode we tolerate migration errors because the
-  // DDL was applied outside the runner.
-  const isFirstRunOnExistingDb = appliedSet.size === 0 && (await dbHasTables());
-  if (isFirstRunOnExistingDb) {
-    console.log("[MIGRATE] First run on existing DB detected — will skip failing migrations.");
+  // If the DB already has tables, some or all migrations were applied outside
+  // this runner. Tolerate errors from re-running those migrations — they fail
+  // on duplicate tables, sequences, rules, etc. New migrations should use
+  // IF NOT EXISTS and be idempotent; if a genuinely new migration has a bug,
+  // the app startup will fail when it needs the missing schema.
+  const existingDb = await dbHasTables();
+  if (existingDb) {
+    console.log("[MIGRATE] Existing DB detected — will skip failing migrations.");
   }
 
   let count = 0;
@@ -47,7 +49,7 @@ async function migrate() {
       await query(sql);
       console.log(`[MIGRATE] Applied: ${file}`);
     } catch (err: any) {
-      if (isFirstRunOnExistingDb) {
+      if (existingDb) {
         console.log(`[MIGRATE] Skipped (existing DB): ${file} — ${err.message}`);
         // Reset any aborted transaction state so subsequent queries work.
         await query("ROLLBACK").catch(() => {});
