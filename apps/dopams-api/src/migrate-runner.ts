@@ -25,13 +25,31 @@ async function migrate() {
   const applied = await query(`SELECT filename FROM _migrations`);
   const appliedSet = new Set(applied.rows.map((r: { filename: string }) => r.filename));
 
+  // PG error codes that indicate the migration's DDL already exists in the DB.
+  // This happens on first run against a DB where tables were created outside
+  // the migration runner. We treat these as "already applied".
+  const ALREADY_EXISTS_CODES = new Set([
+    "42P07", // duplicate_table
+    "42701", // duplicate_column
+    "42710", // duplicate_object
+    "42P16", // invalid_table_definition (e.g. column already exists in ADD COLUMN)
+  ]);
+
   let count = 0;
   for (const file of sqlFiles) {
     if (appliedSet.has(file)) continue;
     const sql = await fs.readFile(path.join(MIGRATIONS_DIR, file), "utf-8");
-    await query(sql);
+    try {
+      await query(sql);
+      console.log(`[MIGRATE] Applied: ${file}`);
+    } catch (err: any) {
+      if (ALREADY_EXISTS_CODES.has(err?.code)) {
+        console.log(`[MIGRATE] Skipped (already exists): ${file} — ${err.message}`);
+      } else {
+        throw err;
+      }
+    }
     await query(`INSERT INTO _migrations (filename) VALUES ($1)`, [file]);
-    console.log(`[MIGRATE] Applied: ${file}`);
     count++;
   }
 
