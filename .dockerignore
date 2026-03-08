@@ -35,6 +35,12 @@ e2e/
 outputs/
 uploads/
 
+# AI / tooling
+.claude/
+
+# Documentation (not needed in production image)
+docs/
+
 # Misc
 *.log
 coverage/

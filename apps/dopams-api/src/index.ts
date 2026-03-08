@@ -6,7 +6,7 @@ dotenv.config({ path: path.resolve(__dirname, "..", "..", "..", ".env") });
 async function main() {
   const { buildApp } = await import("./app");
   const app = await buildApp(true);
-  const port = Number(process.env.PORT || process.env.DOPAMS_API_PORT || 3002);
+  const port = Number(process.env.PORT || process.env.DOPAMS_API_PORT || 8080);
   const host = process.env.DOPAMS_API_HOST || "0.0.0.0";
 
   const SHUTDOWN_TIMEOUT_MS = Number(process.env.SHUTDOWN_TIMEOUT_MS) || 15_000;
