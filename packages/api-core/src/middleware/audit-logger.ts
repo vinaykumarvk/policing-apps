@@ -87,7 +87,7 @@ export function createAuditLogger(config: AuditLoggerConfig) {
 
       try {
 
-        const actorId = (request as any).authUser?.userId ?? null;
+        const actorId = (request as any).authUser?.userId ?? "00000000-0000-0000-0000-000000000000";
         const actorRole = (request as any).authUser?.roles?.join(",") || null;
         const { entityType, entityId } = extractEntityInfo(request.url);
 
@@ -104,7 +104,7 @@ export function createAuditLogger(config: AuditLoggerConfig) {
           `INSERT INTO ${tableName}
              (entity_type, entity_id, event_type, actor_type, actor_id, payload_jsonb, ip_address, request_id, actor_role, response_status, created_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())`,
-          [entityType || "unknown", entityId || "N/A", eventType, "SYSTEM_AUDIT", actorId, payloadSummary, request.ip, request.id, actorRole, reply.statusCode]
+          [entityType || "unknown", entityId || "00000000-0000-0000-0000-000000000000", eventType, "SYSTEM_AUDIT", actorId, payloadSummary, request.ip, request.id, actorRole, reply.statusCode]
         );
 
         consecutiveAuditFailures = 0;
