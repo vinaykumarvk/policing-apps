@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, DropZone, Tabs, Textarea, UploadConfirm, useToast } from "@puda/shared";
+import { Alert, Button, DropZone, Field, Input, Tabs, Textarea, UploadConfirm, useToast } from "@puda/shared";
 import { apiBaseUrl, EvidenceItem } from "../types";
+
+const CourtExportWizard = lazy(() => import("./CourtExportWizard"));
 
 type Props = { id: string; authHeaders: () => Record<string, string>; isOffline: boolean; onBack: () => void };
 
@@ -21,12 +23,64 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
   const [ocrJobId, setOcrJobId] = useState<string | null>(null);
   const [ocrResult, setOcrResult] = useState<string | null>(null);
   const [ocrLoading, setOcrLoading] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyResult, setVerifyResult] = useState<string | null>(null);
+  const [legalHolds, setLegalHolds] = useState<Array<{ hold_id: string; hold_reason: string; legal_reference: string; held_by: string; held_at: string; is_active: boolean }>>([]);
+  const [holdReason, setHoldReason] = useState("");
+  const [holdRef, setHoldRef] = useState("");
+  const [applyingHold, setApplyingHold] = useState(false);
+  const [showCourtExport, setShowCourtExport] = useState(false);
 
   const fetchNotes = () => {
     fetch(`${apiBaseUrl}/api/v1/evidence/${id}/notes`, authHeaders())
       .then((r) => r.ok ? r.json() : { notes: [] })
       .then((data) => setNotes(data.notes || []))
       .catch(() => setNotes([]));
+  };
+
+  const fetchLegalHolds = () => {
+    fetch(`${apiBaseUrl}/api/v1/evidence/${id}/legal-holds`, authHeaders())
+      .then((r) => r.ok ? r.json() : { holds: [] })
+      .then((data) => setLegalHolds(data.holds || []))
+      .catch(() => setLegalHolds([]));
+  };
+
+  const handleVerify = async () => {
+    setVerifying(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/v1/evidence/${id}/verify`, { ...authHeaders(), method: "POST" });
+      if (!res.ok) throw new Error(`Failed: ${res.status}`);
+      const data = await res.json();
+      setVerifyResult(data.result || data.hash_verification_result || "UNKNOWN");
+      const entityRes = await fetch(`${apiBaseUrl}/api/v1/evidence/${id}`, authHeaders());
+      if (entityRes.ok) { const d = await entityRes.json(); setEvidence(d.evidence || d); }
+      showToast("success", t("evidence.verify_complete"));
+    } catch { showToast("error", t("common.error")); }
+    finally { setVerifying(false); }
+  };
+
+  const handleApplyHold = async () => {
+    if (!holdReason.trim()) return;
+    setApplyingHold(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/v1/evidence/${id}/legal-hold`, {
+        ...authHeaders(), method: "POST",
+        body: JSON.stringify({ hold_reason: holdReason, legal_reference: holdRef }),
+      });
+      if (!res.ok) throw new Error(`Failed: ${res.status}`);
+      setHoldReason(""); setHoldRef("");
+      fetchLegalHolds();
+      showToast("success", t("evidence.hold_applied"));
+    } catch { showToast("error", t("common.error")); }
+    finally { setApplyingHold(false); }
+  };
+
+  const handleReleaseHold = async (holdId: string) => {
+    try {
+      await fetch(`${apiBaseUrl}/api/v1/evidence/${id}/legal-hold/${holdId}/release`, { ...authHeaders(), method: "POST" });
+      fetchLegalHolds();
+      showToast("success", t("evidence.hold_released"));
+    } catch { showToast("error", t("common.error")); }
   };
 
   const fetchActivity = () => {
@@ -39,7 +93,7 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
   useEffect(() => {
     fetch(`${apiBaseUrl}/api/v1/evidence/${id}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
-      .then((data) => { setEvidence(data.evidence || data); fetchNotes(); fetchActivity(); })
+      .then((data) => { setEvidence(data.evidence || data); fetchNotes(); fetchActivity(); fetchLegalHolds(); })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed"))
       .finally(() => setLoading(false));
   }, [id, authHeaders]);
@@ -131,7 +185,55 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
                 <div className="detail-field"><span className="detail-field__label">{t("evidence.hash")}</span><span className="detail-field__value" style={{ wordBreak: "break-all" }}>{evidence.hash_sha256 || "—"}</span></div>
                 <div className="detail-field"><span className="detail-field__label">{t("evidence.captured_by")}</span><span className="detail-field__value">{evidence.captured_by}</span></div>
                 <div className="detail-field"><span className="detail-field__label">{t("detail.created_at")}</span><span className="detail-field__value">{evidence.created_at ? new Date(evidence.created_at).toLocaleString() : "—"}</span></div>
+                <div className="detail-field"><span className="detail-field__label">{t("evidence.hash_algorithm")}</span><span className="detail-field__value">{(evidence as any).hash_algorithm || "SHA-256"}</span></div>
+                {(evidence as any).is_original === false && (
+                  <div className="detail-field"><span className="detail-field__label">{t("evidence.original")}</span><span className="badge badge--warning">{t("evidence.derivative_copy")}</span></div>
+                )}
               </div>
+            </div>
+            <div className="detail-section">
+              <h3 className="detail-section__title">{t("evidence.verify_integrity")}</h3>
+              <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+                <Button onClick={handleVerify} disabled={isOffline || verifying} variant="secondary">
+                  {verifying ? t("common.loading") : t("evidence.verify_hash")}
+                </Button>
+                {(verifyResult || (evidence as any).hash_verification_result) && (
+                  <span className={`badge badge--${(verifyResult || (evidence as any).hash_verification_result) === "MATCH" ? "success" : "danger"}`}>
+                    {verifyResult || (evidence as any).hash_verification_result}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="detail-section">
+              <h3 className="detail-section__title">{t("evidence.legal_holds")}</h3>
+              {legalHolds.length > 0 && (
+                <table className="entity-table" style={{ marginBottom: "var(--space-3)" }}>
+                  <thead><tr><th>{t("evidence.hold_reason")}</th><th>{t("evidence.legal_ref")}</th><th>{t("alerts.status")}</th><th>{t("models.actions")}</th></tr></thead>
+                  <tbody>
+                    {legalHolds.map((h) => (
+                      <tr key={h.hold_id}>
+                        <td data-label={t("evidence.hold_reason")}>{h.hold_reason}</td>
+                        <td data-label={t("evidence.legal_ref")}>{h.legal_reference || "—"}</td>
+                        <td data-label={t("alerts.status")}><span className={`badge badge--${h.is_active ? "warning" : "default"}`}>{h.is_active ? t("evidence.hold_active") : t("evidence.hold_released")}</span></td>
+                        <td data-label={t("models.actions")}>{h.is_active && <Button size="sm" variant="secondary" onClick={() => handleReleaseHold(h.hold_id)} disabled={isOffline}>{t("evidence.release_hold")}</Button>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <div style={{ display: "grid", gap: "var(--space-2)" }}>
+                <Field label={t("evidence.hold_reason")} htmlFor="hold-reason">
+                  <Input id="hold-reason" value={holdReason} onChange={(e) => setHoldReason(e.target.value)} placeholder={t("evidence.hold_reason_placeholder")} />
+                </Field>
+                <Field label={t("evidence.legal_ref")} htmlFor="hold-ref">
+                  <Input id="hold-ref" value={holdRef} onChange={(e) => setHoldRef(e.target.value)} placeholder={t("evidence.legal_ref_placeholder")} />
+                </Field>
+                <Button size="sm" onClick={handleApplyHold} disabled={!holdReason.trim() || applyingHold || isOffline}>{t("evidence.apply_hold")}</Button>
+              </div>
+            </div>
+            <div className="detail-section">
+              <h3 className="detail-section__title">{t("osint.court_export")}</h3>
+              <Button onClick={() => setShowCourtExport(true)} disabled={isOffline} variant="secondary">{t("osint.download_package")}</Button>
             </div>
             <div className="detail-section">
               <h2 className="detail-section__title">{t("evidence.upload_file")}</h2>
@@ -190,6 +292,9 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
           </div>
         )},
       ]} />
+      <Suspense fallback={null}>
+        <CourtExportWizard open={showCourtExport} evidenceId={id} onClose={() => setShowCourtExport(false)} authHeaders={authHeaders} isOffline={isOffline} />
+      </Suspense>
     </>
   );
 }

@@ -26,6 +26,8 @@ async function main() {
     try {
       const { stopConnectorScheduler } = await import("./connector-scheduler");
       stopConnectorScheduler();
+      const { shutdownScreenshotService } = await import("./services/screenshot-capture");
+      await shutdownScreenshotService();
       const { stopSlaScheduler } = await import("./sla-scheduler");
       stopSlaScheduler();
       await app.close();
@@ -61,6 +63,9 @@ async function main() {
 
     const { startConnectorScheduler } = await import("./connector-scheduler");
     startConnectorScheduler();
+
+    const { initScreenshotService } = await import("./services/screenshot-capture");
+    await initScreenshotService();
   } catch (err) {
     app.log.error(err);
     process.exit(1);

@@ -10,16 +10,16 @@ async function seed() {
 
   // 1. Organization units
   const units = [
-    { name: "Headquarters", code: "HQ" },
-    { name: "District 1", code: "DIST-1" },
-    { name: "District 2", code: "DIST-2" },
+    { name: "Headquarters", unitType: "HQ" },
+    { name: "District 1", unitType: "DISTRICT" },
+    { name: "District 2", unitType: "DISTRICT" },
   ];
   for (const u of units) {
     await query(
-      `INSERT INTO organization_unit (unit_id, name, code, is_active)
+      `INSERT INTO organization_unit (unit_id, name, unit_type, is_active)
        VALUES (gen_random_uuid(), $1, $2, true)
-       ON CONFLICT (code) DO NOTHING`,
-      [u.name, u.code],
+       ON CONFLICT DO NOTHING`,
+      [u.name, u.unitType],
     );
   }
   console.log("[SEED] Organization units created");
@@ -28,16 +28,16 @@ async function seed() {
   const roles = ["INTELLIGENCE_ANALYST", "CONTROL_ROOM_OPERATOR", "SUPERVISOR", "INVESTIGATOR", "LEGAL_REVIEWER", "EVIDENCE_CUSTODIAN", "PLATFORM_ADMINISTRATOR"];
   for (const rk of roles) {
     await query(
-      `INSERT INTO role (role_id, role_key, description)
-       VALUES (gen_random_uuid(), $1, $1)
+      `INSERT INTO role (role_id, role_key, display_name, description)
+       VALUES (gen_random_uuid(), $1, $2, $3)
        ON CONFLICT (role_key) DO NOTHING`,
-      [rk],
+      [rk, rk, rk],
     );
   }
   console.log("[SEED] Roles ensured");
 
   // Get HQ unit_id
-  const hqResult = await query(`SELECT unit_id FROM organization_unit WHERE code = 'HQ' LIMIT 1`);
+  const hqResult = await query(`SELECT unit_id FROM organization_unit WHERE name = 'Headquarters' LIMIT 1`);
   const hqUnitId = hqResult.rows[0]?.unit_id || null;
 
   // 3. Users
@@ -80,11 +80,12 @@ async function seed() {
     { platform: "twitter", type: "Polling" },
     { platform: "instagram", type: "Polling" },
     { platform: "facebook", type: "Polling" },
+    { platform: "apify", type: "Polling" },
   ]) {
     await query(
       `INSERT INTO source_connector (platform, connector_type, config_jsonb, is_active)
-       SELECT $1, $2, '{}'::jsonb, true
-       WHERE NOT EXISTS (SELECT 1 FROM source_connector WHERE platform = $1)`,
+       SELECT $1::varchar, $2::varchar, '{}'::jsonb, true
+       WHERE NOT EXISTS (SELECT 1 FROM source_connector WHERE platform = $1::varchar)`,
       [c.platform, c.type],
     );
   }
@@ -93,8 +94,8 @@ async function seed() {
   // 5. Sample watchlist
   await query(
     `INSERT INTO watchlist (name, description, keywords, platforms, is_active, created_by)
-     SELECT $1, $2, $3, $4, true, (SELECT user_id FROM user_account WHERE username = 'admin' LIMIT 1)
-     WHERE NOT EXISTS (SELECT 1 FROM watchlist WHERE name = $1)`,
+     SELECT $1::varchar, $2::text, $3::jsonb, $4::jsonb, true, (SELECT user_id FROM user_account WHERE username = 'admin' LIMIT 1)
+     WHERE NOT EXISTS (SELECT 1 FROM watchlist WHERE name = $1::varchar)`,
     [
       "Default Monitoring",
       "Default watchlist for initial monitoring",

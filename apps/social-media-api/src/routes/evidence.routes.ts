@@ -8,8 +8,11 @@ import { executeTransition } from "../workflow-bridge";
 import { getAvailableTransitions } from "../workflow-bridge/transitions";
 import { createEvidencePackager } from "@puda/api-integrations";
 import { generateAndLogWatermark } from "../services/watermark";
+import { getRetentionDashboardStats } from "../services/retention-enforcer";
+import { generateOsintCollectionReport } from "../services/osint-report-generator";
 
 const requireAnalyst = createRoleGuard(["ANALYST", "SUPERVISOR", "PLATFORM_ADMINISTRATOR"]);
+const requireCustodian = createRoleGuard(["EVIDENCE_CUSTODIAN", "LEGAL_REVIEWER", "SUPERVISOR", "PLATFORM_ADMINISTRATOR"]);
 const EVIDENCE_BASE_DIR = process.env.EVIDENCE_STORAGE_DIR || "/data/evidence";
 
 export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void> {
@@ -150,11 +153,22 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
 
       const verified = recomputedHash !== null && recomputedHash === ev.hash_sha256;
 
-      // Log verification attempt as custody event
+      // Determine verification result enum
+      const hashVerificationResult = !ev.hash_sha256 ? "NO_HASH"
+        : !fileUrl ? "NO_FILE"
+        : verified ? "MATCH" : "MISMATCH";
+
+      // Persist verification result to evidence_item (ISO 27037)
       const { userId } = request.authUser!;
       await query(
+        `UPDATE evidence_item SET verified_by = $2, verified_at = NOW(), hash_verification_result = $3 WHERE evidence_id = $1`,
+        [id, userId, hashVerificationResult],
+      ).catch((err: unknown) => { app.log.warn(err, "Verification result persist failed"); });
+
+      // Log verification attempt as custody event
+      await query(
         `INSERT INTO custody_event (evidence_id, event_type, actor_id, details) VALUES ($1, 'HASH_VERIFIED', $2, $3)`,
-        [id, userId, JSON.stringify({ verified, storedHash: ev.hash_sha256, recomputedHash, verificationError })],
+        [id, userId, JSON.stringify({ verified, storedHash: ev.hash_sha256, recomputedHash, verificationError, hashVerificationResult })],
       ).catch((custodyErr: unknown) => { app.log.warn(custodyErr, "Custody event write failed"); });
 
       return {
@@ -162,6 +176,7 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
         hashSha256: ev.hash_sha256,
         recomputedHash: recomputedHash || null,
         verified,
+        hashVerificationResult,
         ...(verificationError ? { reason: verificationError } : {}),
         stateId: ev.state_id,
       };
@@ -273,6 +288,215 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
       return reply.send(zipBuffer);
     } catch (err: unknown) {
       request.log.error(err, "Failed to package evidence");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  // Apply legal hold to evidence
+  app.post("/api/v1/evidence/:id/legal-hold", {
+    schema: {
+      params: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } },
+      body: { type: "object", required: ["holdReason"], properties: { holdReason: { type: "string" }, legalReference: { type: "string" } } },
+    },
+  }, async (request, reply) => {
+    if (!requireCustodian(request, reply)) return;
+    try {
+      const { id } = request.params as { id: string };
+      const { holdReason, legalReference } = request.body as { holdReason: string; legalReference?: string };
+      const { userId } = request.authUser!;
+
+      const result = await query(
+        `INSERT INTO evidence_legal_hold (evidence_id, hold_reason, legal_reference, held_by)
+         VALUES ($1, $2, $3, $4) RETURNING *`,
+        [id, holdReason, legalReference || null, userId],
+      );
+
+      await query(
+        `INSERT INTO custody_event (evidence_id, event_type, actor_id, details) VALUES ($1, 'LEGAL_HOLD_APPLIED', $2, $3)`,
+        [id, userId, JSON.stringify({ holdReason, legalReference })],
+      ).catch((err: unknown) => { app.log.warn(err, "Custody event write failed"); });
+
+      reply.code(201);
+      return { hold: result.rows[0] };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to apply legal hold");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  // Release legal hold
+  app.post("/api/v1/evidence/:id/legal-hold/:holdId/release", {
+    schema: {
+      params: { type: "object", required: ["id", "holdId"], properties: { id: { type: "string", format: "uuid" }, holdId: { type: "string", format: "uuid" } } },
+    },
+  }, async (request, reply) => {
+    if (!requireCustodian(request, reply)) return;
+    try {
+      const { id, holdId } = request.params as { id: string; holdId: string };
+      const { userId } = request.authUser!;
+
+      const result = await query(
+        `UPDATE evidence_legal_hold SET is_active = FALSE, released_by = $2, released_at = NOW(), updated_at = NOW()
+         WHERE hold_id = $1 AND is_active = TRUE RETURNING *`,
+        [holdId, userId],
+      );
+      if (result.rowCount === 0) return send404(reply, "HOLD_NOT_FOUND", "Active legal hold not found");
+
+      await query(
+        `INSERT INTO custody_event (evidence_id, event_type, actor_id, details) VALUES ($1, 'LEGAL_HOLD_RELEASED', $2, $3)`,
+        [id, userId, JSON.stringify({ holdId })],
+      ).catch((err: unknown) => { app.log.warn(err, "Custody event write failed"); });
+
+      return { hold: result.rows[0] };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to release legal hold");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  // Get legal holds for evidence
+  app.get("/api/v1/evidence/:id/legal-holds", {
+    schema: { params: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const result = await query(
+        `SELECT elh.*, hb.full_name AS held_by_name, rb.full_name AS released_by_name
+         FROM evidence_legal_hold elh
+         LEFT JOIN user_account hb ON hb.user_id = elh.held_by
+         LEFT JOIN user_account rb ON rb.user_id = elh.released_by
+         WHERE elh.evidence_id = $1 ORDER BY elh.held_at DESC`,
+        [id],
+      );
+      return { holds: result.rows };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to get legal holds");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  // Copy evidence (creates derivative with parent link)
+  app.post("/api/v1/evidence/:id/copy", {
+    schema: { params: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
+  }, async (request, reply) => {
+    if (!requireAnalyst(request, reply)) return;
+    try {
+      const { id } = request.params as { id: string };
+      const { userId } = request.authUser!;
+      const unitId = request.authUser?.unitId || null;
+
+      const original = await query("SELECT * FROM evidence_item WHERE evidence_id = $1", [id]);
+      if (original.rows.length === 0) return send404(reply, "EVIDENCE_NOT_FOUND", "Evidence not found");
+      const ev = original.rows[0];
+
+      const refResult = await query(`SELECT 'TEF-EVD-' || EXTRACT(YEAR FROM NOW())::text || '-' || LPAD(nextval('sm_evidence_ref_seq')::text, 6, '0') AS ref`);
+      const result = await query(
+        `INSERT INTO evidence_item (content_id, capture_type, screenshot_url, archive_url, hash_sha256, captured_by, unit_id, evidence_ref, is_original, parent_evidence_id, hash_algorithm)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, FALSE, $9, $10)
+         RETURNING evidence_id, evidence_ref`,
+        [ev.content_id, ev.capture_type, ev.screenshot_url, ev.archive_url, ev.hash_sha256, userId, unitId, refResult.rows[0].ref, id, ev.hash_algorithm || "SHA-256"],
+      );
+
+      reply.code(201);
+      return { copy: result.rows[0] };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to copy evidence");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  // Retention dashboard stats
+  app.get("/api/v1/dashboard/retention", async (request, reply) => {
+    try {
+      const stats = await getRetentionDashboardStats();
+      return { retention: stats };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to get retention stats");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  // Court export: ZIP with evidence file + OSINT report PDF + custody CSV
+  app.post("/api/v1/evidence/:id/court-export", {
+    schema: {
+      params: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } },
+      body: { type: "object", properties: { officerName: { type: "string" }, officerBadge: { type: "string" }, caseId: { type: "string" } } },
+    },
+  }, async (request, reply) => {
+    if (!requireAnalyst(request, reply)) return;
+    try {
+      const { id } = request.params as { id: string };
+      const { userId } = request.authUser!;
+      const body = request.body as { officerName?: string; officerBadge?: string; caseId?: string };
+      const unitId = request.authUser?.unitId || null;
+
+      const evResult = await query(
+        `SELECT e.*, u.full_name AS captured_by_name
+         FROM evidence_item e LEFT JOIN user_account u ON u.user_id = e.captured_by
+         WHERE e.evidence_id = $1 AND e.unit_id = $2::uuid`,
+        [id, unitId],
+      );
+      if (evResult.rows.length === 0) return send404(reply, "EVIDENCE_NOT_FOUND", "Evidence not found");
+      const ev = evResult.rows[0];
+
+      // Generate OSINT report PDF
+      const reportPdf = await generateOsintCollectionReport({
+        evidenceId: id,
+        caseId: body.caseId || ev.case_id,
+        officerName: body.officerName || ev.captured_by_name || "Officer",
+        officerBadge: body.officerBadge,
+      });
+
+      const items: Array<{ filename: string; data: Buffer; mimeType: string; metadata?: Record<string, unknown> }> = [];
+      items.push({ filename: "osint-report.pdf", data: reportPdf, mimeType: "application/pdf" });
+
+      // Include evidence file if available
+      const fileUrl = ev.screenshot_url || ev.archive_url;
+      if (fileUrl) {
+        const safePath = validateFilePath(fileUrl, EVIDENCE_BASE_DIR);
+        if (safePath) {
+          try {
+            const buffer = await readFile(safePath);
+            items.push({ filename: fileUrl.split("/").pop() || "evidence-file", data: buffer, mimeType: "application/octet-stream" });
+          } catch { /* file may not be accessible */ }
+        }
+      }
+
+      const watermarkText = await generateAndLogWatermark(userId, "sm_evidence", id, "COURT_EXPORT");
+      const packager = createEvidencePackager();
+      const zipBuffer = await packager.packageEvidence(ev.case_id || id, userId, items);
+
+      await query(
+        `INSERT INTO custody_event (evidence_id, event_type, actor_id, details) VALUES ($1, 'COURT_EXPORTED', $2, $3)`,
+        [id, userId, JSON.stringify({ format: "ZIP+PDF+SHA256", watermark: watermarkText })],
+      ).catch((err: unknown) => { app.log.warn(err, "Custody event write failed"); });
+
+      reply.header("Content-Type", "application/zip");
+      reply.header("Content-Disposition", `attachment; filename="court-export-${ev.evidence_ref || id}.zip"`);
+      return reply.send(zipBuffer);
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to generate court export");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  // OSINT metadata for an evidence item
+  app.get("/api/v1/evidence/:id/osint-metadata", {
+    schema: { params: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const result = await query(
+        `SELECT evidence_id, capture_method, capture_tool_version, capture_timestamp,
+                source_platform, source_url, source_post_id, source_author_handle,
+                hash_algorithm, hash_sha256, hash_verification_result, is_original, parent_evidence_id
+         FROM evidence_item WHERE evidence_id = $1`,
+        [id],
+      );
+      if (result.rows.length === 0) return send404(reply, "EVIDENCE_NOT_FOUND", "Evidence not found");
+      return { metadata: result.rows[0] };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to get OSINT metadata");
       return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
     }
   });

@@ -40,6 +40,11 @@ import { registerSlangRoutes } from "./routes/slang.routes";
 import { registerTaxonomyRoutes } from "./routes/taxonomy.routes";
 import { registerReportTemplateRoutes } from "./routes/report-template.routes";
 import { registerQueueRoutingRoutes } from "./routes/queue-routing.routes";
+import { registerMonitoringRoutes } from "./routes/monitoring.routes";
+import { registerEscalationRoutes } from "./routes/escalation.routes";
+import { registerPrivacyRoutes } from "./routes/privacy.routes";
+import { registerEarlyWarningRoutes } from "./routes/early-warning.routes";
+import { registerPlatformCooperationRoutes } from "./routes/platform-cooperation.routes";
 import { createOidcAuth, createOidcRoutes, createAuthMiddleware, createConfigGovernanceRoutes, createIdempotencyMiddleware, createLdapAuth, createAuthRoutes as createSharedAuthRoutes } from "@puda/api-core";
 import { query } from "./db";
 
@@ -232,6 +237,11 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
   await registerTaxonomyRoutes(app);
   await registerReportTemplateRoutes(app);
   await registerQueueRoutingRoutes(app);
+  await registerMonitoringRoutes(app);
+  await registerEscalationRoutes(app);
+  await registerPrivacyRoutes(app);
+  await registerEarlyWarningRoutes(app);
+  await registerPlatformCooperationRoutes(app);
 
   // Config governance routes
   const registerConfigGovernanceRoutes = createConfigGovernanceRoutes({ queryFn: query });

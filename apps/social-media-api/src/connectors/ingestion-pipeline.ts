@@ -1,7 +1,10 @@
 import { query } from "../db";
 import { logInfo, logError } from "../logger";
-import { classifyContent } from "../services/classifier";
+import { classifyContentEnhanced } from "../services/classifier";
 import { extractAndStore } from "../services/entity-extractor";
+import { enqueueScreenshot, isScreenshotServiceReady } from "../services/screenshot-capture";
+import { autoRedactNonTargetPii, logRedactions } from "../services/pii-minimizer";
+import { recordDetection } from "../services/trend-analyzer";
 import type { FetchedItem } from "./types";
 
 const ALERT_THREAT_THRESHOLD = Number(process.env.ALERT_THREAT_THRESHOLD) || 40;
@@ -32,8 +35,36 @@ export async function ingestItems(
         continue;
       }
 
-      // 2. Classify + confidence routing
-      const classification = classifyContent(item.contentText);
+      // 2. Actor lookup BEFORE classification (FR-07) — feeds repeat-offender info into narcotics scorer
+      let actorRepeatOffender = false;
+      let actorFlaggedPosts = 0;
+      let actorId: string | null = null;
+      if (item.authorHandle && item.platform) {
+        try {
+          const actorResult = await query(
+            `SELECT actor_id, total_flagged_posts, is_repeat_offender FROM actor_account
+             WHERE handles @> $1::jsonb`,
+            [JSON.stringify([{ platform: item.platform, handle: item.authorHandle }])],
+          );
+          if (actorResult.rows.length > 0) {
+            const actor = actorResult.rows[0];
+            actorId = actor.actor_id;
+            actorFlaggedPosts = actor.total_flagged_posts || 0;
+            if (actor.is_repeat_offender || actorFlaggedPosts >= 3) {
+              actorRepeatOffender = true;
+            }
+          }
+        } catch (err) {
+          logError("Actor lookup failed", { error: String(err) });
+        }
+      }
+
+      // 3. Enhanced classification (standard + narcotics pipeline)
+      const classification = await classifyContentEnhanced(
+        item.contentText,
+        actorFlaggedPosts,
+        actorRepeatOffender,
+      );
 
       // FR-06: Route low-confidence results to NEEDS_REVIEW
       const CONFIDENCE_THRESHOLD = Number(process.env.CLASSIFICATION_CONFIDENCE_THRESHOLD) || 60;
@@ -41,7 +72,7 @@ export async function ingestItems(
         ? "NEEDS_REVIEW"
         : classification.riskScore >= CONFIDENCE_THRESHOLD ? "AUTO_ACCEPTED" : "AUTO_ACCEPTED";
 
-      // 3. Insert content item
+      // 4. Insert content item
       const insertResult = await query(
         `INSERT INTO content_item
            (connector_id, platform, platform_post_id, author_handle, author_name,
@@ -65,7 +96,19 @@ export async function ingestItems(
       const contentId = insertResult.rows[0].content_id as string;
       inserted++;
 
-      // 3b. Insert classification result with review status
+      // 4b. Link content to actor if found
+      if (actorId) {
+        try {
+          await query(
+            `UPDATE content_item SET actor_id = $1 WHERE content_id = $2`,
+            [actorId, contentId],
+          );
+        } catch (err) {
+          logError("Actor link failed", { contentId, error: String(err) });
+        }
+      }
+
+      // 4c. Insert classification result with review status
       try {
         await query(
           `INSERT INTO classification_result (entity_type, entity_id, category, risk_score, risk_factors, review_status)
@@ -77,36 +120,36 @@ export async function ingestItems(
         logError("Classification result insert failed", { contentId, error: String(err) });
       }
 
-      // 4. Extract entities (non-blocking — log errors but don't fail)
+      // 4d. Auto-redact non-target PII for non-OSINT content (Phase 3: Privacy)
+      try {
+        const piiResult = autoRedactNonTargetPii(item.contentText);
+        if (piiResult.redactions.length > 0) {
+          await query("UPDATE content_item SET content_text = $1, updated_at = NOW() WHERE content_id = $2", [piiResult.text, contentId]);
+          await logRedactions(contentId, piiResult.redactions);
+        }
+      } catch (err) {
+        logError("PII redaction failed", { contentId, error: String(err) });
+      }
+
+      // 4e. Record detections for trend analysis (Phase 4: Early Warning)
+      try {
+        if (classification.factors && Array.isArray(classification.factors)) {
+          for (const factor of classification.factors) {
+            await recordDetection("CLASSIFICATION_FACTOR", String(factor), classification.category, null);
+          }
+        }
+        if (classification.category && classification.riskScore >= ALERT_THREAT_THRESHOLD) {
+          await recordDetection("SUBSTANCE_CATEGORY", classification.category, classification.category, null);
+        }
+      } catch (err) {
+        logError("Trend recording failed", { contentId, error: String(err) });
+      }
+
+      // 5. Extract entities (non-blocking — log errors but don't fail)
       try {
         await extractAndStore("content_item", contentId, item.contentText);
       } catch (err) {
         logError("Entity extraction failed for content", { contentId, error: String(err) });
-      }
-
-      // 5. Actor repeat-offender auto-CRITICAL (FR-07)
-      let actorRepeatOffender = false;
-      if (item.authorHandle && item.platform) {
-        try {
-          const actorResult = await query(
-            `SELECT actor_id, total_flagged_posts, is_repeat_offender FROM actor_account
-             WHERE handles @> $1::jsonb`,
-            [JSON.stringify([{ platform: item.platform, handle: item.authorHandle }])],
-          );
-          if (actorResult.rows.length > 0) {
-            const actor = actorResult.rows[0];
-            if (actor.is_repeat_offender || (actor.total_flagged_posts || 0) >= 3) {
-              actorRepeatOffender = true;
-            }
-            // Link content to actor
-            await query(
-              `UPDATE content_item SET actor_id = $1 WHERE content_id = $2`,
-              [actor.actor_id, contentId],
-            );
-          }
-        } catch (err) {
-          logError("Actor lookup failed", { contentId, error: String(err) });
-        }
       }
 
       // 6. Auto-alert if risk score exceeds threshold
@@ -122,6 +165,8 @@ export async function ingestItems(
             priority = "CRITICAL";
           }
 
+          const targetedPrefix = item.metadata?.source_tier === "TIER_1" ? "[TARGETED] " : "";
+
           await query(
             `INSERT INTO sm_alert
                (alert_type, priority, title, description, content_id, state_id,
@@ -131,12 +176,17 @@ export async function ingestItems(
                 'SM-ALERT-' || to_char(now(), 'YYYY') || '-' || lpad(nextval('sm_alert_ref_seq')::text, 6, '0'))`,
             [
               priority,
-              `[${classification.category}] ${item.platform} — ${(item.contentText || "").slice(0, 100)}`,
+              `${targetedPrefix}[${classification.category}] ${item.platform} — ${(item.contentText || "").slice(0, 100)}`,
               `Auto-detected ${classification.category} content from ${item.platform}. Risk score: ${classification.riskScore}. Author: ${item.authorHandle || "unknown"}. URL: ${item.contentUrl}`,
               contentId,
             ],
           );
           alertsCreated++;
+
+          // Auto-screenshot capture for high-threat posts
+          if (item.contentUrl && isScreenshotServiceReady()) {
+            enqueueScreenshot(contentId, item.contentUrl, connectorId);
+          }
         } catch (err) {
           logError("Auto-alert creation failed", { contentId, error: String(err) });
         }

@@ -67,7 +67,7 @@ export function createAuthRoutes(deps: AuthRouteDeps) {
       }
       const token = auth.generateToken({ user_id: result.user.user_id, user_type: result.user.user_type, roles: result.user.roles, unit_id: result.user.unit_id });
       auth.setAuthCookie(reply, token);
-      return { user: result.user };
+      return { user: result.user, token };
     });
 
     app.post("/api/v1/auth/logout", {

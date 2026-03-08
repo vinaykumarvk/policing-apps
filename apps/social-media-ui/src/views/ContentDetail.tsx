@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Select, Tabs, Textarea, useToast } from "@puda/shared";
 import { apiBaseUrl, ContentItem } from "../types";
+
+const AccessJustificationModal = lazy(() => import("./AccessJustificationModal"));
 
 type Props = { id: string; authHeaders: () => Record<string, string>; isOffline: boolean; onBack: () => void };
 
@@ -18,6 +20,8 @@ export default function ContentDetail({ id, authHeaders, isOffline, onBack }: Pr
   const [translatedText, setTranslatedText] = useState<string | null>(null);
   const [targetLang, setTargetLang] = useState("hi");
   const [translating, setTranslating] = useState(false);
+  const [showJustification, setShowJustification] = useState(false);
+  const [justified, setJustified] = useState(false);
 
   const fetchNotes = () => {
     fetch(`${apiBaseUrl}/api/v1/content/${id}/notes`, authHeaders())
@@ -36,7 +40,18 @@ export default function ContentDetail({ id, authHeaders, isOffline, onBack }: Pr
   useEffect(() => {
     fetch(`${apiBaseUrl}/api/v1/content/${id}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
-      .then((data) => { setItem(data.content || data); fetchNotes(); fetchActivity(); })
+      .then((data) => {
+        const content = data.content || data;
+        setItem(content);
+        fetchNotes(); fetchActivity();
+        const src = content.content_source_type;
+        if (src && src !== "OSINT") {
+          fetch(`${apiBaseUrl}/api/v1/access-justification/check/content/${id}`, authHeaders())
+            .then((r) => r.ok ? r.json() : { hasActive: false })
+            .then((d) => { if (!d.hasActive) setShowJustification(true); else setJustified(true); })
+            .catch(() => {});
+        } else { setJustified(true); }
+      })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed"))
       .finally(() => setLoading(false));
   }, [id, authHeaders]);
@@ -165,6 +180,17 @@ export default function ContentDetail({ id, authHeaders, isOffline, onBack }: Pr
           </div>
         )},
       ]} />
+      <Suspense fallback={null}>
+        <AccessJustificationModal
+          open={showJustification}
+          entityType="content"
+          entityId={id}
+          onClose={() => { setShowJustification(false); setJustified(true); }}
+          onJustified={() => { setShowJustification(false); setJustified(true); }}
+          authHeaders={authHeaders}
+          isOffline={isOffline}
+        />
+      </Suspense>
     </>
   );
 }

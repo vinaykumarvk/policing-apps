@@ -30,7 +30,15 @@ const NetworkGraph = lazy(() => import("./views/NetworkGraph"));
 const ModelAdmin = lazy(() => import("./views/ModelAdmin"));
 const Settings = lazy(() => import("./views/Settings"));
 const Admin = lazy(() => import("./views/Admin"));
+const SlangAdmin = lazy(() => import("./views/SlangAdmin"));
+const DetectionDictionary = lazy(() => import("./views/DetectionDictionary"));
 const AuditLog = lazy(() => import("./views/AuditLog"));
+const MonitoringConfig = lazy(() => import("./views/MonitoringConfig"));
+const EscalationQueue = lazy(() => import("./views/EscalationQueue"));
+const SlaDashboard = lazy(() => import("./views/SlaDashboard"));
+const SupervisorAudit = lazy(() => import("./views/SupervisorAudit"));
+const EarlyWarningDashboard = lazy(() => import("./views/EarlyWarningDashboard"));
+const PlatformCooperation = lazy(() => import("./views/PlatformCooperation"));
 
 type View =
   | "dashboard" | "alerts" | "alert-detail"
@@ -38,13 +46,17 @@ type View =
   | "content" | "content-detail"
   | "evidence-detail" | "watchlists" | "report-detail"
   | "inbox" | "query-assistant" | "network-graph" | "model-admin"
-  | "settings" | "admin"
-  | "audit-log";
+  | "settings" | "admin" | "slang-admin" | "detection-dictionary"
+  | "audit-log"
+  | "monitoring-config"
+  | "escalation-queue" | "sla-dashboard" | "supervisor-audit"
+  | "early-warning" | "platform-cooperation";
 
 const VALID_VIEWS = [
   "", "dashboard", "alerts", "cases", "content", "evidence", "watchlists", "reports", "inbox",
   "query-assistant", "network-graph", "model-admin",
-  "settings", "admin", "audit-log",
+  "settings", "admin", "slang-admin", "detection-dictionary", "audit-log", "monitoring-config",
+  "escalation-queue", "sla-dashboard", "supervisor-audit", "early-warning", "platform-cooperation",
 ] as const;
 
 const NAV_ITEMS: { view: View; key: string; icon: string }[] = [
@@ -91,7 +103,7 @@ export default function App() {
   const searchRef = useRef<HTMLDivElement>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const isAdmin = roles.includes("admin");
+  const isAdmin = roles.includes("admin") || roles.includes("PLATFORM_ADMINISTRATOR");
 
   const handleLogout = useCallback(() => { clearCachedState(); window.location.hash = ""; logout(); }, [logout]);
 
@@ -183,7 +195,15 @@ export default function App() {
     if (view === "model-admin") return buildHash("model-admin");
     if (view === "settings") return buildHash("settings");
     if (view === "admin") return buildHash("admin");
+    if (view === "slang-admin") return buildHash("slang-admin");
+    if (view === "detection-dictionary") return buildHash("detection-dictionary");
     if (view === "audit-log") return buildHash("audit-log");
+    if (view === "monitoring-config") return buildHash("monitoring-config");
+    if (view === "escalation-queue") return buildHash("escalation-queue");
+    if (view === "sla-dashboard") return buildHash("sla-dashboard");
+    if (view === "supervisor-audit") return buildHash("supervisor-audit");
+    if (view === "early-warning") return buildHash("early-warning");
+    if (view === "platform-cooperation") return buildHash("platform-cooperation");
     return buildHash("dashboard");
   }, [view, resourceId]);
 
@@ -200,7 +220,7 @@ export default function App() {
       const dm: Record<string, View> = { alerts: "alert-detail", cases: "case-detail", content: "content-detail", evidence: "evidence-detail", reports: "report-detail" };
       if (dm[v]) { setView(dm[v]); setResourceId(parsed.resourceId); return; }
     }
-    const sm: Record<string, View> = { dashboard: "dashboard", alerts: "alerts", cases: "cases", content: "content", watchlists: "watchlists", inbox: "inbox", "query-assistant": "query-assistant", "network-graph": "network-graph", "model-admin": "model-admin", settings: "settings", admin: "admin", "audit-log": "audit-log" };
+    const sm: Record<string, View> = { dashboard: "dashboard", alerts: "alerts", cases: "cases", content: "content", watchlists: "watchlists", inbox: "inbox", "query-assistant": "query-assistant", "network-graph": "network-graph", "model-admin": "model-admin", settings: "settings", admin: "admin", "slang-admin": "slang-admin", "detection-dictionary": "detection-dictionary", "audit-log": "audit-log", "monitoring-config": "monitoring-config", "escalation-queue": "escalation-queue", "sla-dashboard": "sla-dashboard", "supervisor-audit": "supervisor-audit", "early-warning": "early-warning", "platform-cooperation": "platform-cooperation" };
     setView(sm[v] || "dashboard");
   }, [auth]);
 
@@ -214,7 +234,7 @@ export default function App() {
         const dm: Record<string, View> = { alerts: "alert-detail", cases: "case-detail", content: "content-detail", evidence: "evidence-detail", reports: "report-detail" };
         if (dm[v]) { setView(dm[v]); setResourceId(parsed.resourceId); return; }
       }
-      const sm: Record<string, View> = { dashboard: "dashboard", alerts: "alerts", cases: "cases", content: "content", watchlists: "watchlists", inbox: "inbox", "query-assistant": "query-assistant", "network-graph": "network-graph", "model-admin": "model-admin", settings: "settings", admin: "admin", "audit-log": "audit-log" };
+      const sm: Record<string, View> = { dashboard: "dashboard", alerts: "alerts", cases: "cases", content: "content", watchlists: "watchlists", inbox: "inbox", "query-assistant": "query-assistant", "network-graph": "network-graph", "model-admin": "model-admin", settings: "settings", admin: "admin", "slang-admin": "slang-admin", "detection-dictionary": "detection-dictionary", "audit-log": "audit-log", "monitoring-config": "monitoring-config", "escalation-queue": "escalation-queue", "sla-dashboard": "sla-dashboard", "supervisor-audit": "supervisor-audit", "early-warning": "early-warning", "platform-cooperation": "platform-cooperation" };
       setView(sm[v] || "dashboard"); setResourceId(null);
     };
     window.addEventListener("popstate", handle);
@@ -305,6 +325,24 @@ export default function App() {
             <span>{t("nav.model_admin")}</span>
           </button>
         </li>
+        <li>
+          <button className={`sidebar__item ${view === "detection-dictionary" ? "sidebar__item--active" : ""}`} onClick={() => navigate("detection-dictionary")} title={t("nav.detection_dictionary")} type="button">
+            <span className="sidebar__item-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
+            <span>{t("nav.detection_dictionary")}</span>
+          </button>
+        </li>
+        <li>
+          <button className={`sidebar__item ${view === "early-warning" ? "sidebar__item--active" : ""}`} onClick={() => navigate("early-warning")} title={t("nav.early_warning")} type="button">
+            <span className="sidebar__item-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+            <span>{t("nav.early_warning")}</span>
+          </button>
+        </li>
+        <li>
+          <button className={`sidebar__item ${view === "platform-cooperation" ? "sidebar__item--active" : ""}`} onClick={() => navigate("platform-cooperation")} title={t("nav.platform_cooperation")} type="button">
+            <span className="sidebar__item-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg></span>
+            <span>{t("nav.platform_cooperation")}</span>
+          </button>
+        </li>
         <li className="sidebar__divider" role="separator" />
         <li>
           <button className={`sidebar__item ${view === "settings" ? "sidebar__item--active" : ""}`} onClick={() => navigate("settings")} title={t("nav.settings")} type="button">
@@ -318,6 +356,36 @@ export default function App() {
             <button className={`sidebar__item ${view === "admin" ? "sidebar__item--active" : ""}`} onClick={() => navigate("admin")} title={t("nav.admin")} type="button">
               <span className="sidebar__item-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
               <span>{t("nav.admin")}</span>
+            </button>
+          </li>
+          <li>
+            <button className={`sidebar__item ${view === "slang-admin" ? "sidebar__item--active" : ""}`} onClick={() => navigate("slang-admin")} title={t("nav.slang_admin")} type="button">
+              <span className="sidebar__item-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
+              <span>{t("nav.slang_admin")}</span>
+            </button>
+          </li>
+          <li>
+            <button className={`sidebar__item ${view === "monitoring-config" ? "sidebar__item--active" : ""}`} onClick={() => navigate("monitoring-config")} title={t("nav.monitoring_config")} type="button">
+              <span className="sidebar__item-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
+              <span>{t("nav.monitoring_config")}</span>
+            </button>
+          </li>
+          <li>
+            <button className={`sidebar__item ${view === "escalation-queue" ? "sidebar__item--active" : ""}`} onClick={() => navigate("escalation-queue")} title={t("nav.escalation_queue")} type="button">
+              <span className="sidebar__item-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg></span>
+              <span>{t("nav.escalation_queue")}</span>
+            </button>
+          </li>
+          <li>
+            <button className={`sidebar__item ${view === "sla-dashboard" ? "sidebar__item--active" : ""}`} onClick={() => navigate("sla-dashboard")} title={t("nav.sla_dashboard")} type="button">
+              <span className="sidebar__item-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+              <span>{t("nav.sla_dashboard")}</span>
+            </button>
+          </li>
+          <li>
+            <button className={`sidebar__item ${view === "supervisor-audit" ? "sidebar__item--active" : ""}`} onClick={() => navigate("supervisor-audit")} title={t("nav.supervisor_audit")} type="button">
+              <span className="sidebar__item-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+              <span>{t("nav.supervisor_audit")}</span>
             </button>
           </li>
           <li>
@@ -443,7 +511,7 @@ export default function App() {
               {view === "content" && <ContentList authHeaders={authHeaders} isOffline={isOffline} onSelect={(id) => navigate("content-detail", id)} />}
               {view === "content-detail" && resourceId && <ContentDetail id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => navigate("content")} />}
               {view === "evidence-detail" && resourceId && <EvidenceDetail id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => window.history.back()} />}
-              {view === "watchlists" && <WatchlistManager authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "watchlists" && <WatchlistManager authHeaders={authHeaders} isOffline={isOffline} isAdmin={isAdmin} />}
               {view === "report-detail" && resourceId && <ReportDetail id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => window.history.back()} />}
               {view === "inbox" && <TaskInbox authHeaders={authHeaders} isOffline={isOffline} />}
               {view === "query-assistant" && <QueryAssistant authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
@@ -452,6 +520,14 @@ export default function App() {
               {view === "settings" && <Settings />}
               {view === "audit-log" && <AuditLog authHeaders={authHeaders} isOffline={isOffline} />}
               {view === "admin" && <Admin authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "slang-admin" && <SlangAdmin authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "detection-dictionary" && <DetectionDictionary authHeaders={authHeaders} isOffline={isOffline} isAdmin={isAdmin} />}
+              {view === "monitoring-config" && <MonitoringConfig authHeaders={authHeaders} isOffline={isOffline} isAdmin={isAdmin} />}
+              {view === "escalation-queue" && <EscalationQueue authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "sla-dashboard" && <SlaDashboard authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "supervisor-audit" && <SupervisorAudit authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "early-warning" && <EarlyWarningDashboard authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "platform-cooperation" && <PlatformCooperation authHeaders={authHeaders} isOffline={isOffline} />}
             </Suspense>
           </main>
         </div>

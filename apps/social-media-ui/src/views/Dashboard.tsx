@@ -6,6 +6,8 @@ import { apiBaseUrl } from "../types";
 type AlertByState = { state_id: string; count: number };
 type RecentAlert = { alert_id: string; title: string; priority: string; state_id: string; created_at: string };
 
+type RetentionStats = { totalPolicies: number; nearingExpiry: number; expired: number; legalHolds: number };
+
 type DashboardStats = {
   alertsByState: AlertByState[];
   totalCases: number;
@@ -30,6 +32,7 @@ export default function Dashboard({ authHeaders, isOffline, onNavigate }: Props)
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retention, setRetention] = useState<RetentionStats | null>(null);
 
   useEffect(() => {
     if (isOffline) { setLoading(false); return; }
@@ -41,6 +44,10 @@ export default function Dashboard({ authHeaders, isOffline, onNavigate }: Props)
       .then((data: DashboardStats) => setStats(data))
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load dashboard"))
       .finally(() => setLoading(false));
+    fetch(`${apiBaseUrl}/api/v1/evidence/dashboard/retention`, authHeaders())
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setRetention(data); })
+      .catch(() => {});
   }, [authHeaders, isOffline]);
 
   if (loading) return <div className="loading-center">{t("common.loading")}</div>;
@@ -75,6 +82,30 @@ export default function Dashboard({ authHeaders, isOffline, onNavigate }: Props)
           <p className="stat-card__value">{stats?.activeWatchlists ?? 0}</p>
         </button>
       </div>
+
+      {retention && (
+        <div className="detail-section" style={{ marginTop: "var(--space-5)" }}>
+          <h2 className="detail-section__title">{t("dashboard.retention_status")}</h2>
+          <div className="dashboard-grid">
+            <div className="stat-card">
+              <p className="stat-card__label">{t("dashboard.retention_policies")}</p>
+              <p className="stat-card__value">{retention.totalPolicies}</p>
+            </div>
+            <div className="stat-card">
+              <p className="stat-card__label">{t("dashboard.nearing_expiry")}</p>
+              <p className="stat-card__value" style={{ color: retention.nearingExpiry > 0 ? "var(--color-state-critical)" : undefined }}>{retention.nearingExpiry}</p>
+            </div>
+            <div className="stat-card">
+              <p className="stat-card__label">{t("dashboard.expired_items")}</p>
+              <p className="stat-card__value">{retention.expired}</p>
+            </div>
+            <div className="stat-card">
+              <p className="stat-card__label">{t("dashboard.legal_holds")}</p>
+              <p className="stat-card__value">{retention.legalHolds}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {alertsByState.length > 0 && (
         <div className="detail-section" style={{ marginTop: "var(--space-5)" }}>

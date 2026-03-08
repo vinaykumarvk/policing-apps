@@ -124,5 +124,151 @@ export type Task = {
   updated_at: string;
 };
 
+export type SlangEntry = {
+  slang_id: string;
+  term: string;
+  normalized_form: string;
+  language: string;
+  category: string;
+  risk_weight: number;
+  is_active: boolean;
+  submission_status: string;
+  submitted_by: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  term_type: string;
+};
+
+export type EmojiDrugCode = {
+  emoji_id: string;
+  emoji: string;
+  drug_category: string;
+  risk_weight: number;
+  signal_type: string;
+  description: string;
+  is_active: boolean;
+  created_at: string;
+};
+
+export type MonitoringProfile = {
+  profile_id: string;
+  platform: string;
+  entry_type: string;
+  handle: string | null;
+  url: string | null;
+  is_active: boolean;
+  priority: string;
+  last_scraped_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type JurisdictionLocation = {
+  location_id: string;
+  district_name: string;
+  city_names: string[];
+  area_names: string[];
+  alt_spellings: string[];
+  is_active: boolean;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EvidenceLegalHold = {
+  hold_id: string;
+  evidence_id: string;
+  hold_reason: string;
+  legal_reference: string;
+  held_by: string;
+  released_by: string | null;
+  held_at: string;
+  released_at: string | null;
+  is_active: boolean;
+};
+
+export type SlaRule = {
+  rule_id: string;
+  priority: string;
+  category: string;
+  entity_type: string;
+  sla_minutes: number;
+  escalate_to_parent: boolean;
+};
+
+export type AccessJustification = {
+  justification_id: string;
+  user_id: string;
+  entity_type: string;
+  entity_id: string;
+  case_id: string | null;
+  justification_type: string;
+  reason_text: string;
+  accessed_at: string;
+};
+
+export type DetectionTrend = {
+  trend_id: string;
+  term_type: string;
+  term_value: string;
+  category: string | null;
+  time_bucket: string;
+  occurrence_count: number;
+  unit_id: string | null;
+};
+
+export type TrendSpikeAlert = {
+  spike_id: string;
+  term_type: string;
+  term_value: string;
+  baseline_count: number;
+  spike_count: number;
+  spike_ratio: number;
+  time_window: string | null;
+  acknowledged: boolean;
+  created_at: string;
+};
+
+export type NpsCandidate = {
+  nps_id: string;
+  term: string;
+  context_snippet: string | null;
+  source_content_ids: string[];
+  occurrence_count: number;
+  status: string;
+  reviewed_by: string | null;
+  created_at: string;
+};
+
+export type PlatformPreservationRequest = {
+  request_id: string;
+  request_ref: string;
+  platform: string;
+  case_id: string | null;
+  alert_id: string | null;
+  request_type: string;
+  status: string;
+  target_accounts: unknown;
+  target_content: unknown;
+  legal_authority: string;
+  valid_from: string;
+  valid_until: string;
+  generated_document_url: string | null;
+  created_by_name: string;
+  created_at: string;
+};
+
+export type PlatformResponse = {
+  response_id: string;
+  request_id: string;
+  response_type: string;
+  response_date: string;
+  response_ref: string | null;
+  details: string | null;
+};
+
 export const apiBaseUrl =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3010";

@@ -25,6 +25,8 @@ export default function AlertDetail({ id, authHeaders, isOffline, onBack }: Prop
   const [translatedText, setTranslatedText] = useState<string | null>(null);
   const [targetLang, setTargetLang] = useState("hi");
   const [translating, setTranslating] = useState(false);
+  const [escalationReason, setEscalationReason] = useState("");
+  const [escalating, setEscalating] = useState(false);
 
   const fetchTransitions = () => {
     fetch(`${apiBaseUrl}/api/v1/alerts/${id}/transitions`, authHeaders())
@@ -97,6 +99,23 @@ export default function AlertDetail({ id, authHeaders, isOffline, onBack }: Prop
       }
     } catch { /* silent */ }
     setTranslating(false);
+  };
+
+  const handleEscalate = async () => {
+    if (!escalationReason.trim()) return;
+    setEscalating(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/v1/alerts/${id}/escalate`, {
+        ...authHeaders(), method: "POST",
+        body: JSON.stringify({ reason: escalationReason }),
+      });
+      if (!res.ok) throw new Error(`Failed: ${res.status}`);
+      showToast("success", t("escalation.requested"));
+      setEscalationReason("");
+      const entityRes = await fetch(`${apiBaseUrl}/api/v1/alerts/${id}`, authHeaders());
+      if (entityRes.ok) { const d = await entityRes.json(); setAlert(d.alert || d); }
+    } catch { showToast("error", t("common.error")); }
+    finally { setEscalating(false); }
   };
 
   const handleTransition = async () => {
@@ -218,6 +237,25 @@ export default function AlertDetail({ id, authHeaders, isOffline, onBack }: Prop
                   </div>
                 </div>
               )}
+            </div>
+            <div className="detail-section">
+              <h3 className="detail-section__title">{t("escalation.title")}</h3>
+              {(alert as any).escalation_level && (
+                <p style={{ marginBottom: "var(--space-2)" }}>
+                  <span className="badge badge--warning">{t("escalation.level")}: {(alert as any).escalation_level}</span>
+                  {(alert as any).escalation_reason && <span style={{ marginLeft: "var(--space-2)", fontSize: "0.875rem", color: "var(--color-text-muted)" }}>{(alert as any).escalation_reason}</span>}
+                </p>
+              )}
+              <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "flex-end" }}>
+                <div style={{ flex: 1 }}>
+                  <Field label={t("escalation.reason")} htmlFor="esc-reason">
+                    <Input id="esc-reason" value={escalationReason} onChange={(e) => setEscalationReason(e.target.value)} placeholder={t("escalation.reason_placeholder")} />
+                  </Field>
+                </div>
+                <Button onClick={handleEscalate} disabled={!escalationReason.trim() || escalating || isOffline}>
+                  {escalating ? t("common.loading") : t("escalation.request")}
+                </Button>
+              </div>
             </div>
           </>
         )},

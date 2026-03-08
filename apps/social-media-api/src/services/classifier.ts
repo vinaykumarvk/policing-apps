@@ -1,15 +1,16 @@
 import { query } from "../db";
+import { classifyNarcotics, type NarcoticsClassificationResult } from "./narcotics-scorer";
 
 type DbRow = Record<string, unknown>;
 
-interface RiskFactor {
+export interface RiskFactor {
   factor: string;
   weight: number;
   score: number;
   detail: string;
 }
 
-interface ClassificationResult {
+export interface ClassificationResult {
   category: string;
   riskScore: number;
   factors: RiskFactor[];
@@ -22,7 +23,12 @@ const KEYWORD_CATEGORIES: Record<string, string[]> = {
   HARASSMENT: ["harass", "stalk", "bully", "intimidat", "abuse"],
   CSAM: ["child", "minor", "underage"],
   TERRORISM: ["terror", "bomb", "radicali", "jihad", "extremis"],
-  DRUGS: ["drug", "narcotic", "cocaine", "heroin", "meth", "cannabis", "ganja"],
+  DRUGS: [
+    "drug", "narcotic", "cocaine", "heroin", "meth", "cannabis", "ganja",
+    "ganjayi", "afeemu", "naatusaara", "saarayi", "mandu", "podi",
+    "gullu", "saruku", "gaddi", "gaanja", "ganji",
+  ],
+  ILLICIT_LIQUOR: ["naatusaara", "kallu", "saarayi", "belt shop", "kaltee"],
   CYBER_CRIME: ["hack", "malware", "ransomware", "phish", "ddos"],
 };
 
@@ -161,6 +167,46 @@ export function classifyContentWithActorHistory(
   }
 
   return base;
+}
+
+/**
+ * Enhanced classifier: runs standard classification + narcotics pipeline,
+ * returns whichever scores higher. Used in the ingestion pipeline.
+ */
+export async function classifyContentEnhanced(
+  text: string,
+  actorFlaggedPosts = 0,
+  isRepeatOffender = false,
+): Promise<ClassificationResult & { narcoticsResult?: NarcoticsClassificationResult }> {
+  // Run standard classification
+  const standard = classifyContent(text);
+
+  // Run narcotics pipeline
+  const narcoticsResult = await classifyNarcotics(text, actorFlaggedPosts, isRepeatOffender);
+
+  // If narcotics score is higher, build a ClassificationResult from it
+  if (narcoticsResult.narcoticsScore > standard.riskScore) {
+    const factors: RiskFactor[] = narcoticsResult.riskFactors.map(rf => ({
+      factor: rf.factor,
+      weight: 1.0,
+      score: rf.contribution,
+      detail: rf.detail,
+    }));
+
+    return {
+      category: narcoticsResult.substanceCategory ? `DRUGS_${narcoticsResult.substanceCategory}` : "DRUGS",
+      riskScore: narcoticsResult.narcoticsScore,
+      factors,
+      narcoticsResult,
+    };
+  }
+
+  // Standard result is higher — return with actor history if applicable
+  if (isRepeatOffender || actorFlaggedPosts >= 3) {
+    return { ...classifyContentWithActorHistory(text, actorFlaggedPosts, isRepeatOffender), narcoticsResult };
+  }
+
+  return { ...standard, narcoticsResult };
 }
 
 export async function classifyEntity(entityType: string, entityId: string): Promise<DbRow> {

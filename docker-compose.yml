@@ -124,13 +124,21 @@ services:
       SM_DATABASE_URL: postgres://puda:puda@social-media-db:5432/social_media
       DATABASE_SSL: "false"
       JWT_SECRET: "${SM_JWT_SECRET:-sm-local-dev-secret}"
-      ALLOWED_ORIGINS: "http://localhost:3020"
+      ALLOWED_ORIGINS: "http://localhost:3020,http://localhost:5177"
       YOUTUBE_API_KEY: "${YOUTUBE_API_KEY:-}"
       TWITTER_BEARER_TOKEN: "${TWITTER_BEARER_TOKEN:-}"
       META_ACCESS_TOKEN: "${META_ACCESS_TOKEN:-}"
       INSTAGRAM_BUSINESS_ACCOUNT_ID: "${INSTAGRAM_BUSINESS_ACCOUNT_ID:-}"
+      APIFY_API_TOKEN: "${APIFY_API_KEY:-}"
+      APIFY_ONLY_PLATFORMS: "twitter,instagram,facebook"
       CONNECTOR_POLL_INTERVAL_MS: "300000"
-      ALERT_THREAT_THRESHOLD: "40"
+      ALERT_THREAT_THRESHOLD: "15"
+      EVIDENCE_STORAGE_DIR: /data/evidence
+      SCREENSHOT_ENABLED: "true"
+      SCREENSHOT_TIMEOUT_MS: "30000"
+      CHROMIUM_PATH: /usr/bin/chromium-browser
+    volumes:
+      - sm_evidence_data:/data/evidence
     command: ["sh", "-c", "node apps/social-media-api/dist/migrate-runner.js && node apps/social-media-api/dist/index.js"]
     depends_on:
       social-media-db:
@@ -297,5 +305,6 @@ volumes:
   puda_pg_data:
   puda_uploads:
   sm_pg_data:
+  sm_evidence_data:
   dopams_pg_data:
   forensic_pg_data:

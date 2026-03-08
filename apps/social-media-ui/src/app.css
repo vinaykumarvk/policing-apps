@@ -75,6 +75,12 @@
   outline-offset: 2px;
 }
 
+/* Scrollable table wrapper */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Entity list tables */
 .entity-table {
   width: 100%;
@@ -87,6 +93,7 @@
   text-align: left;
   border-bottom: 1px solid var(--color-border);
   font-size: 0.875rem;
+  white-space: nowrap;
 }
 
 .entity-table th {
@@ -95,6 +102,12 @@
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+/* Compact variant — tighter padding for many-column tables */
+.entity-table--compact th,
+.entity-table--compact td {
+  padding: var(--space-2) var(--space-3);
 }
 
 .entity-table tr:hover {
@@ -108,6 +121,35 @@
 .entity-table__clickable {
   cursor: pointer;
 }
+
+/* Inline icon action buttons */
+.action-btns {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+}
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  min-height: 2.25rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.icon-btn:hover  { background: var(--color-brand-soft); color: var(--color-brand); }
+.icon-btn:active { background: var(--color-brand-soft); color: var(--color-brand); }
+.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.icon-btn--success:hover,
+.icon-btn--success:active { background: var(--color-success-soft); color: var(--color-success); }
+.icon-btn--danger:hover,
+.icon-btn--danger:active  { background: var(--color-danger-soft);  color: var(--color-danger); }
 
 /* Mobile: table → cards */
 @media (max-width: 48rem) {
@@ -348,6 +390,60 @@
   justify-content: center;
   padding: var(--space-7);
   color: var(--color-text-muted);
+}
+
+/* Tab bar — Detection Dictionary, Monitoring, etc. */
+.tab-bar {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-4);
+}
+.tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  min-height: 2.75rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+}
+.tab-btn:hover  { background: var(--color-surface-muted); color: var(--color-text); }
+.tab-btn:active { background: var(--color-surface-muted); }
+.tab-btn--active {
+  background: var(--color-surface);
+  color: var(--color-brand);
+  box-shadow: var(--shadow-xs);
+}
+.tab-btn--active:hover { background: var(--color-surface); color: var(--color-brand); }
+
+.tab-btn__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.25rem;
+  padding: 0 var(--space-1);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: var(--color-border);
+  color: var(--color-text-muted);
+}
+.tab-btn--active .tab-btn__count {
+  background: var(--color-brand-soft);
+  color: var(--color-brand);
 }
 
 /* Admin table */
