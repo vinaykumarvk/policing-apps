@@ -33,7 +33,7 @@ export async function registerDedupRoutes(app: FastifyInstance): Promise<void> {
         `SELECT dc.candidate_id,
                 dc.subject_id_a, sa.full_name AS full_name_a, sa.subject_ref AS subject_ref_a,
                 dc.subject_id_b, sb.full_name AS full_name_b, sb.subject_ref AS subject_ref_b,
-                dc.similarity_score, dc.match_reasons, dc.state_id,
+                dc.similarity_score, dc.match_fields, dc.state_id,
                 dc.reviewed_by, dc.reviewed_at, dc.created_at,
                 COUNT(*) OVER() AS total_count
          FROM dedup_candidate dc

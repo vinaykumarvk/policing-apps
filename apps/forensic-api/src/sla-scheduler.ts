@@ -9,8 +9,18 @@ const scheduler = createSlaScheduler({
   executeTransition,
 });
 
-export const startSlaScheduler = scheduler.start;
-export const stopSlaScheduler = scheduler.stop;
+const _origStart = scheduler.start;
+const _origStop = scheduler.stop;
+
+export function startSlaScheduler(): void {
+  _origStart();
+  startReportScheduler();
+}
+
+export function stopSlaScheduler(): void {
+  _origStop();
+  stopReportScheduler();
+}
 
 // Scheduled report runner
 let reportInterval: ReturnType<typeof setInterval> | null = null;

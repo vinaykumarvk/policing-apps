@@ -229,7 +229,7 @@ export async function registerSubjectRoutes(app: FastifyInstance): Promise<void>
         if (camelKey && body[camelKey] !== undefined) {
           // Insert conflict record for audit
           await query(
-            `INSERT INTO assertion_conflict (subject_id, field_name, source_a, value_a, source_b, value_b, resolved_source, resolved_at)
+            `INSERT INTO assertion_conflict (subject_id, field_name, source_a, value_a, source_b, value_b, resolution, resolved_at)
              VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
              ON CONFLICT DO NOTHING`,
             [

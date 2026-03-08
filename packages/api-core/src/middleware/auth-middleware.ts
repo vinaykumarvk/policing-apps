@@ -18,6 +18,7 @@ const DEFAULT_PUBLIC_ROUTES = [
   "/health",
   "/ready",
   "/api/v1/auth/login",
+  "/api/v1/auth/ldap/login",
   "/api/v1/auth/logout",
 ];
 
