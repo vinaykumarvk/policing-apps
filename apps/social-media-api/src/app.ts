@@ -82,6 +82,11 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
   await app.register(cors, { origin: allowedOrigins, credentials: true });
   await app.register(cookie);
 
+  // Allow text/csv bodies for CSV import endpoints
+  app.addContentTypeParser("text/csv", { parseAs: "string" }, (_req, body, done) => {
+    done(null, body);
+  });
+
   const globalRateLimitMax = Number.parseInt(process.env.RATE_LIMIT_MAX || "100", 10);
   await app.register(rateLimit, {
     max: Number.isFinite(globalRateLimitMax) ? globalRateLimitMax : 100,

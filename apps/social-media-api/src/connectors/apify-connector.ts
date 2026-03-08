@@ -9,19 +9,19 @@ const POLL_TIMEOUT_MS = 120_000;
 const ACTOR_MAP: Record<string, { profile: string; keyword: string }> = {
   facebook: {
     profile: "apify/facebook-posts-scraper",
-    keyword: "apify/facebook-posts-scraper",
+    keyword: "apify/facebook-search-scraper",
   },
   instagram: {
     profile: "apify/instagram-profile-scraper",
     keyword: "apify/instagram-hashtag-scraper",
   },
   twitter: {
-    profile: "apify/twitter-scraper",
-    keyword: "apify/twitter-scraper",
+    profile: "web.harvester/twitter-scraper",
+    keyword: "apidojo/tweet-scraper",
   },
   x: {
-    profile: "apify/twitter-scraper",
-    keyword: "apify/twitter-scraper",
+    profile: "web.harvester/twitter-scraper",
+    keyword: "apidojo/tweet-scraper",
   },
 };
 
@@ -90,8 +90,17 @@ export class ApifyConnector {
     switch (platform) {
       case "facebook":
         return { searchQueries: keywords, resultsLimit: 25 };
-      case "instagram":
-        return { hashtags: keywords, resultsLimit: 25 };
+      case "instagram": {
+        // Instagram hashtag scraper requires single-word hashtags (no spaces/special chars)
+        // Split multi-word keywords into individual hashtags and also create a joined variant
+        const hashtags: string[] = [];
+        for (const kw of keywords) {
+          const words = kw.replace(/[^a-zA-Z0-9\u0900-\u0D7F\s]/g, "").split(/\s+/).filter(Boolean);
+          hashtags.push(...words);
+          if (words.length > 1) hashtags.push(words.join(""));  // e.g. "drugspunjab"
+        }
+        return { hashtags: [...new Set(hashtags)], resultsLimit: 25 };
+      }
       case "twitter":
       case "x":
         return { searchTerms: keywords, tweetsDesired: 25 };
@@ -102,8 +111,9 @@ export class ApifyConnector {
 
   private async runActor(actorId: string, input: Record<string, unknown>, platform: string): Promise<FetchedItem[]> {
     try {
-      // 1. Start actor run
-      const startRes = await fetch(`${APIFY_BASE_URL}/acts/${actorId}/runs?token=${this.apiToken}`, {
+      // 1. Start actor run — Apify API uses ~ as namespace separator in URLs
+      const actorPath = actorId.replace("/", "~");
+      const startRes = await fetch(`${APIFY_BASE_URL}/acts/${actorPath}/runs?token=${this.apiToken}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
@@ -111,7 +121,8 @@ export class ApifyConnector {
       });
 
       if (!startRes.ok) {
-        logError("Apify: failed to start actor", { actorId, status: startRes.status });
+        const errBody = await startRes.text().catch(() => "");
+        logError("Apify: failed to start actor", { actorId, status: startRes.status, body: errBody.slice(0, 300) });
         return [];
       }
 
@@ -181,17 +192,20 @@ export class ApifyConnector {
     const items: FetchedItem[] = [];
 
     for (const raw of rawItems) {
-      const id = String(raw.id || raw.postId || raw.tweetId || raw.shortcode || raw.url || "");
+      // Skip error/empty sentinel items returned by some actors
+      if (raw.noResults || raw.error) continue;
+
+      const id = String(raw.id || raw.postId || raw.tweetId || raw.shortCode || raw.shortcode || raw.url || "");
       if (!id) continue;
 
-      const text = String(raw.text || raw.caption || raw.body || raw.postText || raw.fullText || "");
+      const text = String(raw.text || raw.caption || raw.body || raw.postText || raw.fullText || raw.message || "");
       if (!text) continue;
 
       items.push({
         platformPostId: `apify_${platform}_${id}`,
         platform,
-        authorHandle: String(raw.username || raw.authorUsername || raw.handle || raw.author || "") || null,
-        authorName: String(raw.authorName || raw.name || raw.displayName || "") || null,
+        authorHandle: String(raw.ownerUsername || raw.username || raw.authorUsername || raw.handle || raw.author || "") || null,
+        authorName: String(raw.ownerFullName || raw.authorName || raw.name || raw.displayName || "") || null,
         contentText: text,
         contentUrl: String(raw.url || raw.postUrl || raw.tweetUrl || raw.link || ""),
         language: String(raw.lang || raw.language || "") || null,

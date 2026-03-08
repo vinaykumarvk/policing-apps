@@ -159,6 +159,10 @@ export type MonitoringProfile = {
   url: string | null;
   is_active: boolean;
   priority: string;
+  source: string;
+  source_ref: string | null;
+  suspect_name: string | null;
+  notes: string | null;
   last_scraped_at: string | null;
   created_by: string | null;
   created_at: string;

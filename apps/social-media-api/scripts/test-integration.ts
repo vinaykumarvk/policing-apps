@@ -138,7 +138,6 @@ async function main() {
   log(`\nTotal fetched: ${allItems.length} items`);
   if (allItems.length === 0) {
     log("Nothing to ingest — exiting.");
-    await pool.end();
     return;
   }
 

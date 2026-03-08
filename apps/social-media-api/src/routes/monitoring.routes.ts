@@ -59,6 +59,10 @@ export async function registerMonitoringRoutes(app: FastifyInstance): Promise<vo
           handle: { type: "string", maxLength: 256 },
           url: { type: "string", maxLength: 2048 },
           priority: { type: "string", enum: ["HIGH", "NORMAL", "LOW"], default: "NORMAL" },
+          source: { type: "string", enum: ["MANUAL", "NIDAAN", "TEF", "PRIVATE", "BULK_CSV"], default: "MANUAL" },
+          sourceRef: { type: "string", maxLength: 256 },
+          suspectName: { type: "string", maxLength: 256 },
+          notes: { type: "string" },
         },
       },
     },
@@ -70,10 +74,10 @@ export async function registerMonitoringRoutes(app: FastifyInstance): Promise<vo
       }
       const { userId } = request.authUser!;
       const result = await query(
-        `INSERT INTO monitoring_profile (platform, entry_type, handle, url, priority, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING profile_id, platform, entry_type, handle, url, is_active, priority, created_at`,
-        [body.platform, body.entryType || "PROFILE", body.handle || null, body.url || null, body.priority || "NORMAL", userId],
+        `INSERT INTO monitoring_profile (platform, entry_type, handle, url, priority, source, source_ref, suspect_name, notes, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         RETURNING profile_id, platform, entry_type, handle, url, is_active, priority, source, source_ref, suspect_name, notes, created_at`,
+        [body.platform, body.entryType || "PROFILE", body.handle || null, body.url || null, body.priority || "NORMAL", body.source || "MANUAL", (body.sourceRef as string) || null, (body.suspectName as string) || null, (body.notes as string) || null, userId],
       );
       reply.code(201);
       return { profile: result.rows[0] };
@@ -96,6 +100,10 @@ export async function registerMonitoringRoutes(app: FastifyInstance): Promise<vo
           handle: { type: "string", maxLength: 256 },
           url: { type: "string", maxLength: 2048 },
           priority: { type: "string", enum: ["HIGH", "NORMAL", "LOW"] },
+          source: { type: "string", enum: ["MANUAL", "NIDAAN", "TEF", "PRIVATE", "BULK_CSV"] },
+          sourceRef: { type: "string", maxLength: 256 },
+          suspectName: { type: "string", maxLength: 256 },
+          notes: { type: "string" },
         },
       },
     },
@@ -104,15 +112,19 @@ export async function registerMonitoringRoutes(app: FastifyInstance): Promise<vo
     const body = request.body as Record<string, unknown>;
     const result = await query(
       `UPDATE monitoring_profile
-       SET platform   = COALESCE($2, platform),
-           entry_type = COALESCE($3, entry_type),
-           handle     = COALESCE($4, handle),
-           url        = COALESCE($5, url),
-           priority   = COALESCE($6, priority),
-           updated_at = NOW()
+       SET platform     = COALESCE($2, platform),
+           entry_type   = COALESCE($3, entry_type),
+           handle       = COALESCE($4, handle),
+           url          = COALESCE($5, url),
+           priority     = COALESCE($6, priority),
+           source       = COALESCE($7, source),
+           source_ref   = COALESCE($8, source_ref),
+           suspect_name = COALESCE($9, suspect_name),
+           notes        = COALESCE($10, notes),
+           updated_at   = NOW()
        WHERE profile_id = $1 AND is_active = TRUE
-       RETURNING profile_id, platform, entry_type, handle, url, is_active, priority, last_scraped_at, created_at, updated_at`,
-      [id, body.platform ?? null, body.entryType ?? null, body.handle ?? null, body.url ?? null, body.priority ?? null],
+       RETURNING profile_id, platform, entry_type, handle, url, is_active, priority, source, source_ref, suspect_name, notes, last_scraped_at, created_at, updated_at`,
+      [id, body.platform ?? null, body.entryType ?? null, body.handle ?? null, body.url ?? null, body.priority ?? null, body.source ?? null, body.sourceRef ?? null, body.suspectName ?? null, body.notes ?? null],
     );
     if (result.rows.length === 0) return send404(reply, "NOT_FOUND", "Profile not found");
     return { profile: result.rows[0] };
@@ -130,6 +142,104 @@ export async function registerMonitoringRoutes(app: FastifyInstance): Promise<vo
     );
     if (result.rows.length === 0) return send404(reply, "NOT_FOUND", "Profile not found");
     return { success: true };
+  });
+
+  // POST /api/v1/monitoring/profiles/import — CSV bulk import
+  app.post("/api/v1/monitoring/profiles/import", {
+    schema: {
+      body: { type: "string" },
+    },
+  }, async (request, reply) => {
+    try {
+      const csv = request.body as string;
+      if (!csv || typeof csv !== "string") {
+        return send400(reply, "VALIDATION_ERROR", "Request body must be CSV text");
+      }
+
+      const lines = csv.split(/\r?\n/).filter((l) => l.trim());
+      if (lines.length < 2) {
+        return send400(reply, "VALIDATION_ERROR", "CSV must have a header row and at least one data row");
+      }
+
+      const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
+      const requiredCols = ["platform", "handle"];
+      for (const col of requiredCols) {
+        if (!header.includes(col)) {
+          return send400(reply, "VALIDATION_ERROR", `Missing required CSV column: ${col}`);
+        }
+      }
+
+      const validPlatforms = new Set(["facebook", "instagram", "twitter", "x"]);
+      const validEntryTypes = new Set(["PROFILE", "GROUP", "PAGE"]);
+      const validSources = new Set(["MANUAL", "NIDAAN", "TEF", "PRIVATE", "BULK_CSV"]);
+      const validPriorities = new Set(["HIGH", "NORMAL", "LOW"]);
+
+      let imported = 0;
+      let skipped = 0;
+      const errors: string[] = [];
+      const { userId } = request.authUser!;
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(",").map((v) => v.trim());
+        const row: Record<string, string> = {};
+        header.forEach((col, idx) => { row[col] = values[idx] || ""; });
+
+        if (!row.platform || !row.handle) {
+          errors.push(`Row ${i + 1}: platform and handle are required`);
+          skipped++;
+          continue;
+        }
+        if (!validPlatforms.has(row.platform)) {
+          errors.push(`Row ${i + 1}: invalid platform "${row.platform}"`);
+          skipped++;
+          continue;
+        }
+        const entryType = row.entry_type || "PROFILE";
+        if (!validEntryTypes.has(entryType)) {
+          errors.push(`Row ${i + 1}: invalid entry_type "${entryType}"`);
+          skipped++;
+          continue;
+        }
+        const source = row.source || "BULK_CSV";
+        if (!validSources.has(source)) {
+          errors.push(`Row ${i + 1}: invalid source "${source}"`);
+          skipped++;
+          continue;
+        }
+        const priority = row.priority || "NORMAL";
+        if (!validPriorities.has(priority)) {
+          errors.push(`Row ${i + 1}: invalid priority "${priority}"`);
+          skipped++;
+          continue;
+        }
+
+        try {
+          await query(
+            `INSERT INTO monitoring_profile (platform, entry_type, handle, priority, source, source_ref, suspect_name, notes, created_by)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             ON CONFLICT (platform, handle) WHERE handle IS NOT NULL DO UPDATE
+             SET priority     = EXCLUDED.priority,
+                 source       = EXCLUDED.source,
+                 source_ref   = EXCLUDED.source_ref,
+                 suspect_name = EXCLUDED.suspect_name,
+                 notes        = EXCLUDED.notes,
+                 updated_at   = NOW()`,
+            [row.platform, entryType, row.handle, priority, source, row.source_ref || null, row.suspect_name || null, row.notes || null, userId],
+          );
+          imported++;
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : "Unknown error";
+          errors.push(`Row ${i + 1}: ${msg}`);
+          skipped++;
+        }
+      }
+
+      reply.code(imported > 0 ? 201 : 200);
+      return { imported, skipped, errors };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to import CSV");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
   });
 
   // ─── LOCATIONS (Tier-2) ───────────────────────────────────────────

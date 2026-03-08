@@ -352,6 +352,14 @@ const pa: Record<string, string> = {
   "monitoring.page_info": "{{from}}\u2013{{to}} / {{total}}",
   "monitoring.handle_or_url_required": "ਹੈਂਡਲ ਜਾਂ URL ਲੋੜੀਂਦਾ ਹੈ",
   "monitoring.comma_separated": "ਕਾਮੇ ਨਾਲ ਵੱਖ ਕੀਤੇ ਮੁੱਲ",
+  "monitoring.source": "ਸਰੋਤ",
+  "monitoring.source_ref": "ਸਰੋਤ ਹਵਾਲਾ",
+  "monitoring.suspect_name": "ਸ਼ੱਕੀ ਦਾ ਨਾਮ",
+  "monitoring.suspect": "ਸ਼ੱਕੀ",
+  "monitoring.import_csv": "CSV ਆਯਾਤ",
+  "monitoring.import_success": "ਆਯਾਤ ਕੀਤੇ {{imported}}, ਛੱਡੇ {{skipped}}",
+  "monitoring.import_failed": "ਆਯਾਤ ਅਸਫਲ",
+  "monitoring.select_csv": "CSV ਫਾਈਲ ਚੁਣੋ",
 
   // Phase 1: Evidence Integrity
   "evidence.verify_integrity": "ਹੈਸ਼ ਤਸਦੀਕ",

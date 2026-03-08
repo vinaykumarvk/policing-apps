@@ -362,6 +362,14 @@ const te: Record<string, string> = {
   "monitoring.page_info": "{{from}}\u2013{{to}} / {{total}}",
   "monitoring.handle_or_url_required": "హ్యాండిల్ లేదా URL అవసరం",
   "monitoring.comma_separated": "కామాతో వేరు చేయబడిన విలువలు",
+  "monitoring.source": "మూలం",
+  "monitoring.source_ref": "మూల సూచన",
+  "monitoring.suspect_name": "అనుమానిత వ్యక్తి పేరు",
+  "monitoring.suspect": "అనుమానిత",
+  "monitoring.import_csv": "CSV దిగుమతి",
+  "monitoring.import_success": "దిగుమతి {{imported}}, దాటవేసిన {{skipped}}",
+  "monitoring.import_failed": "దిగుమతి విఫలమైంది",
+  "monitoring.select_csv": "CSV ఫైల్ ఎంచుకోండి",
 
   // Phase 1: Evidence Integrity
   "evidence.verify_integrity": "హ్యాష్ ధృవీకరణ",

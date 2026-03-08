@@ -362,6 +362,14 @@ const en: Record<string, string> = {
   "monitoring.page_info": "{{from}}\u2013{{to}} of {{total}}",
   "monitoring.handle_or_url_required": "Handle or URL is required",
   "monitoring.comma_separated": "Comma-separated values",
+  "monitoring.source": "Source",
+  "monitoring.source_ref": "Source Reference",
+  "monitoring.suspect_name": "Suspect Name",
+  "monitoring.suspect": "Suspect",
+  "monitoring.import_csv": "Import CSV",
+  "monitoring.import_success": "Imported {{imported}}, skipped {{skipped}}",
+  "monitoring.import_failed": "Import failed",
+  "monitoring.select_csv": "Select CSV file",
 
   // Phase 1: Evidence Integrity
   "evidence.verify_integrity": "Hash Verification",

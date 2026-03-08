@@ -9,7 +9,18 @@ type Tab = "profiles" | "locations";
 const PLATFORMS = ["facebook", "instagram", "twitter", "x"] as const;
 const ENTRY_TYPES = ["PROFILE", "GROUP", "PAGE"] as const;
 const PRIORITIES = ["HIGH", "NORMAL", "LOW"] as const;
+const SOURCES = ["MANUAL", "NIDAAN", "TEF", "PRIVATE", "BULK_CSV"] as const;
 const LIMIT = 20;
+
+const sourceBadgeClass = (source: string) => {
+  switch (source) {
+    case "NIDAAN": return "badge--error";
+    case "TEF": return "badge--warning";
+    case "PRIVATE": return "badge--info";
+    case "BULK_CSV": return "badge--success";
+    default: return "badge--default";
+  }
+};
 
 export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Props) {
   const { t } = useTranslation();
@@ -25,6 +36,7 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
   const [profileOffset, setProfileOffset] = useState(0);
   const [filterPlatform, setFilterPlatform] = useState("");
   const [filterEntryType, setFilterEntryType] = useState("");
+  const [filterSource, setFilterSource] = useState("");
   const [searchText, setSearchText] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -36,6 +48,10 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
   const [fpHandle, setFpHandle] = useState("");
   const [fpUrl, setFpUrl] = useState("");
   const [fpPriority, setFpPriority] = useState<string>("NORMAL");
+  const [fpSource, setFpSource] = useState<string>("MANUAL");
+  const [fpSourceRef, setFpSourceRef] = useState("");
+  const [fpSuspectName, setFpSuspectName] = useState("");
+  const [fpNotes, setFpNotes] = useState("");
   const [creating, setCreating] = useState(false);
 
   // Profile edit modal
@@ -45,7 +61,15 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
   const [epHandle, setEpHandle] = useState("");
   const [epUrl, setEpUrl] = useState("");
   const [epPriority, setEpPriority] = useState("");
+  const [epSource, setEpSource] = useState("");
+  const [epSourceRef, setEpSourceRef] = useState("");
+  const [epSuspectName, setEpSuspectName] = useState("");
+  const [epNotes, setEpNotes] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // CSV import
+  const csvInputRef = useRef<HTMLInputElement | null>(null);
+  const [importing, setImporting] = useState(false);
 
   // Delete confirmation
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -101,6 +125,7 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
     params.set("offset", String(profileOffset));
     if (filterPlatform) params.set("platform", filterPlatform);
     if (filterEntryType) params.set("entryType", filterEntryType);
+    if (filterSource) params.set("source", filterSource);
     if (debouncedSearch) params.set("search", debouncedSearch);
 
     fetch(`${apiBaseUrl}/api/v1/monitoring/profiles?${params}`, authHeaders())
@@ -108,7 +133,7 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
       .then((data) => { setProfiles(data.profiles || []); setProfileTotal(data.total || 0); })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed"))
       .finally(() => setLoading(false));
-  }, [authHeaders, isOffline, profileOffset, filterPlatform, filterEntryType, debouncedSearch]);
+  }, [authHeaders, isOffline, profileOffset, filterPlatform, filterEntryType, filterSource, debouncedSearch]);
 
   // ─── Load locations ───────────────────────────────────────────────
   const loadLocations = useCallback(() => {
@@ -138,12 +163,17 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/monitoring/profiles`, {
         ...authHeaders(), method: "POST",
-        body: JSON.stringify({ platform: fpPlatform, entryType: fpEntryType, handle: fpHandle || undefined, url: fpUrl || undefined, priority: fpPriority }),
+        body: JSON.stringify({
+          platform: fpPlatform, entryType: fpEntryType, handle: fpHandle || undefined, url: fpUrl || undefined,
+          priority: fpPriority, source: fpSource, sourceRef: fpSourceRef || undefined,
+          suspectName: fpSuspectName || undefined, notes: fpNotes || undefined,
+        }),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
       showToast("success", t("monitoring.profile_created"));
       setShowCreateProfile(false);
-      setFpHandle(""); setFpUrl(""); setFpPriority("NORMAL");
+      setFpHandle(""); setFpUrl(""); setFpPriority("NORMAL"); setFpSource("MANUAL");
+      setFpSourceRef(""); setFpSuspectName(""); setFpNotes("");
       loadProfiles();
     } catch (err) { showToast("error", err instanceof Error ? err.message : "Failed"); }
     finally { setCreating(false); }
@@ -153,6 +183,8 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
     setEditProfile(p);
     setEpPlatform(p.platform); setEpEntryType(p.entry_type);
     setEpHandle(p.handle || ""); setEpUrl(p.url || ""); setEpPriority(p.priority);
+    setEpSource(p.source || "MANUAL"); setEpSourceRef(p.source_ref || "");
+    setEpSuspectName(p.suspect_name || ""); setEpNotes(p.notes || "");
   };
 
   const handleSaveProfile = async () => {
@@ -161,13 +193,40 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/monitoring/profiles/${editProfile.profile_id}`, {
         ...authHeaders(), method: "PATCH",
-        body: JSON.stringify({ platform: epPlatform, entryType: epEntryType, handle: epHandle || undefined, url: epUrl || undefined, priority: epPriority }),
+        body: JSON.stringify({
+          platform: epPlatform, entryType: epEntryType, handle: epHandle || undefined, url: epUrl || undefined,
+          priority: epPriority, source: epSource, sourceRef: epSourceRef || undefined,
+          suspectName: epSuspectName || undefined, notes: epNotes || undefined,
+        }),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
       showToast("success", t("monitoring.profile_saved"));
       setEditProfile(null); loadProfiles();
     } catch (err) { showToast("error", err instanceof Error ? err.message : "Failed"); }
     finally { setSaving(false); }
+  };
+
+  // ─── CSV Import ─────────────────────────────────────────────────
+  const handleCsvImport = async (file: File) => {
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const res = await fetch(`${apiBaseUrl}/api/v1/monitoring/profiles/import`, {
+        method: "POST",
+        headers: { "Content-Type": "text/csv" },
+        credentials: "include",
+        body: text,
+      });
+      if (!res.ok) throw new Error(`Failed: ${res.status}`);
+      const data = await res.json() as { imported: number; skipped: number; errors: string[] };
+      showToast("success", t("monitoring.import_success", { imported: data.imported, skipped: data.skipped }));
+      loadProfiles();
+    } catch (err) {
+      showToast("error", t("monitoring.import_failed"));
+    } finally {
+      setImporting(false);
+      if (csvInputRef.current) csvInputRef.current.value = "";
+    }
   };
 
   // ─── Location CRUD ────────────────────────────────────────────────
@@ -266,9 +325,21 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
           <div className="admin-section__header">
             <h2>{t("monitoring.profiles_heading")}</h2>
             {isAdmin && (
-              <Button onClick={() => setShowCreateProfile(!showCreateProfile)} disabled={isOffline}>
-                {showCreateProfile ? t("common.cancel") : t("monitoring.add_profile")}
-              </Button>
+              <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
+                <input
+                  ref={csvInputRef}
+                  type="file"
+                  accept=".csv"
+                  style={{ display: "none" }}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleCsvImport(f); }}
+                />
+                <Button onClick={() => csvInputRef.current?.click()} disabled={isOffline || importing}>
+                  {importing ? t("common.loading") : t("monitoring.import_csv")}
+                </Button>
+                <Button onClick={() => setShowCreateProfile(!showCreateProfile)} disabled={isOffline}>
+                  {showCreateProfile ? t("common.cancel") : t("monitoring.add_profile")}
+                </Button>
+              </div>
             )}
           </div>
 
@@ -287,6 +358,12 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
               <select id="mp-type" className="input" value={filterEntryType} onChange={(e) => { setFilterEntryType(e.target.value); setProfileOffset(0); }}>
                 <option value="">{t("filter.all")}</option>
                 {ENTRY_TYPES.map((et) => <option key={et} value={et}>{et}</option>)}
+              </select>
+            </Field>
+            <Field label={t("monitoring.source")} htmlFor="mp-source">
+              <select id="mp-source" className="input" value={filterSource} onChange={(e) => { setFilterSource(e.target.value); setProfileOffset(0); }}>
+                <option value="">{t("filter.all")}</option>
+                {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </Field>
           </div>
@@ -316,6 +393,20 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
                     {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </Field>
+                <Field label={t("monitoring.source")} htmlFor="cp-source">
+                  <select id="cp-source" className="input" value={fpSource} onChange={(e) => setFpSource(e.target.value)}>
+                    {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </Field>
+                <Field label={t("monitoring.source_ref")} htmlFor="cp-sref">
+                  <Input id="cp-sref" value={fpSourceRef} onChange={(e) => setFpSourceRef(e.target.value)} />
+                </Field>
+                <Field label={t("monitoring.suspect_name")} htmlFor="cp-suspect">
+                  <Input id="cp-suspect" value={fpSuspectName} onChange={(e) => setFpSuspectName(e.target.value)} />
+                </Field>
+                <Field label={t("monitoring.notes")} htmlFor="cp-notes">
+                  <Input id="cp-notes" value={fpNotes} onChange={(e) => setFpNotes(e.target.value)} />
+                </Field>
               </div>
               <div style={{ marginTop: "var(--space-3)" }}>
                 <Button type="submit" disabled={creating}>{creating ? t("common.loading") : t("common.create")}</Button>
@@ -332,9 +423,9 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
                 <thead>
                   <tr>
                     <th>{t("monitoring.platform")}</th>
-                    <th>{t("monitoring.entry_type")}</th>
                     <th>{t("monitoring.handle")}</th>
-                    <th>{t("monitoring.url")}</th>
+                    <th>{t("monitoring.source")}</th>
+                    <th>{t("monitoring.suspect")}</th>
                     <th>{t("monitoring.priority")}</th>
                     <th>{t("monitoring.last_scraped")}</th>
                     {isAdmin && <th>{t("models.actions")}</th>}
@@ -344,9 +435,11 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
                   {profiles.map((p) => (
                     <tr key={p.profile_id}>
                       <td data-label={t("monitoring.platform")}><span className="badge badge--default">{p.platform}</span></td>
-                      <td data-label={t("monitoring.entry_type")}>{p.entry_type}</td>
                       <td data-label={t("monitoring.handle")}>{p.handle || "—"}</td>
-                      <td data-label={t("monitoring.url")} style={{ maxWidth: "12rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.url || "—"}</td>
+                      <td data-label={t("monitoring.source")}>
+                        <span className={`badge ${sourceBadgeClass(p.source)}`}>{p.source}</span>
+                      </td>
+                      <td data-label={t("monitoring.suspect")}>{p.suspect_name || "—"}</td>
                       <td data-label={t("monitoring.priority")}>
                         <span className={`badge badge--${p.priority === "HIGH" ? "error" : p.priority === "LOW" ? "success" : "warning"}`}>{p.priority}</span>
                       </td>
@@ -502,6 +595,21 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
               <select id="ep-prio" className="input" value={epPriority} onChange={(e) => setEpPriority(e.target.value)}>
                 {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
+            </Field>
+            <Field label={t("monitoring.source")} htmlFor="ep-source">
+              <select id="ep-source" className="input" value={epSource} onChange={(e) => setEpSource(e.target.value)}
+                disabled={epSource === "NIDAAN" || epSource === "TEF"}>
+                {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </Field>
+            <Field label={t("monitoring.source_ref")} htmlFor="ep-sref">
+              <Input id="ep-sref" value={epSourceRef} onChange={(e) => setEpSourceRef(e.target.value)} />
+            </Field>
+            <Field label={t("monitoring.suspect_name")} htmlFor="ep-suspect">
+              <Input id="ep-suspect" value={epSuspectName} onChange={(e) => setEpSuspectName(e.target.value)} />
+            </Field>
+            <Field label={t("monitoring.notes")} htmlFor="ep-notes">
+              <Input id="ep-notes" value={epNotes} onChange={(e) => setEpNotes(e.target.value)} />
             </Field>
           </div>
         )}

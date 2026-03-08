@@ -362,6 +362,14 @@ const hi: Record<string, string> = {
   "monitoring.page_info": "{{from}}\u2013{{to}} / {{total}}",
   "monitoring.handle_or_url_required": "हैंडल या URL आवश्यक है",
   "monitoring.comma_separated": "अल्पविराम से अलग मान",
+  "monitoring.source": "स्रोत",
+  "monitoring.source_ref": "स्रोत संदर्भ",
+  "monitoring.suspect_name": "संदिग्ध का नाम",
+  "monitoring.suspect": "संदिग्ध",
+  "monitoring.import_csv": "CSV आयात",
+  "monitoring.import_success": "आयातित {{imported}}, छोड़े गए {{skipped}}",
+  "monitoring.import_failed": "आयात विफल",
+  "monitoring.select_csv": "CSV फ़ाइल चुनें",
 
   // Phase 1: Evidence Integrity
   "evidence.verify_integrity": "हैश सत्यापन",
