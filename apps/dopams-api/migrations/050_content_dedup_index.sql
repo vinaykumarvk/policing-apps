@@ -1,5 +1,13 @@
 -- FR-02 AC-02 / FR-19: Content deduplication unique constraint
--- Prevents exact duplicate ingestion by (source_platform, md5(raw_text), captured_at)
+-- Prevents exact duplicate ingestion by (source_platform, content_hash)
+
+-- Add content_hash column if not exists (must come BEFORE the constraint)
+ALTER TABLE content_item ADD COLUMN IF NOT EXISTS content_hash TEXT;
+
+-- Populate content_hash for existing rows
+UPDATE content_item SET content_hash = md5(raw_text) WHERE content_hash IS NULL;
+
+-- Add unique constraint for deduplication
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -9,12 +17,6 @@ BEGIN
       ADD CONSTRAINT uq_content_dedup UNIQUE (source_platform, content_hash);
   END IF;
 END $$;
-
--- Add content_hash column if not exists
-ALTER TABLE content_item ADD COLUMN IF NOT EXISTS content_hash TEXT;
-
--- Populate content_hash for existing rows
-UPDATE content_item SET content_hash = md5(raw_text) WHERE content_hash IS NULL;
 
 -- Create function to auto-set content_hash on INSERT
 CREATE OR REPLACE FUNCTION set_content_hash() RETURNS TRIGGER AS $$

@@ -23,5 +23,14 @@ CREATE TABLE IF NOT EXISTS alert_suppression_rule (
   updated_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Export log table (must exist before adding columns)
+CREATE TABLE IF NOT EXISTS export_log (
+  export_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  export_type   VARCHAR(50) NOT NULL,
+  filters_jsonb JSONB DEFAULT '{}',
+  created_by    UUID REFERENCES user_account(user_id),
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Export justification
 ALTER TABLE export_log ADD COLUMN IF NOT EXISTS justification TEXT NOT NULL DEFAULT '';
