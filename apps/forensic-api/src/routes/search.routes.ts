@@ -99,12 +99,15 @@ export async function registerSearchRoutes(app: FastifyInstance): Promise<void> 
 
       const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
+      // FR-05 AC-04: Join artifact table for parser_version and artifact_type source context
       const result = await query(
         `SELECT e.evidence_id, e.file_name, e.source_type AS mime_type, e.file_url AS thumbnail_url,
                 e.created_at AS uploaded_at, c.title AS case_title,
+                a.parser_version, a.artifact_type AS source_artifact_type,
                 COUNT(*) OVER() AS total_count
          FROM evidence_source e
          JOIN forensic_case c ON c.case_id = e.case_id
+         LEFT JOIN artifact a ON a.case_id = e.case_id AND a.artifact_id = e.artifact_id
          ${whereClause}
          ORDER BY e.created_at DESC
          LIMIT $${idx++} OFFSET $${idx++}`,
@@ -119,6 +122,8 @@ export async function registerSearchRoutes(app: FastifyInstance): Promise<void> 
         thumbnailUrl: row.thumbnail_url,
         uploadedAt: row.uploaded_at,
         caseTitle: row.case_title,
+        parserVersion: row.parser_version || null,
+        sourceArtifactType: row.source_artifact_type || null,
       }));
 
       return { items, total };

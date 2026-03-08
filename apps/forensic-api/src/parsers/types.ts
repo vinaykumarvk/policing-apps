@@ -10,6 +10,9 @@ export interface ForensicParser {
   /** Human-readable parser name. */
   name: string;
 
+  /** Parser version string (FR-03 AC-03). */
+  version?: string;
+
   /** File extensions this parser can handle. */
   supportedExtensions: string[];
 

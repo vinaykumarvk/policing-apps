@@ -94,6 +94,66 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
     }
   });
 
+  // FR-15 AC-03: Dedicated CSV export endpoint for MIS
+  app.get("/api/v1/dashboard/export-csv", {
+    schema: {
+      querystring: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          dateFrom: { type: "string", format: "date" },
+          dateTo: { type: "string", format: "date" },
+          status: { type: "string", maxLength: 100 },
+          priority: { type: "string", maxLength: 50 },
+          district: { type: "string", maxLength: 200 },
+          category: { type: "string", maxLength: 100 },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const unitId = request.authUser?.unitId || null;
+      const qs = request.query as Record<string, string | undefined>;
+
+      const { whereClause, params } = buildFilterClauses({
+        dateFrom: qs.dateFrom,
+        dateTo: qs.dateTo,
+        status: qs.status,
+        statusColumn: "state_id",
+        priority: qs.priority,
+        district: qs.district,
+        category: qs.category,
+        categoryColumn: "case_type",
+        unit: unitId || undefined,
+        unitColumn: "unit_id",
+      });
+
+      const filterSql = whereClause || (unitId ? `WHERE unit_id = $1` : "");
+      const filterParams = whereClause ? params : (unitId ? [unitId] : []);
+
+      const casesResult = await query(
+        `SELECT case_id, case_number, title, case_type, state_id, priority, created_by, created_at, updated_at
+         FROM forensic_case ${filterSql}
+         ORDER BY created_at DESC`,
+        filterParams,
+      );
+
+      const csvLines: string[] = [];
+      csvLines.push("Case ID,Case Number,Title,Case Type,State,Priority,Created By,Created At,Updated At");
+      for (const c of casesResult.rows) {
+        const title = String(c.title || "").replace(/"/g, '""');
+        csvLines.push(`${c.case_id},${c.case_number},"${title}",${c.case_type || ""},${c.state_id},${c.priority || ""},${c.created_by},${c.created_at},${c.updated_at || ""}`);
+      }
+
+      reply.header("Content-Type", "text/csv");
+      reply.header("Content-Disposition", "attachment; filename=\"forensic-cases-export.csv\"");
+      return reply.send(csvLines.join("\n"));
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to export CSV");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
   // ── Scheduled Reports CRUD ──
 
   app.get("/api/v1/reports/scheduled", {

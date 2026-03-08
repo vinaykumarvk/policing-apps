@@ -83,15 +83,15 @@ async function postToDopams(payload: SyncPayload, webhookUrl?: string): Promise<
  * Execute DOPAMS sync for a forensic case.
  * Creates a sync event, sends the payload, records the result.
  */
-export async function syncToDopams(caseId: string, userId: string): Promise<Record<string, unknown>> {
+export async function syncToDopams(caseId: string, userId: string, idempotencyKey?: string): Promise<Record<string, unknown>> {
   const payload = await buildSyncPayload(caseId);
 
-  // Create sync event record
+  // FR-12 AC-03: Create sync event record with idempotency key
   const eventResult = await query(
-    `INSERT INTO dopams_sync_event (case_id, sync_type, direction, status, payload_jsonb)
-     VALUES ($1, 'FINDINGS', 'OUTBOUND', 'PENDING', $2)
+    `INSERT INTO dopams_sync_event (case_id, sync_type, direction, status, payload_jsonb, idempotency_key)
+     VALUES ($1, 'FINDINGS', 'OUTBOUND', 'PENDING', $2, $3)
      RETURNING sync_event_id`,
-    [caseId, JSON.stringify(payload)],
+    [caseId, JSON.stringify(payload), idempotencyKey || null],
   );
   const syncEventId = eventResult.rows[0].sync_event_id;
 

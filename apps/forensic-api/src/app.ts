@@ -37,7 +37,7 @@ import { registerDopamsSyncRoutes } from "./routes/dopams-sync.routes";
 import { registerEntityOpsRoutes } from "./routes/entity-ops.routes";
 import { registerDictionaryRoutes } from "./routes/dictionary.routes";
 import { registerDataLifecycleRoutes } from "./routes/data-lifecycle.routes";
-import { createOidcAuth, createOidcRoutes, createAuthMiddleware, createConfigGovernanceRoutes, createIdempotencyMiddleware } from "@puda/api-core";
+import { createOidcAuth, createOidcRoutes, createAuthMiddleware, createConfigGovernanceRoutes, createIdempotencyMiddleware, createLdapAuth, createAuthRoutes as createSharedAuthRoutes } from "@puda/api-core";
 import { query } from "./db";
 
 export async function buildApp(logger = true): Promise<FastifyInstance> {
@@ -225,6 +225,23 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
   // Config governance routes
   const registerConfigGovernanceRoutes = createConfigGovernanceRoutes({ queryFn: query });
   await registerConfigGovernanceRoutes(app);
+
+  // LDAP auth (conditionally enabled via env)
+  if (process.env.LDAP_URL) {
+    const ldapAuth = createLdapAuth({
+      url: process.env.LDAP_URL,
+      baseDn: process.env.LDAP_BASE_DN || "",
+      bindDn: process.env.LDAP_BIND_DN,
+      bindPassword: process.env.LDAP_BIND_PASSWORD,
+    }, query);
+    const auth = createAuthMiddleware({
+      cookieName: "forensic_auth",
+      defaultDevSecret: "forensic-dev-secret-DO-NOT-USE-IN-PRODUCTION",
+      queryFn: query,
+    });
+    const registerLdapAuthRoutes = createSharedAuthRoutes({ queryFn: query, auth, ldapAuth });
+    await registerLdapAuthRoutes(app);
+  }
 
   // OIDC routes (conditionally enabled via env)
   if (process.env.OIDC_ISSUER_URL) {

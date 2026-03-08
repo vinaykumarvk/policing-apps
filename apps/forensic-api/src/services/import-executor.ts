@@ -108,9 +108,10 @@ export async function executeImport(
     const parseResult = await parser.parse(input, config);
     warnings.push(...parseResult.warnings);
 
-    // 6. Insert artifacts
+    // 6. Insert artifacts (FR-03 AC-03/04: set parser_version and artifact_type from registry)
+    const parserVersion = String(config?.version || parser.version || "unknown");
     for (const artifact of parseResult.artifacts) {
-      await insertArtifact(caseId, jobId, artifact);
+      await insertArtifact(caseId, jobId, artifact, parserVersion);
       artifactsCreated++;
     }
 
@@ -162,13 +163,13 @@ export async function executeImport(
   }
 }
 
-async function insertArtifact(caseId: string, jobId: string, artifact: ParsedArtifact): Promise<string> {
+async function insertArtifact(caseId: string, jobId: string, artifact: ParsedArtifact, parserVersion?: string): Promise<string> {
   const result = await query(
-    `INSERT INTO artifact (case_id, import_job_id, artifact_type, source_path, content_preview, metadata_jsonb, hash_sha256)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO artifact (case_id, import_job_id, artifact_type, source_path, content_preview, metadata_jsonb, hash_sha256, parser_version)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING artifact_id`,
     [caseId, jobId, artifact.artifactType, artifact.sourcePath, artifact.contentPreview,
-     JSON.stringify(artifact.metadata), artifact.hashSha256 || null],
+     JSON.stringify(artifact.metadata), artifact.hashSha256 || null, parserVersion || null],
   );
   return result.rows[0].artifact_id;
 }

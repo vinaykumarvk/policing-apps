@@ -18,7 +18,20 @@ export async function registerDopamsSyncRoutes(app: FastifyInstance): Promise<vo
       const caseResult = await query(`SELECT case_id FROM forensic_case WHERE case_id = $1`, [caseId]);
       if (caseResult.rows.length === 0) return send404(reply, "CASE_NOT_FOUND", "Case not found");
 
-      const result = await syncToDopams(caseId, userId);
+      // FR-12 AC-03: Idempotency — check for recent pending/completed sync for same case
+      const idempotencyKey = request.headers["idempotency-key"] as string | undefined;
+      if (idempotencyKey) {
+        const existing = await query(
+          `SELECT sync_event_id, status FROM dopams_sync_event
+           WHERE case_id = $1 AND idempotency_key = $2`,
+          [caseId, idempotencyKey],
+        );
+        if (existing.rows.length > 0) {
+          return { sync: existing.rows[0], replayed: true };
+        }
+      }
+
+      const result = await syncToDopams(caseId, userId, idempotencyKey);
       return { sync: result };
     } catch (err: unknown) {
       request.log.error(err, "Failed to trigger DOPAMS sync");

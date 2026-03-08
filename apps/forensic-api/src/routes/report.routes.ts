@@ -341,13 +341,22 @@ export async function registerReportRoutes(app: FastifyInstance): Promise<void> 
         if (!requireReportPublish(request, reply)) return;
 
         // FR-11 AC-04: Block publish when findings are unreviewed
+        // Fixed: use correct table name `ai_finding` instead of `finding`
         const unreviewedResult = await query(
-          `SELECT COUNT(*) AS unreviewed_count FROM finding WHERE case_id = (SELECT case_id FROM report WHERE report_id = $1) AND status = 'UNREVIEWED'`,
+          `SELECT COUNT(*) AS unreviewed_count FROM ai_finding WHERE case_id = (SELECT case_id FROM report WHERE report_id = $1) AND state_id = 'UNREVIEWED'`,
           [id],
         );
         if (parseInt(unreviewedResult.rows[0].unreviewed_count, 10) > 0) {
           return sendError(reply, 409, "UNREVIEWED_FINDINGS", "Cannot publish report with unreviewed findings");
         }
+      }
+
+      // FR-11 AC-03: Record approved_at on APPROVED transition
+      if (target?.toStateId === "APPROVED") {
+        await query(
+          `UPDATE report SET approved_at = NOW(), approved_by = $1 WHERE report_id = $2`,
+          [userId, id],
+        );
       }
 
       const result = await executeTransition(
