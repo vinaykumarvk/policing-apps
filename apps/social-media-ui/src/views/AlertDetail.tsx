@@ -127,7 +127,7 @@ export default function AlertDetail({ id, authHeaders, isOffline, onBack }: Prop
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/legal/map`, {
         ...authHeaders(), method: "POST",
-        body: JSON.stringify({ entity_type: "sm_alert", entity_id: id }),
+        body: JSON.stringify({ entityType: "sm_alert", entityId: id }),
       });
       if (res.ok) {
         const data = await res.json();
