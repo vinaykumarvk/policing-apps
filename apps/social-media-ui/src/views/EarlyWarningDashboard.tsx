@@ -2,11 +2,29 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Tabs, useToast } from "@puda/shared";
 import { apiBaseUrl } from "../types";
+import EmptyState from "../components/EmptyState";
+import { Sparkline } from "../charts";
 
 type Spike = { spike_id: string; term_type: string; term_value: string; baseline_count: number; spike_count: number; spike_ratio: number; created_at: string };
 type NpsCandidate = { nps_id: string; term: string; occurrence_count: number; status: string; context_snippet: string; created_at: string };
 
 type Props = { authHeaders: () => Record<string, string>; isOffline: boolean };
+
+function spikeRatioBadge(ratio: number): string {
+  if (ratio >= 5) return "badge--critical";
+  if (ratio >= 3) return "badge--high";
+  if (ratio >= 2) return "badge--medium";
+  return "badge--default";
+}
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const hours = Math.floor(diff / 3600000);
+  if (hours < 1) return "< 1h ago";
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? "1 day ago" : `${days} days ago`;
+}
 
 export default function EarlyWarningDashboard({ authHeaders, isOffline }: Props) {
   const { t } = useTranslation();
@@ -14,6 +32,7 @@ export default function EarlyWarningDashboard({ authHeaders, isOffline }: Props)
   const [spikes, setSpikes] = useState<Spike[]>([]);
   const [nps, setNps] = useState<NpsCandidate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedNps, setExpandedNps] = useState<Set<string>>(new Set());
 
   const fetchData = () => {
     Promise.all([
@@ -45,7 +64,26 @@ export default function EarlyWarningDashboard({ authHeaders, isOffline }: Props)
     } catch { showToast("error", t("common.error")); }
   };
 
+  const toggleNpsExpand = (id: string) => {
+    setExpandedNps(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
   if (loading) return <div className="loading-center">{t("common.loading")}</div>;
+
+  // Summary stats
+  const now = Date.now();
+  const spikes7d = spikes.filter(s => now - new Date(s.created_at).getTime() < 7 * 86400000);
+  const pendingNps = nps.filter(n => n.status === "PENDING" || !n.status);
+  const lastSpikeTime = spikes.length > 0
+    ? relativeTime(spikes.reduce((latest, s) => new Date(s.created_at) > new Date(latest.created_at) ? s : latest).created_at)
+    : "—";
+
+  // Sparkline from spike ratios (recent spikes)
+  const sparkData = spikes.slice(0, 10).map(s => Number(s.spike_ratio) || 0).reverse();
 
   return (
     <>
@@ -53,56 +91,108 @@ export default function EarlyWarningDashboard({ authHeaders, isOffline }: Props)
         <h1>{t("ewa.title")}</h1>
         <p className="subtitle">{t("ewa.subtitle")}</p>
       </div>
+
+      {/* Summary Stat Cards */}
+      <div className="kpi-grid" style={{ marginBottom: "var(--space-4)", gridTemplateColumns: "repeat(3, 1fr)" }}>
+        <div className="stat-card">
+          <p className="stat-card__label">{t("ewa.spikes_this_week")}</p>
+          <p className="stat-card__value" style={{ color: spikes7d.length > 0 ? "var(--color-danger)" : "var(--color-success)" }}>
+            {spikes7d.length}
+          </p>
+          {sparkData.length > 1 && (
+            <div className="stat-card__trend">
+              <Sparkline data={sparkData} color={spikes7d.length > 3 ? "#dc2626" : "#3b82f6"} />
+            </div>
+          )}
+        </div>
+        <div className="stat-card">
+          <p className="stat-card__label">{t("ewa.pending_nps_count")}</p>
+          <p className="stat-card__value" style={{ color: pendingNps.length > 0 ? "var(--color-warning)" : undefined }}>
+            {pendingNps.length}
+          </p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-card__label">{t("ewa.last_spike_time")}</p>
+          <p className="stat-card__value" style={{ fontSize: "1.1rem" }}>{lastSpikeTime}</p>
+        </div>
+      </div>
+
       <Tabs tabs={[
         { key: "spikes", label: t("ewa.tab_spikes"), content: (
           <>
             {spikes.length === 0 ? (
-              <p style={{ color: "var(--color-text-muted)", padding: "var(--space-4)" }}>{t("ewa.no_spikes")}</p>
+              <EmptyState icon="shield" title={t("ewa.no_spikes")} subtitle={t("ewa.no_spikes_subtitle")} />
             ) : (
+              <div className="table-scroll">
               <table className="entity-table">
                 <thead><tr><th>{t("ewa.term")}</th><th>{t("ewa.spike_ratio")}</th><th>{t("ewa.baseline")}</th><th>{t("ewa.current")}</th><th>{t("alerts.created")}</th><th>{t("models.actions")}</th></tr></thead>
                 <tbody>
-                  {spikes.map((s) => (
-                    <tr key={s.spike_id}>
-                      <td data-label={t("ewa.term")}><strong>{s.term_value}</strong> <small>({s.term_type})</small></td>
-                      <td data-label={t("ewa.spike_ratio")}><span className="badge badge--critical">{Number(s.spike_ratio).toFixed(1)}x</span></td>
-                      <td data-label={t("ewa.baseline")}>{Number(s.baseline_count).toFixed(1)}</td>
-                      <td data-label={t("ewa.current")}>{s.spike_count}</td>
-                      <td data-label={t("alerts.created")}>{new Date(s.created_at).toLocaleString()}</td>
-                      <td data-label={t("models.actions")}>
-                        <Button size="sm" onClick={() => handleAckSpike(s.spike_id)} disabled={isOffline}>{t("ewa.acknowledge")}</Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {spikes.map((s) => {
+                    const ratio = Number(s.spike_ratio);
+                    return (
+                      <tr key={s.spike_id}>
+                        <td data-label={t("ewa.term")}><strong>{s.term_value}</strong> <small>({s.term_type})</small></td>
+                        <td data-label={t("ewa.spike_ratio")}>
+                          <span className={`badge ${spikeRatioBadge(ratio)}`}>{ratio.toFixed(1)}x</span>
+                        </td>
+                        <td data-label={t("ewa.baseline")}>{Number(s.baseline_count).toFixed(1)}</td>
+                        <td data-label={t("ewa.current")}>{s.spike_count}</td>
+                        <td data-label={t("alerts.created")}>{relativeTime(s.created_at)}</td>
+                        <td data-label={t("models.actions")}>
+                          <Button size="sm" onClick={() => handleAckSpike(s.spike_id)} disabled={isOffline}>{t("ewa.acknowledge")}</Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
+              </div>
             )}
           </>
         )},
         { key: "nps", label: t("ewa.tab_nps"), content: (
           <>
             {nps.length === 0 ? (
-              <p style={{ color: "var(--color-text-muted)", padding: "var(--space-4)" }}>{t("ewa.no_nps")}</p>
+              <EmptyState icon="shield" title={t("ewa.no_nps")} subtitle={t("ewa.no_nps_subtitle")} />
             ) : (
+              <div className="table-scroll">
               <table className="entity-table">
                 <thead><tr><th>{t("ewa.term")}</th><th>{t("ewa.occurrences")}</th><th>{t("ewa.context")}</th><th>{t("models.actions")}</th></tr></thead>
                 <tbody>
-                  {nps.map((n) => (
-                    <tr key={n.nps_id}>
-                      <td data-label={t("ewa.term")}><strong>{n.term}</strong></td>
-                      <td data-label={t("ewa.occurrences")}>{n.occurrence_count}</td>
-                      <td data-label={t("ewa.context")}>{n.context_snippet || "—"}</td>
-                      <td data-label={t("models.actions")}>
-                        <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                          <Button size="sm" onClick={() => handleReviewNps(n.nps_id, "CONFIRMED_NPS")} disabled={isOffline}>{t("ewa.confirm_nps")}</Button>
-                          <Button size="sm" variant="secondary" onClick={() => handleReviewNps(n.nps_id, "FALSE_POSITIVE")} disabled={isOffline}>{t("ewa.false_positive")}</Button>
-                          <Button size="sm" variant="secondary" onClick={() => handleReviewNps(n.nps_id, "KNOWN_SUBSTANCE")} disabled={isOffline}>{t("ewa.known_substance")}</Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {nps.map((n) => {
+                    const snippet = n.context_snippet || "—";
+                    const isLong = snippet.length > 80;
+                    const isExpanded = expandedNps.has(n.nps_id);
+                    return (
+                      <tr key={n.nps_id}>
+                        <td data-label={t("ewa.term")}><strong>{n.term}</strong></td>
+                        <td data-label={t("ewa.occurrences")}>{n.occurrence_count}</td>
+                        <td data-label={t("ewa.context")} style={{ whiteSpace: "normal", maxWidth: "20rem" }}>
+                          {isLong && !isExpanded ? snippet.slice(0, 80) + "…" : snippet}
+                          {isLong && (
+                            <button
+                              type="button"
+                              className="link-btn"
+                              onClick={() => toggleNpsExpand(n.nps_id)}
+                              style={{ display: "block", marginTop: "var(--space-1)", fontSize: "0.75rem" }}
+                            >
+                              {isExpanded ? t("common.show_less") : t("common.show_more")}
+                            </button>
+                          )}
+                        </td>
+                        <td data-label={t("models.actions")}>
+                          <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
+                            <Button size="sm" onClick={() => handleReviewNps(n.nps_id, "CONFIRMED_NPS")} disabled={isOffline}>{t("ewa.confirm_nps")}</Button>
+                            <Button size="sm" variant="secondary" onClick={() => handleReviewNps(n.nps_id, "FALSE_POSITIVE")} disabled={isOffline}>{t("ewa.false_positive")}</Button>
+                            <Button size="sm" variant="secondary" onClick={() => handleReviewNps(n.nps_id, "KNOWN_SUBSTANCE")} disabled={isOffline}>{t("ewa.known_substance")}</Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
+              </div>
             )}
           </>
         )},

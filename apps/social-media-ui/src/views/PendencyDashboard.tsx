@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert } from "@puda/shared";
 import { apiBaseUrl } from "../types";
+import EmptyState from "../components/EmptyState";
 import { StackedBarChart, MiniBarChart, TrendLineChart } from "../charts";
 
 type Props = { authHeaders: () => Record<string, string>; isOffline: boolean; onNavigate: (view: string) => void };
@@ -138,7 +139,7 @@ export default function PendencyDashboard({ authHeaders, isOffline, onNavigate }
               </div>
             </div>
           ) : (
-            <p style={{ color: "var(--color-text-muted)" }}>{t("common.no_data")}</p>
+            <EmptyState icon="chart" title={t("common.no_data")} />
           )}
         </div>
       </div>

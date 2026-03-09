@@ -34,4 +34,11 @@ export async function ensureLocaleLoaded(lang: string): Promise<void> {
   loadedLocales.add(lang);
 }
 
+// Pre-load saved secondary language bundle on startup (active language stays "en";
+// the Bilingual component uses t(key, { lng }) for explicit secondary lookups).
+const savedLang = typeof localStorage !== "undefined" ? localStorage.getItem("sm_secondary_lang") : null;
+if (savedLang && savedLang !== "none") {
+  ensureLocaleLoaded(savedLang);
+}
+
 export default i18n;

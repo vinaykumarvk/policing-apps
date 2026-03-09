@@ -232,7 +232,7 @@ export default function TemplateAdmin({ authHeaders, isOffline }: Props) {
           {templates.length === 0 ? (
             <Card><p style={{ color: "var(--color-text-secondary)" }}>{t("templates.no_templates")}</p></Card>
           ) : (
-            <div style={{ overflowX: "auto" }}>
+            <div className="table-scroll">
               <table className="entity-table">
                 <thead>
                   <tr>

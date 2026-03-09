@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, useToast } from "@puda/shared";
 import { apiBaseUrl } from "../types";
+import EmptyState from "../components/EmptyState";
 
 type EscalationItem = {
   alert_id: string;
@@ -54,8 +55,9 @@ export default function EscalationQueue({ authHeaders, isOffline }: Props) {
         <p className="subtitle">{t("escalation.subtitle")}</p>
       </div>
       {queue.length === 0 ? (
-        <p style={{ color: "var(--color-text-muted)", padding: "var(--space-4)" }}>{t("escalation.no_pending")}</p>
+        <EmptyState icon="inbox" title={t("escalation.no_pending")} />
       ) : (
+        <div className="table-scroll">
         <table className="entity-table">
           <thead>
             <tr>
@@ -87,6 +89,7 @@ export default function EscalationQueue({ authHeaders, isOffline }: Props) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </>
   );

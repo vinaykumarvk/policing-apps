@@ -16,7 +16,7 @@ import { normalizeText, KNOWN_DRUG_TERMS } from "./text-normalizer";
 import { analyzeEmojis } from "./emoji-drug-decoder";
 import { detectTransactionSignals } from "./transaction-signal-detector";
 import { normalizeSlangCached, calculateSlangRiskBonus } from "./slang-normalizer";
-import { llmComplete } from "./llm-provider";
+import { llmCompleteJson } from "./llm-provider";
 
 export interface NarcoticsRiskFactor {
   factor: string;
@@ -37,6 +37,13 @@ export interface NarcoticsClassificationResult {
   normalizationsApplied: string[];
   /** Slang dictionary version used */
   slangDictionaryVersion: string;
+  /** Pipeline intermediate results for demo/debug display */
+  normalizedText?: string;
+  keywordsFound?: string[];
+  slangMatches?: Array<{ term: string; normalizedForm: string; category: string; riskWeight: number }>;
+  emojiMatches?: Array<{ emoji: string; drugCategory: string; signalType: string; riskWeight: number }>;
+  transactionSignals?: Array<{ signalType: string; matched: string }>;
+  processingTimeMs?: number;
 }
 
 /** Substance severity map: drug category → base score */
@@ -116,6 +123,7 @@ export async function classifyNarcotics(
 ): Promise<NarcoticsClassificationResult> {
   const riskFactors: NarcoticsRiskFactor[] = [];
   let narcoticsScore = 0;
+  const startTime = Date.now();
 
   if (!text) {
     return {
@@ -158,6 +166,12 @@ export async function classifyNarcotics(
       riskFactors: [],
       normalizationsApplied: normalized.appliedTransforms,
       slangDictionaryVersion: slangResult.dictionaryVersion,
+      normalizedText: workingText,
+      keywordsFound: [],
+      slangMatches: slangResult.matches.map(m => ({ term: m.term, normalizedForm: m.normalizedForm, category: m.category, riskWeight: m.riskWeight })),
+      emojiMatches: [],
+      transactionSignals: [],
+      processingTimeMs: Date.now() - startTime,
     };
   }
 
@@ -247,24 +261,37 @@ export async function classifyNarcotics(
   // 7. LLM enhancement for ambiguous scores (20-60 range)
   if (narcoticsScore >= 20 && narcoticsScore <= 60) {
     try {
-      const llmResult = await llmComplete({
-        messages: [{ role: "user", content: text }],
-        useCase: "NARCOTICS_ANALYSIS",
-      });
+      const llmResult = await llmCompleteJson<{
+        narcotics_score?: number;
+        substance_category?: string;
+        activity_type?: string;
+        confidence_band?: string;
+        sub_reason_scores?: Array<{ reason_code: string; score: number; matched_evidence?: string[]; explanation?: string }>;
+        final_reasoning?: string;
+      }>(
+        {
+          messages: [{ role: "user", content: text }],
+          useCase: "NARCOTICS_ANALYSIS",
+          maxTokens: 1536,
+          temperature: 0.2,
+        },
+        [{ field: "narcotics_score", type: "number" }],
+      );
 
       if (llmResult) {
-        const parsed = JSON.parse(llmResult.content);
+        const parsed = llmResult.data;
         const llmScore = typeof parsed.narcotics_score === "number" ? parsed.narcotics_score : 0;
 
         if (llmScore > narcoticsScore) {
+          const prevScore = narcoticsScore;
           narcoticsScore = Math.min(llmScore, 100);
           if (parsed.substance_category && !substanceCategory) {
             substanceCategory = parsed.substance_category;
           }
           riskFactors.push({
             factor: "llm_narcotics_analysis",
-            contribution: llmScore - narcoticsScore,
-            detail: `LLM analysis elevated score (${parsed.activity_type || "N/A"})`,
+            contribution: narcoticsScore - prevScore,
+            detail: `LLM elevated score: ${parsed.final_reasoning || parsed.activity_type || "N/A"}`,
           });
         }
       }
@@ -280,5 +307,11 @@ export async function classifyNarcotics(
     riskFactors,
     normalizationsApplied: normalized.appliedTransforms,
     slangDictionaryVersion: slangResult.dictionaryVersion,
+    normalizedText: workingText,
+    keywordsFound: drugDetection.terms,
+    slangMatches: slangResult.matches.map(m => ({ term: m.term, normalizedForm: m.normalizedForm, category: m.category, riskWeight: m.riskWeight })),
+    emojiMatches: emojiResult.matches.map(m => ({ emoji: m.emoji, drugCategory: m.drugCategory, signalType: m.signalType, riskWeight: m.riskWeight })),
+    transactionSignals: txResult.signals.map(s => ({ signalType: s.signalType, matched: s.matched })),
+    processingTimeMs: Date.now() - startTime,
   };
 }

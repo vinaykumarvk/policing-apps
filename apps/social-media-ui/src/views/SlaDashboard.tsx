@@ -56,6 +56,7 @@ export default function SlaDashboard({ authHeaders, isOffline }: Props) {
         {rules.length === 0 ? (
           <p style={{ color: "var(--color-text-muted)" }}>{t("common.no_data")}</p>
         ) : (
+          <div className="table-scroll">
           <table className="entity-table">
             <thead>
               <tr>
@@ -76,6 +77,7 @@ export default function SlaDashboard({ authHeaders, isOffline }: Props) {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </>

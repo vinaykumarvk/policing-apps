@@ -53,6 +53,7 @@ export default function SupervisorAudit({ authHeaders, isOffline }: Props) {
       {stats.length === 0 ? (
         <p style={{ color: "var(--color-text-muted)", padding: "var(--space-4)" }}>{t("common.no_data")}</p>
       ) : (
+        <div className="table-scroll">
         <table className="entity-table">
           <thead>
             <tr>
@@ -79,6 +80,7 @@ export default function SupervisorAudit({ authHeaders, isOffline }: Props) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </>
   );

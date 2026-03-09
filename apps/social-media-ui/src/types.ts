@@ -32,6 +32,54 @@ export type ContentItem = {
   metadata_jsonb: Record<string, unknown>;
   published_at: string;
   ingested_at: string;
+  classification_category: string | null;
+  classification_risk_score: number | null;
+  classified_by_llm: boolean | null;
+  llm_confidence: number | null;
+  review_status: string | null;
+  effective_category: string | null;
+  risk_factors: Array<{ factor: string; weight: number; score: number; detail: string }> | null;
+  pipeline_metadata: {
+    normalizedText?: string;
+    keywordsFound?: string[];
+    slangMatches?: Array<{ term: string; normalizedForm: string; category: string; riskWeight: number }>;
+    emojiMatches?: Array<{ emoji: string; drugCategory: string; signalType: string; riskWeight: number }>;
+    transactionSignals?: Array<{ signalType: string; matched: string }>;
+    normalizationsApplied?: string[];
+    substanceCategory?: string | null;
+    activityType?: string;
+    narcoticsScore?: number;
+    slangDictionaryVersion?: string;
+    processingTimeMs?: number;
+    llmUsed?: boolean;
+    classifiedAt?: string;
+    llmClassification?: {
+      narcoticsRelevance?: { label: string; score: number; reasoning: string };
+      primaryCategory?: { label: string; score: number; reasoning: string };
+      secondaryCategories?: Array<{ label: string; score: number; reasoning: string }>;
+      subReasonScores?: Array<{
+        reason_code: string;
+        reason_label: string;
+        score: number;
+        matched_evidence: string[];
+        explanation: string;
+      }>;
+      matchedEntities?: {
+        drug_terms?: string[];
+        slang_terms?: string[];
+        emoji_codes?: string[];
+        contact_handles?: string[];
+        phone_numbers?: string[];
+        payment_indicators?: string[];
+        locations?: string[];
+        delivery_terms?: string[];
+      };
+      confidenceBand?: string;
+      reviewRecommended?: boolean;
+      reviewReason?: string;
+      finalReasoning?: string;
+    };
+  } | null;
 };
 
 export type SMAlert = {
@@ -68,6 +116,7 @@ export type EvidenceItem = {
 
 export type CaseRecord = {
   case_id: string;
+  case_ref: string | null;
   case_number: string;
   title: string;
   description: string;
@@ -75,10 +124,49 @@ export type CaseRecord = {
   priority: string;
   state_id: string;
   assigned_to: string | null;
+  assigned_to_name: string | null;
+  assigned_to_designation: string | null;
   created_by: string;
+  created_by_name: string | null;
   row_version: number;
+  due_at: string | null;
+  closure_reason: string | null;
+  closed_at: string | null;
   created_at: string;
   updated_at: string;
+  category_name: string | null;
+  source_alert_ref: string | null;
+  source_alert_title: string | null;
+  source_alert_priority: string | null;
+  source_alert_state: string | null;
+  source_content_id: string | null;
+};
+
+export type LinkedPost = {
+  content_id: string;
+  platform: string;
+  author_handle: string;
+  author_name: string | null;
+  content_text: string;
+  content_url: string | null;
+  language: string;
+  threat_score: string | null;
+  published_at: string;
+  sentiment: string | null;
+  classification_category: string | null;
+  classification_score: string | null;
+};
+
+export type TimelineEvent = {
+  event_type: string;
+  event_id: string;
+  from_state: string | null;
+  to_state: string | null;
+  transition_id: string | null;
+  detail: string | null;
+  actor_id: string | null;
+  actor_name: string | null;
+  created_at: string;
 };
 
 export type ReportInstance = {
@@ -364,5 +452,54 @@ export type LegalMappingResult = {
   rule_law_name: string | null;
 };
 
+export type SourceConnector = {
+  connector_id: string;
+  platform: string;
+  connector_type: string;
+  config_jsonb: Record<string, unknown>;
+  is_active: boolean;
+  default_legal_basis: string | null;
+  default_retention_days: number;
+  health_status: string;
+  error_count: number;
+  last_error: string | null;
+  last_poll_at: string | null;
+  backoff_until: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ConnectorHealth = {
+  connector_id: string;
+  platform: string;
+  is_active: boolean;
+  health_status: string;
+  error_count: number;
+  last_error: string | null;
+  last_poll_at: string | null;
+  backoff_until: string | null;
+};
+
+export type DeadLetterItem = {
+  id: string;
+  connector_id: string;
+  platform: string;
+  error_message: string;
+  payload: Record<string, unknown>;
+  retry_count: number;
+  created_at: string;
+};
+
+export type RetentionFlaggedItem = {
+  content_id: string;
+  platform: string;
+  author_handle: string;
+  content_url: string | null;
+  legal_basis: string | null;
+  retention_until: string;
+  retention_flagged: boolean;
+  ingested_at: string;
+};
+
 export const apiBaseUrl =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:3010";
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3004";

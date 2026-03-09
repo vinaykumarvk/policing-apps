@@ -76,7 +76,7 @@ export default function QueryAssistant({ authHeaders, isOffline, onNavigate }: P
             <Card key={i} style={{ alignSelf: msg.role === "user" ? "flex-end" : "flex-start", maxWidth: "85%" }}>
               <p style={{ fontWeight: msg.role === "user" ? 600 : 400, whiteSpace: "pre-wrap" }}>{msg.text}</p>
               {msg.data && msg.data.columns.length > 0 && (
-                <div style={{ overflowX: "auto", marginTop: "var(--space-2)" }}>
+                <div className="table-scroll" style={{ marginTop: "var(--space-2)" }}>
                   <table className="entity-table">
                     <thead><tr>{msg.data.columns.map((c, ci) => <th key={ci}>{c}</th>)}</tr></thead>
                     <tbody>{msg.data.rows.map((row, ri) => <tr key={ri}>{row.map((cell, ci) => <td key={ci} data-label={msg.data!.columns[ci]}>{String(cell ?? "")}</td>)}</tr>)}</tbody>

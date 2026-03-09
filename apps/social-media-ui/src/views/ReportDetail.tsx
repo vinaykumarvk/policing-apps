@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Field, Input, Select, Tabs, Textarea, useToast } from "@puda/shared";
 import { apiBaseUrl, ReportInstance } from "../types";
+import EmptyState from "../components/EmptyState";
 
 type Props = { id: string; authHeaders: () => Record<string, string>; isOffline: boolean; onBack: () => void };
 
@@ -131,7 +132,7 @@ export default function ReportDetail({ id, authHeaders, isOffline, onBack }: Pro
                 {t("notes.add")}
               </Button>
             </div>
-            {notes.length === 0 ? <p style={{ color: "var(--color-text-muted)" }}>{t("notes.empty")}</p> : (
+            {notes.length === 0 ? <EmptyState icon="inbox" title={t("notes.empty")} /> : (
               <ul className="notes-list">
                 {notes.map((n) => (
                   <li key={n.note_id} className="notes-list__item">
@@ -145,7 +146,7 @@ export default function ReportDetail({ id, authHeaders, isOffline, onBack }: Pro
         )},
         { key: "activity", label: t("detail.tab_activity"), content: (
           <div className="detail-section">
-            {activity.length === 0 ? <p style={{ color: "var(--color-text-muted)" }}>{t("activity.empty")}</p> : (
+            {activity.length === 0 ? <EmptyState icon="inbox" title={t("activity.empty")} /> : (
               <ul className="activity-list">
                 {activity.map((e) => (
                   <li key={e.event_id} className="activity-list__item">

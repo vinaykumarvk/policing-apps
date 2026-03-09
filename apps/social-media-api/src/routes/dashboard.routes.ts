@@ -34,7 +34,7 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
         unitColumn: "unit_id",
       });
 
-      const filterSql = whereClause || (unitId ? `WHERE unit_id = $1` : "");
+      const filterSql = whereClause || (unitId ? `WHERE (unit_id = $1 OR unit_id IN (SELECT unit_id FROM organization_unit WHERE parent_unit_id = $1::uuid))` : "");
       const filterParams = whereClause ? params : (unitId ? [unitId] : []);
 
       const [alertsByState, casesTotal, contentTotal, watchlistsActive, recentAlerts] = await Promise.all([
@@ -92,7 +92,7 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
                 END AS sla_remaining_seconds,
                 COUNT(*) OVER() AS total_count
          FROM sm_alert a
-         WHERE a.state_id IN ('NEW', 'TRIAGED', 'INVESTIGATING')
+         WHERE a.state_id IN ('NEW', 'TRIAGED', 'IN_REVIEW', 'ESCALATED_SUPERVISOR', 'ESCALATED_CONTROL_ROOM')
            AND ($1::text IS NULL OR a.priority = $1)
          ORDER BY
            CASE a.priority WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 ELSE 4 END,
@@ -228,21 +228,22 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
         // Case stage distribution (pendency)
         query(
           `SELECT state_id, COUNT(*)::int AS count,
-             AVG(EXTRACT(EPOCH FROM (NOW() - created_at))/3600)::numeric(10,1) AS avg_hours
+             AVG(EXTRACT(EPOCH FROM (NOW() - created_at))/3600)::float AS avg_hours
            FROM case_record WHERE state_id NOT IN ('CLOSED','ARCHIVED')
            GROUP BY state_id`,
         ),
         // Alert stage distribution
         query(
           `SELECT state_id, COUNT(*)::int AS count,
-             AVG(EXTRACT(EPOCH FROM (NOW() - created_at))/3600)::numeric(10,1) AS avg_hours
+             AVG(EXTRACT(EPOCH FROM (NOW() - created_at))/3600)::float AS avg_hours
            FROM sm_alert WHERE state_id NOT IN ('CLOSED_NO_ACTION','CLOSED_ACTIONED','FALSE_POSITIVE')
            GROUP BY state_id`,
         ),
-        // Platform distribution
+        // Platform distribution (normalized to lowercase, limited to key platforms)
         query(
-          `SELECT platform, COUNT(*)::int AS count FROM content_item
-           WHERE ingested_at >= $1::date GROUP BY platform ORDER BY count DESC`,
+          `SELECT LOWER(platform) AS platform, COUNT(*)::int AS count FROM content_item
+           WHERE ingested_at >= $1::date AND LOWER(platform) IN ('reddit','x','facebook','instagram','telegram','youtube')
+           GROUP BY LOWER(platform) ORDER BY count DESC`,
           [dateFrom],
         ),
         // Category distribution
@@ -287,7 +288,7 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
         ),
         // Avg resolution time
         query(
-          `SELECT AVG(EXTRACT(EPOCH FROM (updated_at - created_at))/3600)::numeric(10,1) AS avg_hours
+          `SELECT AVG(EXTRACT(EPOCH FROM (updated_at - created_at))/3600)::float AS avg_hours
            FROM case_record WHERE state_id = 'CLOSED' AND updated_at >= $1::date`,
           [dateFrom],
         ),
@@ -340,9 +341,10 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
                FROM case_record WHERE created_at >= $2::date AND created_at < ($3::date + 1)
                GROUP BY bucket, state_id ORDER BY bucket`;
       } else if (metric === "content") {
-        sql = `SELECT date_trunc($1, ingested_at)::date AS bucket, platform AS breakdown, COUNT(*)::int AS count
+        sql = `SELECT date_trunc($1, ingested_at)::date AS bucket, LOWER(platform) AS breakdown, COUNT(*)::int AS count
                FROM content_item WHERE ingested_at >= $2::date AND ingested_at < ($3::date + 1)
-               GROUP BY bucket, platform ORDER BY bucket`;
+                 AND LOWER(platform) IN ('reddit','x','facebook','instagram','telegram','youtube')
+               GROUP BY bucket, LOWER(platform) ORDER BY bucket`;
       } else {
         sql = `SELECT date_trunc($1, created_at)::date AS bucket, priority AS breakdown, COUNT(*)::int AS count
                FROM sm_alert WHERE created_at >= $2::date AND created_at < ($3::date + 1)
@@ -379,9 +381,9 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
       const result = await query(
         `SELECT state_id,
            COUNT(*)::int AS count,
-           AVG(EXTRACT(EPOCH FROM (NOW() - created_at))/3600)::numeric(10,1) AS avg_hours,
-           MIN(EXTRACT(EPOCH FROM (NOW() - created_at))/3600)::numeric(10,1) AS min_hours,
-           MAX(EXTRACT(EPOCH FROM (NOW() - created_at))/3600)::numeric(10,1) AS max_hours,
+           AVG(EXTRACT(EPOCH FROM (NOW() - created_at))/3600)::float AS avg_hours,
+           MIN(EXTRACT(EPOCH FROM (NOW() - created_at))/3600)::float AS min_hours,
+           MAX(EXTRACT(EPOCH FROM (NOW() - created_at))/3600)::float AS max_hours,
            COUNT(*) FILTER (WHERE NOW() - created_at < INTERVAL '4h')::int AS bucket_0_4h,
            COUNT(*) FILTER (WHERE NOW() - created_at >= INTERVAL '4h' AND NOW() - created_at < INTERVAL '12h')::int AS bucket_4_12h,
            COUNT(*) FILTER (WHERE NOW() - created_at >= INTERVAL '12h' AND NOW() - created_at < INTERVAL '24h')::int AS bucket_12_24h,
@@ -423,12 +425,12 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
         `SELECT ou.name AS district, ou.unit_id,
            COUNT(DISTINCT a.alert_id)::int AS alert_count,
            COUNT(DISTINCT c.case_id)::int AS case_count,
-           AVG(ci.threat_score)::numeric(4,1) AS avg_threat_score,
+           AVG(ci.threat_score)::float AS avg_threat_score,
            COUNT(DISTINCT a.alert_id) FILTER (WHERE a.due_at < NOW() AND a.state_id NOT IN ('CLOSED_NO_ACTION','CLOSED_ACTIONED','FALSE_POSITIVE'))::int AS breach_count
          FROM organization_unit ou
          LEFT JOIN sm_alert a ON a.unit_id = ou.unit_id AND a.created_at >= $1::date
          LEFT JOIN case_record c ON c.unit_id = ou.unit_id AND c.created_at >= $1::date
-         LEFT JOIN content_item ci ON ci.content_id = a.source_content_id
+         LEFT JOIN content_item ci ON ci.content_id = a.content_id
          WHERE ou.is_active = TRUE
          GROUP BY ou.unit_id, ou.name
          ORDER BY alert_count DESC`,

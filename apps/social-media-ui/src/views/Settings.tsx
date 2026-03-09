@@ -2,10 +2,14 @@ import { useTranslation } from "react-i18next";
 import { Field, Select } from "@puda/shared";
 import { useTheme, CUSTOM_THEMES } from "../theme";
 import type { ThemePreference } from "../theme";
+import { SECONDARY_LANGUAGES } from "../i18n";
+import { useSecondaryLanguage, useSetSecondaryLanguage } from "../SecondaryLanguageContext";
 
 export default function Settings() {
   const { t } = useTranslation();
   const { theme, setTheme } = useTheme("sm_theme");
+  const secondaryLang = useSecondaryLanguage();
+  const setSecondaryLang = useSetSecondaryLanguage();
 
   return (
     <>
@@ -22,6 +26,18 @@ export default function Settings() {
               <option value="dark">{t("settings.theme_dark")}</option>
               <option value="system">{t("settings.theme_system")}</option>
               {CUSTOM_THEMES.map((ct) => (<option key={ct} value={ct}>{ct.charAt(0).toUpperCase() + ct.slice(1)}</option>))}
+            </Select>
+          </Field>
+        </div>
+      </div>
+      <div className="detail-section">
+        <h2 className="detail-section__title">{t("settings.regional")}</h2>
+        <div className="detail-grid">
+          <Field label={t("settings.secondary_language")} htmlFor="pref-lang">
+            <Select id="pref-lang" value={secondaryLang} onChange={(e) => setSecondaryLang(e.target.value as "hi" | "te" | "none")}>
+              {SECONDARY_LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>{l.label}</option>
+              ))}
             </Select>
           </Field>
         </div>

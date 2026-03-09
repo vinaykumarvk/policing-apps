@@ -212,7 +212,7 @@ export default function ReportEditor({ id, authHeaders, isOffline, onBack }: Pro
 
   const handleConfirmMapping = async (mappingId: string) => {
     try {
-      const res = await fetch(`${apiBaseUrl}/api/v1/legal-mappings/${mappingId}/confirm`, {
+      const res = await fetch(`${apiBaseUrl}/api/v1/legal/mappings/${mappingId}/confirm`, {
         ...authHeaders(),
         method: "PATCH",
       });
@@ -357,7 +357,7 @@ export default function ReportEditor({ id, authHeaders, isOffline, onBack }: Pro
           {evidence.length === 0 ? (
             <p style={{ color: "var(--color-text-secondary)" }}>{t("reports.no_evidence")}</p>
           ) : (
-            <div style={{ overflowX: "auto" }}>
+            <div className="table-scroll">
               <table className="entity-table">
                 <thead>
                   <tr>
@@ -391,7 +391,7 @@ export default function ReportEditor({ id, authHeaders, isOffline, onBack }: Pro
           {mappings.length === 0 ? (
             <p style={{ color: "var(--color-text-secondary)" }}>{t("reports.no_legal")}</p>
           ) : (
-            <div style={{ overflowX: "auto" }}>
+            <div className="table-scroll">
               <table className="entity-table">
                 <thead>
                   <tr>

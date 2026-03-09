@@ -27,6 +27,7 @@ export default function TaskInbox({ authHeaders, isOffline }: Props) {
       {loading ? <div className="loading-center">{t("common.loading")}</div> : tasks.length === 0 ? (
         <div className="empty-state"><h3>{t("inbox.no_tasks")}</h3></div>
       ) : (
+        <div className="table-scroll">
         <table className="entity-table">
           <thead><tr><th>{t("inbox.entity")}</th><th>{t("inbox.role")}</th><th>{t("inbox.status")}</th><th>{t("inbox.sla")}</th></tr></thead>
           <tbody>
@@ -55,6 +56,7 @@ export default function TaskInbox({ authHeaders, isOffline }: Props) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </>
   );

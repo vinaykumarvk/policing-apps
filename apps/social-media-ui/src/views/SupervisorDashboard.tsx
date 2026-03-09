@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert } from "@puda/shared";
 import { apiBaseUrl } from "../types";
+import EmptyState from "../components/EmptyState";
 import { MiniBarChart } from "../charts";
 
 type Props = { authHeaders: () => Record<string, string>; isOffline: boolean; onNavigate: (view: string) => void };
@@ -94,7 +95,7 @@ export default function SupervisorDashboard({ authHeaders, isOffline, onNavigate
       <div className="chart-section" style={{ marginBottom: "var(--space-4)" }}>
         <h2 className="chart-section__title">{t("dashboard.pending_approvals")}</h2>
         {queue.length === 0 ? (
-          <p style={{ color: "var(--color-text-muted)" }}>{t("escalation.no_pending")}</p>
+          <EmptyState icon="inbox" title={t("escalation.no_pending")} />
         ) : (
           <div className="table-scroll">
             <table className="entity-table entity-table--compact">

@@ -105,7 +105,7 @@ export default function LeadershipDashboard({ authHeaders, isOffline, onNavigate
 
       {error && <Alert variant="error">{error}</Alert>}
 
-      <DashboardFilters value={filters} onChange={setFilters} authHeaders={authHeaders} showGranularity />
+      <DashboardFilters value={filters} onChange={setFilters} authHeaders={authHeaders} />
 
       {/* Row 1: Executive KPI Cards */}
       <div className="kpi-grid" style={{ marginBottom: "var(--space-4)", gridTemplateColumns: "repeat(2, 1fr)" }}>

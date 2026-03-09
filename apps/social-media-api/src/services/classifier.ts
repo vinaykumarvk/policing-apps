@@ -1,6 +1,6 @@
 import { query } from "../db";
 import { classifyNarcotics, type NarcoticsClassificationResult } from "./narcotics-scorer";
-import { llmComplete } from "./llm-provider";
+import { llmCompleteJson, isLlmAvailable } from "./llm-provider";
 
 type DbRow = Record<string, unknown>;
 
@@ -16,6 +16,73 @@ export interface ClassificationResult {
   riskScore: number;
   factors: RiskFactor[];
   taxonomyVersionId?: string;
+}
+
+/** Rich LLM classification output — explainable narcotics-intelligence schema */
+export interface LlmClassificationOutput {
+  post_id?: string;
+  language?: string;
+  narcotics_relevance?: {
+    label: string;
+    score: number;
+    reasoning: string;
+  };
+  primary_category?: {
+    label: string;
+    score: number;
+    reasoning: string;
+  };
+  secondary_categories?: Array<{
+    label: string;
+    score: number;
+    reasoning: string;
+  }>;
+  sub_reason_scores?: Array<{
+    reason_code: string;
+    reason_label: string;
+    score: number;
+    matched_evidence: string[];
+    explanation: string;
+  }>;
+  matched_entities?: {
+    drug_terms?: string[];
+    slang_terms?: string[];
+    emoji_codes?: string[];
+    contact_handles?: string[];
+    phone_numbers?: string[];
+    payment_indicators?: string[];
+    locations?: string[];
+    delivery_terms?: string[];
+  };
+  confidence_band?: string;
+  review_recommended?: boolean;
+  review_reason?: string;
+  final_reasoning?: string;
+  // Legacy fields for backward compat
+  category?: string;
+  confidence?: number;
+  risk_score?: number;
+  factors?: Array<{ factor: string; detail: string }>;
+}
+
+/**
+ * Bridge LLM output category names → taxonomy_category.name
+ */
+const LLM_TO_TAXONOMY: Record<string, string> = {
+  DRUGS: "DRUGS_TRAFFICKING",
+  FRAUD: "CYBER_FRAUD",
+  CYBER_CRIME: "CYBER_FRAUD",
+  ILLICIT_LIQUOR: "DRUGS_CONSUMPTION",
+  UNCATEGORIZED: "GENERAL",
+  GENERAL: "GENERAL",
+  // Direct matches: HATE_SPEECH, HARASSMENT, CSAM, TERRORISM, FAKE_NEWS,
+  // DEFAMATION, EXTORTION, GAMBLING, IDENTITY_THEFT, DRUGS_TRAFFICKING,
+  // DRUGS_CONSUMPTION, CYBER_FRAUD
+};
+
+export function normalizeCategoryToTaxonomy(cat: string): string {
+  const upper = cat?.toUpperCase() ?? "GENERAL";
+  return LLM_TO_TAXONOMY[upper] ?? upper;
 }
 
 const KEYWORD_CATEGORIES: Record<string, string[]> = {
@@ -178,51 +245,141 @@ export async function classifyContentWithLlm(
   text: string,
   actorFlaggedPosts = 0,
   isRepeatOffender = false,
-): Promise<ClassificationResult & { narcoticsResult?: NarcoticsClassificationResult; llmUsed: boolean; llmConfidence?: number }> {
+): Promise<ClassificationResult & { narcoticsResult?: NarcoticsClassificationResult; llmUsed: boolean; llmConfidence?: number; llmClassification?: LlmClassificationOutput; llmError?: string }> {
   // Always run the rule-based pipeline (narcotics + standard)
   const rulesResult = await classifyContentEnhanced(text, actorFlaggedPosts, isRepeatOffender);
 
-  // Try LLM classification
+  // Check if rule-based pipeline found any meaningful signals worth sending to LLM
+  const nr = rulesResult.narcoticsResult;
+  const hasMeaningfulSignals =
+    (nr?.keywordsFound?.length ?? 0) > 0 ||
+    (nr?.slangMatches?.length ?? 0) > 0 ||
+    (nr?.emojiMatches?.length ?? 0) > 0 ||
+    (nr?.transactionSignals?.length ?? 0) > 0 ||
+    (rulesResult.riskScore > 0 && rulesResult.category !== "UNCATEGORIZED");
+
+  if (!hasMeaningfulSignals) {
+    return {
+      category: "GENERAL",
+      riskScore: 0,
+      factors: [],
+      narcoticsResult: nr,
+      llmUsed: false,
+      llmConfidence: undefined,
+      llmClassification: undefined,
+    };
+  }
+
+  // Build pre-extracted signals from the rule-based pipeline for the LLM
+  const preExtractedSignals = nr ? {
+    drug_terms: nr.keywordsFound || [],
+    slang_terms: nr.slangMatches?.map(s => s.term) || [],
+    emoji_codes: nr.emojiMatches?.map(e => e.emoji) || [],
+    sale_terms: nr.transactionSignals?.filter(s => s.signalType === "SALE" || s.signalType === "PURCHASE").map(s => s.matched) || [],
+    delivery_terms: nr.transactionSignals?.filter(s => s.signalType === "CONTACT").map(s => s.matched) || [],
+    payment_terms: nr.transactionSignals?.filter(s => s.signalType === "PRICE").map(s => s.matched) || [],
+    quantity_terms: nr.transactionSignals?.filter(s => s.signalType === "QUANTITY").map(s => s.matched) || [],
+    locations: [] as string[],
+    contact_handles: [] as string[],
+  } : undefined;
+
+  const userContent = preExtractedSignals
+    ? `Return JSON using the required schema.\n\nINPUT:\n${JSON.stringify({
+        post_id: "content",
+        raw_text: text,
+        language_hint: "auto-detect",
+        pre_extracted_signals: preExtractedSignals,
+      }, null, 2)}`
+    : text;
+
+  // Check if LLM provider is available before attempting
+  const llmAvailable = await isLlmAvailable();
+  if (!llmAvailable) {
+    return {
+      ...rulesResult,
+      llmUsed: false,
+      llmError: "NO_API_KEY",
+    };
+  }
+
+  // Try LLM classification with JSON mode
   try {
-    const llmResult = await llmComplete({
-      messages: [{ role: "user", content: text }],
-      useCase: "CLASSIFICATION",
-    });
+    const llmResult = await llmCompleteJson<LlmClassificationOutput>(
+      {
+        messages: [{ role: "user", content: userContent }],
+        useCase: "CLASSIFICATION",
+        maxTokens: 2048,
+        temperature: 0.2,
+      },
+      [
+        { field: "primary_category", type: "object" },
+        { field: "narcotics_relevance", type: "object" },
+      ],
+    );
 
     if (llmResult) {
-      const parsed = JSON.parse(llmResult.content);
-      const llmScore = typeof parsed.risk_score === "number" ? parsed.risk_score : 0;
-      const llmConfidence = typeof parsed.confidence === "number" ? parsed.confidence : undefined;
+      const parsed = llmResult.data;
 
-      // Use whichever scores higher (LLM or rules)
-      if (llmScore > rulesResult.riskScore) {
-        const llmFactors: RiskFactor[] = Array.isArray(parsed.factors)
-          ? parsed.factors.map((f: Record<string, unknown>) => ({
+      // Extract score: prefer primary_category.score, fallback to risk_score, narcotics_relevance.score
+      const llmScore = parsed.primary_category?.score
+        ?? parsed.risk_score
+        ?? parsed.narcotics_relevance?.score
+        ?? 0;
+
+      // Map confidence band to numeric confidence
+      const confidenceMap: Record<string, number> = { high: 0.9, medium: 0.65, low: 0.35 };
+      const llmConfidence = parsed.confidence
+        ?? (parsed.confidence_band ? confidenceMap[parsed.confidence_band] : undefined)
+        ?? undefined;
+
+      // Extract category from rich format
+      const llmCategory = parsed.primary_category?.label
+        ?? parsed.category
+        ?? rulesResult.category;
+
+      // Build factors from sub_reason_scores
+      const llmFactors: RiskFactor[] = Array.isArray(parsed.sub_reason_scores)
+        ? parsed.sub_reason_scores.map(sr => ({
+            factor: sr.reason_code || "llm_factor",
+            weight: 1.0,
+            score: sr.score || 0,
+            detail: `${sr.reason_label}: ${sr.explanation}${sr.matched_evidence?.length ? ` [${sr.matched_evidence.join(", ")}]` : ""}`,
+          }))
+        : Array.isArray(parsed.factors)
+          ? parsed.factors.map(f => ({
               factor: String(f.factor || "llm_factor"),
               weight: 1.0,
               score: llmScore,
               detail: String(f.detail || "LLM classification"),
             }))
-          : [{ factor: "llm_classification", weight: 1.0, score: llmScore, detail: `LLM classified as ${parsed.category}` }];
+          : [{ factor: "llm_classification", weight: 1.0, score: llmScore, detail: `LLM classified as ${llmCategory}` }];
 
+      // Use whichever scores higher (LLM or rules)
+      if (llmScore > rulesResult.riskScore) {
         return {
-          category: parsed.category || rulesResult.category,
+          category: llmCategory.toUpperCase(),
           riskScore: llmScore,
           factors: llmFactors,
           narcoticsResult: rulesResult.narcoticsResult,
           llmUsed: true,
           llmConfidence,
+          llmClassification: parsed,
         };
       }
 
-      // Rules scored higher, but still mark LLM as consulted
-      return { ...rulesResult, llmUsed: true, llmConfidence };
+      // Rules scored higher, but still attach the LLM output
+      return { ...rulesResult, llmUsed: true, llmConfidence, llmClassification: parsed };
     }
-  } catch {
-    // LLM failed — fall through to rules
+  } catch (err) {
+    // LLM failed — fall through to rules with error info
+    return {
+      ...rulesResult,
+      llmUsed: false,
+      llmError: `LLM_CALL_FAILED: ${err instanceof Error ? err.message : String(err)}`,
+    };
   }
 
-  return { ...rulesResult, llmUsed: false };
+  return { ...rulesResult, llmUsed: false, llmError: "LLM_NO_RESULT" };
 }
 
 /**
@@ -275,6 +432,7 @@ export async function classifyEntity(entityType: string, entityId: string): Prom
     case "sm_alert": tableName = "sm_alert"; textColumn = "description"; idColumn = "alert_id"; break;
     case "sm_case": tableName = "case_record"; textColumn = "description"; idColumn = "case_id"; break;
     case "sm_evidence": tableName = "evidence_item"; textColumn = "description"; idColumn = "evidence_id"; break;
+    case "content_item": tableName = "content_item"; textColumn = "content_text"; idColumn = "content_id"; break;
     default: throw new Error(`Unknown entity type: ${entityType}`);
   }
 
@@ -282,18 +440,86 @@ export async function classifyEntity(entityType: string, entityId: string): Prom
   if (entityResult.rows.length === 0) throw new Error("Entity not found");
 
   const text = entityResult.rows[0][textColumn] || "";
-  // FR-06 AC-02: Use taxonomy-backed classification
-  const classification = await classifyContentWithTaxonomy(text);
 
-  // Upsert classification result with taxonomy_version_id
+  // For content_item, use LLM-enhanced classification; otherwise taxonomy-backed
+  const isContentItem = entityType === "content_item";
+  const classification = isContentItem
+    ? await classifyContentWithLlm(text)
+    : await classifyContentWithTaxonomy(text);
+
+  // Build pipeline_metadata from narcotics result if available
+  const narcoticsResult = "narcoticsResult" in classification
+    ? (classification as { narcoticsResult?: NarcoticsClassificationResult }).narcoticsResult
+    : undefined;
+  const llmClassification = "llmClassification" in classification
+    ? (classification as { llmClassification?: LlmClassificationOutput }).llmClassification
+    : undefined;
+  const pipelineMetadata = narcoticsResult ? {
+    normalizedText: narcoticsResult.normalizedText,
+    keywordsFound: narcoticsResult.keywordsFound,
+    slangMatches: narcoticsResult.slangMatches,
+    emojiMatches: narcoticsResult.emojiMatches,
+    transactionSignals: narcoticsResult.transactionSignals,
+    normalizationsApplied: narcoticsResult.normalizationsApplied,
+    substanceCategory: narcoticsResult.substanceCategory,
+    activityType: narcoticsResult.activityType,
+    narcoticsScore: narcoticsResult.narcoticsScore,
+    slangDictionaryVersion: narcoticsResult.slangDictionaryVersion,
+    processingTimeMs: narcoticsResult.processingTimeMs,
+    llmUsed: "llmUsed" in classification ? (classification as { llmUsed: boolean }).llmUsed : false,
+    llmError: "llmError" in classification ? (classification as { llmError?: string }).llmError : undefined,
+    classifiedAt: new Date().toISOString(),
+    ...(llmClassification ? {
+      llmClassification: {
+        narcoticsRelevance: llmClassification.narcotics_relevance,
+        primaryCategory: llmClassification.primary_category,
+        secondaryCategories: llmClassification.secondary_categories,
+        subReasonScores: llmClassification.sub_reason_scores,
+        matchedEntities: llmClassification.matched_entities,
+        confidenceBand: llmClassification.confidence_band,
+        reviewRecommended: llmClassification.review_recommended,
+        reviewReason: llmClassification.review_reason,
+        finalReasoning: llmClassification.final_reasoning,
+      },
+    } : {}),
+  } : {};
+
+  // Upsert classification result with taxonomy_version_id, LLM metadata, and pipeline metadata
   const result = await query(
-    `INSERT INTO classification_result (entity_type, entity_id, category, risk_score, risk_factors, taxonomy_version_id)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO classification_result (entity_type, entity_id, category, risk_score, risk_factors, taxonomy_version_id, classified_by_llm, llm_confidence, pipeline_metadata)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      ON CONFLICT (entity_type, entity_id) DO UPDATE SET
-       category = $3, risk_score = $4, risk_factors = $5, taxonomy_version_id = $6, updated_at = now()
+       category = $3, risk_score = $4, risk_factors = $5, taxonomy_version_id = $6,
+       classified_by_llm = $7, llm_confidence = $8, pipeline_metadata = $9, updated_at = now()
      RETURNING *`,
-    [entityType, entityId, classification.category, classification.riskScore, JSON.stringify(classification.factors), classification.taxonomyVersionId || null],
+    [
+      entityType, entityId, classification.category, classification.riskScore,
+      JSON.stringify(classification.factors),
+      ("taxonomyVersionId" in classification ? classification.taxonomyVersionId : null) || null,
+      "llmUsed" in classification ? classification.llmUsed : false,
+      "llmConfidence" in classification ? (classification.llmConfidence ?? null) : null,
+      JSON.stringify(pipelineMetadata),
+    ],
   );
+
+  // For content_item, sync category_id and threat_score back
+  if (isContentItem) {
+    try {
+      const taxName = normalizeCategoryToTaxonomy(classification.category);
+      const catResult = await query(
+        `SELECT category_id FROM taxonomy_category WHERE name = $1 LIMIT 1`,
+        [taxName],
+      );
+      if (catResult.rows.length > 0) {
+        await query(
+          `UPDATE content_item SET category_id = $1, threat_score = $2 WHERE content_id = $3`,
+          [catResult.rows[0].category_id, classification.riskScore, entityId],
+        );
+      }
+    } catch {
+      // Category FK sync failed — non-fatal
+    }
+  }
 
   return result.rows[0];
 }

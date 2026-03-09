@@ -1,0 +1,1 @@
+ALTER TABLE user_account ADD COLUMN IF NOT EXISTS designation VARCHAR(256);

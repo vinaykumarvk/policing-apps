@@ -6,16 +6,17 @@ import { apiBaseUrl, MonitoringProfile, JurisdictionLocation } from "../types";
 type Props = { authHeaders: () => Record<string, string>; isOffline: boolean; isAdmin: boolean };
 type Tab = "profiles" | "locations";
 
-const PLATFORMS = ["facebook", "instagram", "twitter", "x"] as const;
+const PLATFORMS = ["facebook", "instagram", "twitter", "x", "telegram", "whatsapp", "youtube"] as const;
 const ENTRY_TYPES = ["PROFILE", "GROUP", "PAGE"] as const;
 const PRIORITIES = ["HIGH", "NORMAL", "LOW"] as const;
-const SOURCES = ["MANUAL", "NIDAAN", "TEF", "PRIVATE", "BULK_CSV"] as const;
+const SOURCES = ["MANUAL", "NIDAAN", "TEF", "PRIVATE", "BULK_CSV", "UNODC", "EUROPOL", "INTERPOL", "NCB", "DEA", "FATF"] as const;
 const LIMIT = 20;
 
 const sourceBadgeClass = (source: string) => {
   switch (source) {
     case "NIDAAN": return "badge--error";
-    case "TEF": return "badge--warning";
+    case "UNODC": case "EUROPOL": case "INTERPOL": case "DEA": case "FATF": return "badge--error";
+    case "TEF": case "NCB": return "badge--warning";
     case "PRIVATE": return "badge--info";
     case "BULK_CSV": return "badge--success";
     default: return "badge--default";
@@ -419,6 +420,7 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
             <div className="empty-state"><h3>{t("monitoring.no_profiles")}</h3></div>
           ) : (
             <>
+              <div className="table-scroll">
               <table className="entity-table">
                 <thead>
                   <tr>
@@ -456,6 +458,7 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
                   ))}
                 </tbody>
               </table>
+              </div>
               {profileTotal > LIMIT && (
                 <div className="pagination" style={{ display: "flex", gap: "var(--space-3)", alignItems: "center", justifyContent: "center", marginTop: "var(--space-3)" }}>
                   <Button onClick={() => setProfileOffset(Math.max(0, profileOffset - LIMIT))} disabled={profileOffset === 0}>{t("audit.prev_page")}</Button>
@@ -518,6 +521,7 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
             <div className="empty-state"><h3>{t("monitoring.no_locations")}</h3></div>
           ) : (
             <>
+              <div className="table-scroll">
               <table className="entity-table">
                 <thead>
                   <tr>
@@ -549,6 +553,7 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
                   ))}
                 </tbody>
               </table>
+              </div>
               {locationTotal > LIMIT && (
                 <div className="pagination" style={{ display: "flex", gap: "var(--space-3)", alignItems: "center", justifyContent: "center", marginTop: "var(--space-3)" }}>
                   <Button onClick={() => setLocationOffset(Math.max(0, locationOffset - LIMIT))} disabled={locationOffset === 0}>{t("audit.prev_page")}</Button>
@@ -598,7 +603,7 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
             </Field>
             <Field label={t("monitoring.source")} htmlFor="ep-source">
               <select id="ep-source" className="input" value={epSource} onChange={(e) => setEpSource(e.target.value)}
-                disabled={epSource === "NIDAAN" || epSource === "TEF"}>
+                disabled={["NIDAAN","TEF","UNODC","EUROPOL","INTERPOL","NCB","DEA","FATF"].includes(epSource)}>
                 {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </Field>

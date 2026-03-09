@@ -339,6 +339,7 @@ export default function ModelAdmin({ authHeaders, isOffline }: Props) {
           )}
 
           {providers.length > 0 ? (
+            <div className="table-scroll">
             <table className="entity-table">
               <thead>
                 <tr>
@@ -391,6 +392,7 @@ export default function ModelAdmin({ authHeaders, isOffline }: Props) {
                 ))}
               </tbody>
             </table>
+            </div>
           ) : (
             <Card><p style={{ color: "var(--color-text-secondary)", textAlign: "center" }}>{t("llm.no_providers")}</p></Card>
           )}
@@ -401,6 +403,7 @@ export default function ModelAdmin({ authHeaders, isOffline }: Props) {
       {tab === "models" && (
         <div>
           {models.length > 0 ? (
+            <div className="table-scroll">
             <table className="entity-table">
               <thead>
                 <tr>
@@ -438,6 +441,7 @@ export default function ModelAdmin({ authHeaders, isOffline }: Props) {
                 ))}
               </tbody>
             </table>
+            </div>
           ) : (
             <Card><p style={{ color: "var(--color-text-secondary)", textAlign: "center" }}>{t("models.no_models")}</p></Card>
           )}
@@ -517,6 +521,7 @@ export default function ModelAdmin({ authHeaders, isOffline }: Props) {
 
           {predictions.length > 0 ? (
             <>
+              <div className="table-scroll">
               <table className="entity-table">
                 <thead>
                   <tr>
@@ -543,6 +548,7 @@ export default function ModelAdmin({ authHeaders, isOffline }: Props) {
                   ))}
                 </tbody>
               </table>
+              </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "var(--space-3)" }}>
                 <span style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>
                   {t("slang.page_info", { from: (predPage - 1) * 20 + 1, to: Math.min(predPage * 20, predTotal), total: predTotal })}

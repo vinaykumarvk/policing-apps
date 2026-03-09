@@ -46,6 +46,8 @@ import { registerPrivacyRoutes } from "./routes/privacy.routes";
 import { registerEarlyWarningRoutes } from "./routes/early-warning.routes";
 import { registerPlatformCooperationRoutes } from "./routes/platform-cooperation.routes";
 import { registerLlmRoutes } from "./routes/llm.routes";
+import { registerPipelineRoutes } from "./routes/pipeline.routes";
+import { registerReportGenerateRoutes } from "./routes/report-generate.routes";
 import { createOidcAuth, createOidcRoutes, createAuthMiddleware, createConfigGovernanceRoutes, createIdempotencyMiddleware, createLdapAuth, createAuthRoutes as createSharedAuthRoutes } from "@puda/api-core";
 import { query } from "./db";
 
@@ -59,25 +61,14 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
   }
   const allowedOrigins = rawAllowedOrigins
     ? rawAllowedOrigins.split(",").map((o) => o.trim()).filter(Boolean)
-    : isTestRuntime ? true : [];
+    : isProduction ? [] : true;
 
   const app = Fastify({ logger, bodyLimit: 10_485_760 }); // 10 MB
 
   await app.register(helmet, {
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
-        styleSrc: ["'self'"],
-        imgSrc: ["'self'"],
-        connectSrc: ["'self'"],
-        fontSrc: ["'self'"],
-        objectSrc: ["'none'"],
-        frameSrc: ["'none'"],
-        baseUri: ["'self'"],
-        formAction: ["'self'"],
-      },
-    },
+    // CSP is not meaningful for a JSON API — CORS handles cross-origin security.
+    // A restrictive connect-src on API responses blocks browsers from reading them.
+    contentSecurityPolicy: false,
   });
   await app.register(compress, { global: true, threshold: 1024 });
   await app.register(cors, { origin: allowedOrigins, credentials: true });
@@ -249,6 +240,8 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
   await registerEarlyWarningRoutes(app);
   await registerPlatformCooperationRoutes(app);
   await registerLlmRoutes(app);
+  await registerPipelineRoutes(app);
+  await registerReportGenerateRoutes(app);
 
   // Config governance routes
   const registerConfigGovernanceRoutes = createConfigGovernanceRoutes({ queryFn: query });

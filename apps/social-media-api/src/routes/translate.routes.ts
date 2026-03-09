@@ -132,6 +132,11 @@ export async function registerTranslateRoutes(app: FastifyInstance): Promise<voi
           textColumn = "description";
           idColumn = "evidence_id";
           break;
+        case "content_item":
+          tableName = "content_item";
+          textColumn = "content_text";
+          idColumn = "content_id";
+          break;
         default:
           return send400(reply, "UNKNOWN_ENTITY_TYPE", `Unsupported entity type: ${entityType}`);
       }

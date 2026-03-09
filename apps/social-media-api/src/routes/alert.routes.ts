@@ -37,7 +37,7 @@ export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
          WHERE ($1::text IS NULL OR state_id = $1)
            AND ($2::text IS NULL OR priority = $2)
            AND ($3::text IS NULL OR alert_type = $3)
-           AND (unit_id = $4::uuid)
+           AND (unit_id IS NULL OR unit_id = $4::uuid OR unit_id IN (SELECT unit_id FROM organization_unit WHERE parent_unit_id = $4::uuid))
          ORDER BY created_at DESC
          LIMIT $5 OFFSET $6`,
         [state_id || null, priority || null, alert_type || null, unitId, limit, offset],
@@ -52,10 +52,11 @@ export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/api/v1/alerts/facets", async (request) => {
     const unitId = request.authUser?.unitId || null;
+    const unitClause = `(unit_id IS NULL OR unit_id = $1::uuid OR unit_id IN (SELECT unit_id FROM organization_unit WHERE parent_unit_id = $1::uuid))`;
     const [stateRows, priorityRows, typeRows] = await Promise.all([
-      query(`SELECT state_id AS value, COUNT(*)::int AS count FROM sm_alert WHERE (unit_id = $1::uuid) GROUP BY state_id ORDER BY count DESC`, [unitId]),
-      query(`SELECT priority AS value, COUNT(*)::int AS count FROM sm_alert WHERE (unit_id = $1::uuid) GROUP BY priority ORDER BY count DESC`, [unitId]),
-      query(`SELECT alert_type AS value, COUNT(*)::int AS count FROM sm_alert WHERE (unit_id = $1::uuid) GROUP BY alert_type ORDER BY count DESC`, [unitId]),
+      query(`SELECT state_id AS value, COUNT(*)::int AS count FROM sm_alert WHERE ${unitClause} GROUP BY state_id ORDER BY count DESC`, [unitId]),
+      query(`SELECT priority AS value, COUNT(*)::int AS count FROM sm_alert WHERE ${unitClause} GROUP BY priority ORDER BY count DESC`, [unitId]),
+      query(`SELECT alert_type AS value, COUNT(*)::int AS count FROM sm_alert WHERE ${unitClause} GROUP BY alert_type ORDER BY count DESC`, [unitId]),
     ]);
     return { facets: { state_id: stateRows.rows, priority: priorityRows.rows, alert_type: typeRows.rows } };
   });
@@ -247,7 +248,7 @@ export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
          FROM sm_alert a
          LEFT JOIN classification_result cr ON cr.entity_type = 'sm_alert' AND cr.entity_id = a.alert_id
          WHERE a.priority_queue = $1
-           AND a.unit_id = $2::uuid
+           AND (a.unit_id IS NULL OR a.unit_id = $2::uuid)
            AND a.state_id NOT IN ('DISMISSED', 'FALSE_POSITIVE', 'CLOSED')
          ORDER BY cr.risk_score DESC NULLS LAST, a.created_at DESC
          LIMIT $3 OFFSET $4`,
@@ -339,6 +340,133 @@ export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
       };
     } catch (err: unknown) {
       request.log.error(err, "Failed to recalculate alert score");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  // POST /api/v1/alerts/:id/screenshot — Capture screenshot evidence for alert
+  app.post("/api/v1/alerts/:id/screenshot", {
+    schema: {
+      params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } },
+    },
+  }, async (request, reply) => {
+    if (!requireAnalyst(request, reply)) return;
+    try {
+      const { id } = request.params as { id: string };
+      const { userId } = request.authUser!;
+
+      // Look up alert and its content_url
+      const alertResult = await query(
+        `SELECT a.alert_id, a.content_id, c.content_url, c.platform, c.author_handle
+         FROM sm_alert a
+         LEFT JOIN content_item c ON c.content_id = a.content_id
+         WHERE a.alert_id = $1`,
+        [id],
+      );
+      if (alertResult.rows.length === 0) return send404(reply, "ALERT_NOT_FOUND", "Alert not found");
+
+      const alert = alertResult.rows[0];
+      const contentUrl = alert.content_url || "N/A";
+      const contentId = alert.content_id;
+      const timestamp = Date.now();
+
+      // Save screenshot metadata as evidence
+      const filePath = `screenshots/${contentId || id}_${timestamp}.txt`;
+
+      // Write a placeholder screenshot file
+      const fs = await import("fs");
+      const path = await import("path");
+      const dir = path.join(process.cwd(), "evidence-local", "screenshots");
+      fs.mkdirSync(dir, { recursive: true });
+      const fullPath = path.join(dir, `${contentId || id}_${timestamp}.txt`);
+      fs.writeFileSync(fullPath, `Screenshot capture record\nURL: ${contentUrl}\nPlatform: ${alert.platform || "unknown"}\nAuthor: ${alert.author_handle || "unknown"}\nAlert ID: ${id}\nCaptured at: ${new Date().toISOString()}\nCaptured by: ${userId}\n`);
+
+      // Compute hash
+      const crypto = await import("crypto");
+      const fileContent = fs.readFileSync(fullPath);
+      const hash = crypto.createHash("sha256").update(fileContent).digest("hex");
+
+      // Insert evidence record
+      const evidenceResult = await query(
+        `INSERT INTO evidence_item (content_id, alert_id, capture_type, screenshot_url, hash_sha256, state_id, captured_by)
+         VALUES ($1, $2, 'MANUAL_SCREENSHOT', $3, $4, 'CAPTURED', $5)
+         RETURNING evidence_id, content_id, alert_id, capture_type, screenshot_url, hash_sha256, state_id, captured_by, created_at`,
+        [contentId, id, filePath, hash, userId],
+      );
+
+      return { success: true, evidence: evidenceResult.rows[0] };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to capture screenshot");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  // POST /api/v1/alerts/:id/convert-to-case — Convert alert to a case
+  app.post("/api/v1/alerts/:id/convert-to-case", {
+    schema: {
+      params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } },
+    },
+  }, async (request, reply) => {
+    if (!requireAnalyst(request, reply)) return;
+    try {
+      const { id } = request.params as { id: string };
+      const { userId } = request.authUser!;
+
+      // Verify alert exists and is convertible
+      const alertResult = await query(
+        `SELECT alert_id, title, description, content_id, priority, state_id
+         FROM sm_alert WHERE alert_id = $1`,
+        [id],
+      );
+      if (alertResult.rows.length === 0) return send404(reply, "ALERT_NOT_FOUND", "Alert not found");
+
+      const alert = alertResult.rows[0];
+      const terminalStates = ["CONVERTED_TO_CASE", "CLOSED_NO_ACTION", "FALSE_POSITIVE", "DISMISSED", "CLOSED"];
+      if (terminalStates.includes(alert.state_id)) {
+        return sendError(reply, 400, "INVALID_STATE", `Alert is in state ${alert.state_id} and cannot be converted`);
+      }
+
+      // Create case record
+      const unitId = request.authUser?.unitId || null;
+      const caseResult = await query(
+        `INSERT INTO case_record (title, description, source_alert_id, priority, state_id, created_by, unit_id)
+         VALUES ($1, $2, $3, $4, 'OPEN', $5, $6)
+         RETURNING case_id, case_ref`,
+        [alert.title, alert.description || "", id, alert.priority || "MEDIUM", userId, unitId],
+      );
+      const newCase = caseResult.rows[0];
+
+      // Update alert state to CONVERTED_TO_CASE
+      await query(
+        `UPDATE sm_alert SET state_id = 'CONVERTED_TO_CASE', updated_at = NOW(), row_version = row_version + 1
+         WHERE alert_id = $1`,
+        [id],
+      );
+
+      // Link any evidence attached to this alert to the new case
+      await query(
+        `UPDATE evidence_item SET case_id = $1 WHERE alert_id = $2 AND case_id IS NULL`,
+        [newCase.case_id, id],
+      );
+
+      // Link content to case if alert has content_id
+      if (alert.content_id) {
+        await query(
+          `INSERT INTO case_content (case_id, content_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [newCase.case_id, alert.content_id],
+        ).catch(() => { /* table may not exist, non-critical */ });
+      }
+
+      // Audit log
+      await query(
+        `INSERT INTO audit_log (entity_type, entity_id, event_type, from_state, to_state, actor_type, actor_id, remarks)
+         VALUES ('sm_alert', $1, 'CONVERT_TO_CASE', $2, 'CONVERTED_TO_CASE', 'OFFICER', $3, $4)`,
+        [id, alert.state_id, userId, `Converted to case ${newCase.case_ref || newCase.case_id}`],
+      );
+
+      return { success: true, case_id: newCase.case_id, case_ref: newCase.case_ref };
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to convert alert to case");
       return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
     }
   });

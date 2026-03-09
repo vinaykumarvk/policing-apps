@@ -17,6 +17,25 @@ function facetOptions(entries: FacetEntry[] | undefined, fallback: string[]) {
   return fallback.map((v) => <option key={v} value={v}>{v}</option>);
 }
 
+const STATE_COLORS: Record<string, string> = {
+  OPEN: "info",
+  ASSIGNED: "warning",
+  UNDER_INVESTIGATION: "primary",
+  AWAITING_REVIEW: "warning",
+  CLOSED: "success",
+  REOPENED: "danger",
+};
+
+function relativeDate(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const days = Math.floor(diff / 86400000);
+  if (days === 0) return "Today";
+  if (days === 1) return "1 day ago";
+  if (days < 30) return `${days} days ago`;
+  const months = Math.floor(days / 30);
+  return months === 1 ? "1 month ago" : `${months} months ago`;
+}
+
 export default function CaseList({ authHeaders, isOffline, onSelect }: Props) {
   const { t } = useTranslation();
   const [cases, setCases] = useState<CaseRecord[]>([]);
@@ -26,6 +45,7 @@ export default function CaseList({ authHeaders, isOffline, onSelect }: Props) {
   const [total, setTotal] = useState(0);
   const [stateFilter, setStateFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [facets, setFacets] = useState<Facets>({});
 
   useEffect(() => {
@@ -44,6 +64,7 @@ export default function CaseList({ authHeaders, isOffline, onSelect }: Props) {
     params.set("offset", String((page - 1) * LIMIT));
     if (stateFilter) params.set("state_id", stateFilter);
     if (priorityFilter) params.set("priority", priorityFilter);
+    if (categoryFilter) params.set("category", categoryFilter);
 
     fetch(`${apiBaseUrl}/api/v1/cases?${params}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
@@ -53,7 +74,7 @@ export default function CaseList({ authHeaders, isOffline, onSelect }: Props) {
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed"))
       .finally(() => setLoading(false));
-  }, [authHeaders, isOffline, page, stateFilter, priorityFilter]);
+  }, [authHeaders, isOffline, page, stateFilter, priorityFilter, categoryFilter]);
 
   return (
     <>
@@ -64,13 +85,19 @@ export default function CaseList({ authHeaders, isOffline, onSelect }: Props) {
         <Field label={t("filter.state")} htmlFor="filter-state">
           <Select id="filter-state" value={stateFilter} onChange={(e) => { setStateFilter(e.target.value); setPage(1); }}>
             <option value="">{t("filter.all")}</option>
-            {facetOptions(facets.state_id, ["OPEN", "ASSIGNED", "UNDER_INVESTIGATION", "PENDING_REVIEW", "CLOSED"])}
+            {facetOptions(facets.state_id, ["OPEN", "ASSIGNED", "UNDER_INVESTIGATION", "AWAITING_REVIEW", "CLOSED"])}
           </Select>
         </Field>
         <Field label={t("filter.priority")} htmlFor="filter-priority">
           <Select id="filter-priority" value={priorityFilter} onChange={(e) => { setPriorityFilter(e.target.value); setPage(1); }}>
             <option value="">{t("filter.all")}</option>
-            {facetOptions(facets.priority, ["HIGH", "MEDIUM", "LOW"])}
+            {facetOptions(facets.priority, ["CRITICAL", "HIGH", "MEDIUM", "LOW"])}
+          </Select>
+        </Field>
+        <Field label={t("filter.category")} htmlFor="filter-category">
+          <Select id="filter-category" value={categoryFilter} onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}>
+            <option value="">{t("filter.all")}</option>
+            {facetOptions(facets.category, [])}
           </Select>
         </Field>
       </div>
@@ -79,20 +106,31 @@ export default function CaseList({ authHeaders, isOffline, onSelect }: Props) {
         <div className="empty-state"><h3>{t("cases.no_cases")}</h3></div>
       ) : (
         <>
+          <div className="table-scroll">
           <table className="entity-table">
-            <thead><tr><th>{t("cases.case_number")}</th><th>{t("common.title")}</th><th>{t("cases.priority")}</th><th>{t("cases.status")}</th><th>{t("cases.assigned")}</th></tr></thead>
+            <thead><tr><th>{t("cases.case_ref")}</th><th>{t("common.title")}</th><th>{t("filter.category")}</th><th>{t("cases.priority")}</th><th>{t("cases.status")}</th><th>{t("cases.assigned_officer")}</th><th>{t("detail.created_at")}</th></tr></thead>
             <tbody>
               {cases.map((c) => (
                 <tr key={c.case_id} className="entity-table__clickable" onClick={() => onSelect(c.case_id)}>
-                  <td data-label={t("cases.case_number")}>{c.case_number}</td>
+                  <td data-label={t("cases.case_ref")}>{c.case_ref || c.case_number || "—"}</td>
                   <td data-label={t("common.title")}>{c.title}</td>
+                  <td data-label={t("filter.category")}>{c.category_name ? <span className="badge badge--default">{c.category_name}</span> : "—"}</td>
                   <td data-label={t("cases.priority")}><span className={`badge badge--${c.priority?.toLowerCase() || "default"}`}>{c.priority}</span></td>
-                  <td data-label={t("cases.status")}><span className="badge badge--default">{c.state_id}</span></td>
-                  <td data-label={t("cases.assigned")}>{c.assigned_to || "—"}</td>
+                  <td data-label={t("cases.status")}><span className={`badge badge--${STATE_COLORS[c.state_id] || "default"}`}>{c.state_id}</span></td>
+                  <td data-label={t("cases.assigned_officer")}>
+                    {c.assigned_to_name ? (
+                      <div>
+                        <div>{c.assigned_to_name}</div>
+                        {c.assigned_to_designation && <small style={{ color: "var(--color-text-muted)", fontSize: "0.75rem" }}>{c.assigned_to_designation}</small>}
+                      </div>
+                    ) : "—"}
+                  </td>
+                  <td data-label={t("detail.created_at")}>{c.created_at ? relativeDate(c.created_at) : "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
           <Pagination page={page} total={total} limit={LIMIT} onPageChange={setPage} />
         </>
       )}

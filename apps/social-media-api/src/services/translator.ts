@@ -1,48 +1,14 @@
 import { query } from "../db";
-import { llmComplete } from "./llm-provider";
+import { llmComplete, isLlmAvailable } from "./llm-provider";
 
 type DbRow = Record<string, unknown>;
 
-// Simple internal translation mappings (Telugu/Hindi -> English)
-// In production, this would integrate with Google Translate, Azure Translator, or similar
-const DICTIONARY: Record<string, Record<string, string>> = {
-  "hi_to_en": {
-    "पुलिस": "police",
-    "अपराध": "crime",
-    "गिरफ्तार": "arrested",
-    "शिकायत": "complaint",
-    "जांच": "investigation",
-    "रिपोर्ट": "report",
-    "अपराधी": "criminal",
-    "सबूत": "evidence",
-    "गवाह": "witness",
-    "अदालत": "court",
-    "मुकदमा": "case",
-    "आरोपी": "accused",
-    "पीड़ित": "victim",
-    "चोरी": "theft",
-    "लूट": "robbery",
-    "धोखाधड़ी": "fraud",
-    "हत्या": "murder",
-    "ड्रग्स": "drugs",
-    "सोशल मीडिया": "social media",
-    "साइबर अपराध": "cybercrime",
-  },
-  "te_to_en": {
-    "పోలీసు": "police",
-    "నేరం": "crime",
-    "అరెస్ట్": "arrest",
-    "ఫిర్యాదు": "complaint",
-    "దర్యాప్తు": "investigation",
-    "నివేదిక": "report",
-    "నేరస్తుడు": "criminal",
-    "సాక్ష్యం": "evidence",
-    "సాక్షి": "witness",
-    "కోర్టు": "court",
-    "కేసు": "case",
-    "నిందితుడు": "accused",
-    "బాధితుడు": "victim",
-  },
+const LANGUAGE_NAMES: Record<string, string> = {
+  hi: "Hindi",
+  te: "Telugu",
+  en: "English",
+  pa: "Punjabi",
+  bn: "Bengali",
 };
 
 function detectLanguage(text: string): string {
@@ -52,18 +18,6 @@ function detectLanguage(text: string): string {
   if (/[\u0A00-\u0A7F]/.test(text)) return "pa"; // Gurmukhi (Punjabi)
   if (/[\u0980-\u09FF]/.test(text)) return "bn"; // Bengali
   return "en";
-}
-
-function dictionaryTranslate(text: string, sourceLang: string, targetLang: string): string {
-  const dictKey = `${sourceLang}_to_${targetLang}`;
-  const dict = DICTIONARY[dictKey];
-  if (!dict) return text; // No dictionary available for this pair
-
-  let result = text;
-  for (const [source, target] of Object.entries(dict)) {
-    result = result.replace(new RegExp(source, "g"), target);
-  }
-  return result;
 }
 
 export async function translateText(params: {
@@ -78,26 +32,48 @@ export async function translateText(params: {
   const { sourceEntityType, sourceEntityId, text, targetLanguage, createdBy, detectedLang, langConfidence } = params;
 
   const sourceLang = detectedLang || detectLanguage(text);
+  const languageName = LANGUAGE_NAMES[targetLanguage] || targetLanguage;
 
-  // Check for existing translation
+  // Check for existing LLM translation (skip old dictionary-based INTERNAL records)
   const existing = await query(
     `SELECT * FROM translation_record
       WHERE source_entity_type = $1
         AND source_entity_id = $2
         AND target_language = $3
         AND status = 'COMPLETED'
+        AND provider != 'INTERNAL'
       ORDER BY created_at DESC LIMIT 1`,
     [sourceEntityType, sourceEntityId, targetLanguage],
   );
 
   if (existing.rows.length > 0) {
+    // Still flag the original post language even if we have a cached translation
+    await query(
+      `UPDATE content_item SET language = $1 WHERE content_id = $2 AND (language IS NULL OR language = '')`,
+      [sourceLang, sourceEntityId],
+    ).catch(() => {});
     return existing.rows[0];
   }
 
-  // Try LLM translation first
+  // Check LLM availability before attempting translation
+  const llmAvailable = await isLlmAvailable();
+  if (!llmAvailable) {
+    return {
+      status: "FAILED",
+      error_message: "LLM not available — configure an API key in Administration → Model Admin → LLM Providers.",
+      source_language: sourceLang,
+      target_language: targetLanguage,
+      detected_lang: detectedLang || sourceLang,
+    };
+  }
+
+  // LLM translation
   try {
     const llmResult = await llmComplete({
-      messages: [{ role: "user", content: `Translate to ${targetLanguage}:\n\n${text}` }],
+      messages: [
+        { role: "system", content: `You are a professional translator. Your task: translate the user's text into ${languageName}. Output ONLY the ${languageName} translation — no explanations, no labels, no original text.` },
+        { role: "user", content: text },
+      ],
       useCase: "TRANSLATION",
     });
 
@@ -112,42 +88,33 @@ export async function translateText(params: {
 
       const result = await query(
         `INSERT INTO translation_record
-          (source_entity_type, source_entity_id, source_language, target_language, source_text, translated_text, status, provider, created_by, detected_lang, lang_confidence, llm_model, llm_tokens)
-         VALUES ($1, $2, $3, $4, $5, $6, 'COMPLETED', $7, $8, $9, $10, $11, $12)
+          (source_entity_type, source_entity_id, source_language, target_language, source_lang, target_lang, source_text, translated_text, status, provider, created_by, detected_lang, lang_confidence, llm_model, llm_tokens)
+         VALUES ($1, $2, $3, $4, $13, $14, $5, $6, 'COMPLETED', $7, $8, $9, $10, $11, $12)
          RETURNING *`,
-        [sourceEntityType, sourceEntityId, sourceLang, targetLanguage, text, translatedText, llmResult.provider, createdBy || null, detectedLang || sourceLang, langConfidence ?? null, llmResult.model, (llmResult.promptTokens || 0) + (llmResult.outputTokens || 0)],
+        [sourceEntityType, sourceEntityId, sourceLang, targetLanguage, text, translatedText, llmResult.provider, createdBy || null, detectedLang || sourceLang, langConfidence ?? null, llmResult.model, (llmResult.promptTokens || 0) + (llmResult.outputTokens || 0), sourceLang, targetLanguage],
       );
+
+      // Flag the original post with detected source language
+      await query(
+        `UPDATE content_item SET language = $1 WHERE content_id = $2 AND (language IS NULL OR language = '')`,
+        [sourceLang, sourceEntityId],
+      ).catch(() => {});
 
       return result.rows[0];
     }
   } catch {
-    // LLM failed — fall through to dictionary
+    // LLM call failed
   }
 
-  // Dictionary fallback
-  try {
-    const translated = dictionaryTranslate(text, sourceLang, targetLanguage);
-
-    const result = await query(
-      `INSERT INTO translation_record
-        (source_entity_type, source_entity_id, source_language, target_language, source_text, translated_text, status, provider, created_by, detected_lang, lang_confidence)
-       VALUES ($1, $2, $3, $4, $5, $6, 'COMPLETED', 'INTERNAL', $7, $8, $9)
-       RETURNING *`,
-      [sourceEntityType, sourceEntityId, sourceLang, targetLanguage, text, translated, createdBy || null, detectedLang || sourceLang, langConfidence ?? null],
-    );
-
-    return result.rows[0];
-  } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    const result = await query(
-      `INSERT INTO translation_record
-        (source_entity_type, source_entity_id, source_language, target_language, source_text, status, error_message, provider, created_by, detected_lang, lang_confidence)
-       VALUES ($1, $2, $3, $4, $5, 'FAILED', $6, 'INTERNAL', $7, $8, $9)
-       RETURNING *`,
-      [sourceEntityType, sourceEntityId, sourceLang, targetLanguage, text, errMsg, createdBy || null, detectedLang || sourceLang, langConfidence ?? null],
-    );
-    return result.rows[0];
-  }
+  // Return FAILED without inserting (translated_text has NOT NULL constraint)
+  return {
+    status: "FAILED",
+    error_message: "LLM translation failed",
+    source_language: sourceLang,
+    target_language: targetLanguage,
+    source_text: text,
+    detected_lang: detectedLang || sourceLang,
+  };
 }
 
 export async function getTranslations(sourceEntityType: string, sourceEntityId: string): Promise<DbRow[]> {

@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert } from "@puda/shared";
 import { apiBaseUrl } from "../types";
-import DashboardFilters, { FilterState, defaultFilters } from "../components/DashboardFilters";
+import DashboardFilters, { FilterState, defaultFilters, GranularityBar } from "../components/DashboardFilters";
+import EmptyState from "../components/EmptyState";
 import { TrendLineChart, DonutChart, FunnelChart, Sparkline, HeatMapGrid, GaugeChart } from "../charts";
 
 type Props = { authHeaders: () => Record<string, string>; isOffline: boolean; onNavigate: (view: string) => void };
@@ -29,9 +30,12 @@ const PRIORITY_COLORS: Record<string, string> = {
 };
 
 const STAGE_COLORS: Record<string, string> = {
-  NEW: "#3b82f6", TRIAGED: "#8b5cf6", INVESTIGATING: "#f59e0b", ESCALATED: "#ef4444",
-  CONVERTED_TO_CASE: "#10b981", IN_REVIEW: "#06b6d4",
-  ASSIGNED: "#8b5cf6", UNDER_INVESTIGATION: "#f59e0b", PENDING_REVIEW: "#06b6d4",
+  NEW: "#3b82f6", TRIAGED: "#8b5cf6", IN_REVIEW: "#06b6d4",
+  ESCALATED_SUPERVISOR: "#ef4444", ESCALATED_CONTROL_ROOM: "#dc2626",
+  CONVERTED_TO_CASE: "#10b981", OPEN: "#3b82f6",
+  ASSIGNED: "#8b5cf6", UNDER_INVESTIGATION: "#f59e0b",
+  AWAITING_REVIEW: "#06b6d4", PENDING_REVIEW: "#06b6d4",
+  CLOSED: "#10b981", REOPENED: "#ef4444",
 };
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -118,7 +122,7 @@ export default function Dashboard({ authHeaders, isOffline, onNavigate }: Props)
       {error && <Alert variant="error">{error}</Alert>}
 
       {/* Row 1: Filters */}
-      <DashboardFilters value={filters} onChange={setFilters} authHeaders={authHeaders} showGranularity />
+      <DashboardFilters value={filters} onChange={setFilters} authHeaders={authHeaders} />
 
       {/* Row 2: KPI Cards */}
       <div className="kpi-grid" style={{ marginBottom: "var(--space-4)" }}>
@@ -157,6 +161,9 @@ export default function Dashboard({ authHeaders, isOffline, onNavigate }: Props)
           <p className="stat-card__value">{analytics?.caseStages.find(s => s.state_id === "UNDER_INVESTIGATION")?.count || 0}</p>
         </div>
       </div>
+
+      {/* Granularity + date presets — affects trend chart */}
+      <GranularityBar value={filters} onChange={setFilters} />
 
       {/* Row 3: Trend Charts (2-column) */}
       <div className="dashboard-row dashboard-row--2col">
@@ -233,10 +240,12 @@ export default function Dashboard({ authHeaders, isOffline, onNavigate }: Props)
 
       {/* Row 7: Top Actors + Recent Alerts (2-column) */}
       <div className="dashboard-row dashboard-row--2col">
-        {analytics && analytics.topActors.length > 0 && (
-          <div className="chart-section">
-            <h2 className="chart-section__title">{t("dashboard.top_actors")}</h2>
-            {analytics.topActors.map((actor, i) => (
+        <div className="chart-section">
+          <h2 className="chart-section__title">{t("dashboard.top_actors")}</h2>
+          {!analytics || analytics.topActors.length === 0 ? (
+            <EmptyState icon="search" title={t("dashboard.no_activity")} />
+          ) : (
+            analytics.topActors.map((actor, i) => (
               <div className="actor-row" key={actor.actor_id}>
                 <span className="actor-row__rank">{i + 1}</span>
                 <div className="actor-row__info">
@@ -248,15 +257,16 @@ export default function Dashboard({ authHeaders, isOffline, onNavigate }: Props)
                 </div>
                 <span className="actor-row__score">{actor.risk_score?.toFixed(0) || "—"}</span>
               </div>
-            ))}
-          </div>
-        )}
+            ))
+          )}
+        </div>
 
         <div className="chart-section">
           <h2 className="chart-section__title">{t("dashboard.recent_alerts")}</h2>
           {recentAlerts.length === 0 ? (
-            <p style={{ color: "var(--color-text-muted)" }}>{t("dashboard.no_activity")}</p>
+            <EmptyState icon="inbox" title={t("dashboard.no_activity")} />
           ) : (
+            <div className="table-scroll">
             <table className="entity-table entity-table--compact">
               <thead>
                 <tr>
@@ -283,6 +293,7 @@ export default function Dashboard({ authHeaders, isOffline, onNavigate }: Props)
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       </div>

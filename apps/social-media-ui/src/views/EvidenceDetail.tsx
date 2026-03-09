@@ -2,6 +2,7 @@ import { useState, useEffect, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, DropZone, Field, Input, Tabs, Textarea, UploadConfirm, useToast } from "@puda/shared";
 import { apiBaseUrl, EvidenceItem } from "../types";
+import EmptyState from "../components/EmptyState";
 
 const CourtExportWizard = lazy(() => import("./CourtExportWizard"));
 
@@ -207,6 +208,7 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
             <div className="detail-section">
               <h3 className="detail-section__title">{t("evidence.legal_holds")}</h3>
               {legalHolds.length > 0 && (
+                <div className="table-scroll">
                 <table className="entity-table" style={{ marginBottom: "var(--space-3)" }}>
                   <thead><tr><th>{t("evidence.hold_reason")}</th><th>{t("evidence.legal_ref")}</th><th>{t("alerts.status")}</th><th>{t("models.actions")}</th></tr></thead>
                   <tbody>
@@ -220,6 +222,7 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
               <div style={{ display: "grid", gap: "var(--space-2)" }}>
                 <Field label={t("evidence.hold_reason")} htmlFor="hold-reason">
@@ -265,7 +268,7 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
                 {t("notes.add")}
               </Button>
             </div>
-            {notes.length === 0 ? <p style={{ color: "var(--color-text-muted)" }}>{t("notes.empty")}</p> : (
+            {notes.length === 0 ? <EmptyState icon="inbox" title={t("notes.empty")} /> : (
               <ul className="notes-list">
                 {notes.map((n) => (
                   <li key={n.note_id} className="notes-list__item">
@@ -279,7 +282,7 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
         )},
         { key: "activity", label: t("detail.tab_activity"), content: (
           <div className="detail-section">
-            {activity.length === 0 ? <p style={{ color: "var(--color-text-muted)" }}>{t("activity.empty")}</p> : (
+            {activity.length === 0 ? <EmptyState icon="inbox" title={t("activity.empty")} /> : (
               <ul className="activity-list">
                 {activity.map((e) => (
                   <li key={e.event_id} className="activity-list__item">

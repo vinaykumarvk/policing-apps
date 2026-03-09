@@ -64,7 +64,7 @@ export function buildFilterClauses(
 
   if (filters.unit) {
     const col = safeColumn(filters.unitColumn || "unit_id", "unit_id");
-    conditions.push(`${col} = $${paramIdx}`);
+    conditions.push(`(${col} = $${paramIdx} OR ${col} IN (SELECT unit_id FROM organization_unit WHERE parent_unit_id = $${paramIdx}::uuid))`);
     params.push(filters.unit);
     paramIdx++;
   }

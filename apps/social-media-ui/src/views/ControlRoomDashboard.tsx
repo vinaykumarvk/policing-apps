@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert } from "@puda/shared";
 import { apiBaseUrl } from "../types";
+import EmptyState from "../components/EmptyState";
 import { GaugeChart, FunnelChart } from "../charts";
 
 type Props = { authHeaders: () => Record<string, string>; isOffline: boolean; onNavigate: (view: string) => void };
@@ -65,8 +66,9 @@ export default function ControlRoomDashboard({ authHeaders, isOffline, onNavigat
   const alertFunnel = [
     { label: "NEW", count: queue.filter(q => q.state_id === "NEW").length, color: "#3b82f6" },
     { label: "TRIAGED", count: queue.filter(q => q.state_id === "TRIAGED").length, color: "#8b5cf6" },
-    { label: "INVESTIGATING", count: queue.filter(q => q.state_id === "INVESTIGATING").length, color: "#f59e0b" },
-    { label: "ESCALATED", count: queue.filter(q => q.state_id === "ESCALATED").length, color: "#ef4444" },
+    { label: "IN REVIEW", count: queue.filter(q => q.state_id === "IN_REVIEW").length, color: "#06b6d4" },
+    { label: "ESCALATED SUP.", count: queue.filter(q => q.state_id === "ESCALATED_SUPERVISOR").length, color: "#ef4444" },
+    { label: "ESCALATED CR", count: queue.filter(q => q.state_id === "ESCALATED_CONTROL_ROOM").length, color: "#dc2626" },
   ].filter(s => s.count > 0);
 
   return (
@@ -98,7 +100,7 @@ export default function ControlRoomDashboard({ authHeaders, isOffline, onNavigat
       <div className="chart-section" style={{ marginBottom: "var(--space-4)" }}>
         <h2 className="chart-section__title">{t("dashboard.priority_queue")}</h2>
         {queue.length === 0 ? (
-          <p style={{ color: "var(--color-text-muted)" }}>{t("dashboard.no_activity")}</p>
+          <EmptyState icon="inbox" title={t("dashboard.no_activity")} />
         ) : (
           <div className="table-scroll">
             <table className="entity-table entity-table--compact">

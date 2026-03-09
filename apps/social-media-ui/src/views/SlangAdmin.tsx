@@ -347,6 +347,7 @@ export default function SlangAdmin({ authHeaders, isOffline }: Props) {
             <div className="empty-state"><h3>{t("slang.no_entries")}</h3></div>
           ) : (
             <>
+              <div className="table-scroll">
               <table className="entity-table">
                 <thead>
                   <tr>
@@ -394,6 +395,7 @@ export default function SlangAdmin({ authHeaders, isOffline }: Props) {
                   ))}
                 </tbody>
               </table>
+              </div>
 
               {/* Pagination */}
               {total > LIMIT && (
@@ -417,6 +419,7 @@ export default function SlangAdmin({ authHeaders, isOffline }: Props) {
           {loading ? <div className="loading-center">{t("common.loading")}</div> : emojiCodes.length === 0 ? (
             <div className="empty-state"><h3>{t("slang.no_emoji")}</h3></div>
           ) : (
+            <div className="table-scroll">
             <table className="entity-table">
               <thead>
                 <tr>
@@ -439,6 +442,7 @@ export default function SlangAdmin({ authHeaders, isOffline }: Props) {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       )}

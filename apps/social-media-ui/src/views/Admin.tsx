@@ -68,6 +68,7 @@ export default function Admin({ authHeaders, isOffline }: Props) {
         {loading ? <div className="loading-center">{t("common.loading")}</div> : users.length === 0 ? (
           <div className="empty-state"><h3>{t("admin.no_users")}</h3></div>
         ) : (
+          <div className="table-scroll">
           <table className="entity-table">
             <thead><tr><th>{t("admin.username")}</th><th>{t("admin.full_name")}</th><th>{t("admin.email")}</th><th>{t("admin.active")}</th></tr></thead>
             <tbody>
@@ -81,6 +82,7 @@ export default function Admin({ authHeaders, isOffline }: Props) {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </>

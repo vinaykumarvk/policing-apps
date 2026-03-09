@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Field, Input, Modal, Select, Tabs, Textarea, useToast } from "@puda/shared";
 import { apiBaseUrl } from "../types";
+import EmptyState from "../components/EmptyState";
 
 type PlatformRequest = {
   request_id: string; request_ref: string; platform: string; request_type: string;
@@ -73,8 +74,9 @@ export default function PlatformCooperation({ authHeaders, isOffline }: Props) {
               <Button onClick={() => setShowCreate(true)} disabled={isOffline}>{t("platform.create_request")}</Button>
             </div>
             {requests.length === 0 ? (
-              <p style={{ color: "var(--color-text-muted)" }}>{t("platform.no_requests")}</p>
+              <EmptyState icon="inbox" title={t("platform.no_requests")} />
             ) : (
+              <div className="table-scroll">
               <table className="entity-table">
                 <thead><tr><th>{t("platform.ref")}</th><th>{t("monitoring.platform")}</th><th>{t("platform.type")}</th><th>{t("alerts.status")}</th><th>{t("alerts.created")}</th></tr></thead>
                 <tbody>
@@ -91,14 +93,16 @@ export default function PlatformCooperation({ authHeaders, isOffline }: Props) {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </>
         )},
         { key: "templates", label: t("platform.tab_templates"), content: (
           <>
             {templates.length === 0 ? (
-              <p style={{ color: "var(--color-text-muted)" }}>{t("platform.no_templates")}</p>
+              <EmptyState icon="inbox" title={t("platform.no_templates")} />
             ) : (
+              <div className="table-scroll">
               <table className="entity-table">
                 <thead><tr><th>{t("watchlists.name")}</th><th>{t("platform.type")}</th><th>{t("monitoring.platform")}</th></tr></thead>
                 <tbody>
@@ -111,6 +115,7 @@ export default function PlatformCooperation({ authHeaders, isOffline }: Props) {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </>
         )},

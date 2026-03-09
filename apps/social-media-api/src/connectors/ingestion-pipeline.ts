@@ -1,6 +1,6 @@
 import { query } from "../db";
 import { logInfo, logError } from "../logger";
-import { classifyContentWithLlm } from "../services/classifier";
+import { classifyContentWithLlm, normalizeCategoryToTaxonomy } from "../services/classifier";
 import { translateText } from "../services/translator";
 import { extractAndStore } from "../services/entity-extractor";
 import { enqueueScreenshot, isScreenshotServiceReady } from "../services/screenshot-capture";
@@ -110,16 +110,61 @@ export async function ingestItems(
         }
       }
 
-      // 4c. Insert classification result with review status + LLM metadata
+      // 4c. Insert classification result with review status + LLM metadata + pipeline metadata
       try {
+        const nr = classification.narcoticsResult;
+        const pipelineMetadata = nr ? {
+          normalizedText: nr.normalizedText,
+          keywordsFound: nr.keywordsFound,
+          slangMatches: nr.slangMatches,
+          emojiMatches: nr.emojiMatches,
+          transactionSignals: nr.transactionSignals,
+          normalizationsApplied: nr.normalizationsApplied,
+          substanceCategory: nr.substanceCategory,
+          activityType: nr.activityType,
+          narcoticsScore: nr.narcoticsScore,
+          slangDictionaryVersion: nr.slangDictionaryVersion,
+          processingTimeMs: nr.processingTimeMs,
+          llmUsed: classification.llmUsed,
+          classifiedAt: new Date().toISOString(),
+          // Rich LLM output when available
+          ...(classification.llmClassification ? {
+            llmClassification: {
+              narcoticsRelevance: classification.llmClassification.narcotics_relevance,
+              primaryCategory: classification.llmClassification.primary_category,
+              secondaryCategories: classification.llmClassification.secondary_categories,
+              subReasonScores: classification.llmClassification.sub_reason_scores,
+              matchedEntities: classification.llmClassification.matched_entities,
+              confidenceBand: classification.llmClassification.confidence_band,
+              reviewRecommended: classification.llmClassification.review_recommended,
+              reviewReason: classification.llmClassification.review_reason,
+              finalReasoning: classification.llmClassification.final_reasoning,
+            },
+          } : {}),
+        } : {};
         await query(
-          `INSERT INTO classification_result (entity_type, entity_id, category, risk_score, risk_factors, review_status, classified_by_llm, llm_confidence)
-           VALUES ('content_item', $1, $2, $3, $4, $5, $6, $7)
-           ON CONFLICT (entity_type, entity_id) DO UPDATE SET risk_score = EXCLUDED.risk_score, review_status = EXCLUDED.review_status, classified_by_llm = EXCLUDED.classified_by_llm, llm_confidence = EXCLUDED.llm_confidence, updated_at = NOW()`,
-          [contentId, classification.category, classification.riskScore, JSON.stringify(classification.factors || []), reviewStatus, classification.llmUsed, classification.llmConfidence ?? null],
+          `INSERT INTO classification_result (entity_type, entity_id, category, risk_score, risk_factors, review_status, classified_by_llm, llm_confidence, pipeline_metadata)
+           VALUES ('content_item', $1, $2, $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (entity_type, entity_id) DO UPDATE SET risk_score = EXCLUDED.risk_score, review_status = EXCLUDED.review_status, classified_by_llm = EXCLUDED.classified_by_llm, llm_confidence = EXCLUDED.llm_confidence, pipeline_metadata = EXCLUDED.pipeline_metadata, updated_at = NOW()`,
+          [contentId, classification.category, classification.riskScore, JSON.stringify(classification.factors || []), reviewStatus, classification.llmUsed, classification.llmConfidence ?? null, JSON.stringify(pipelineMetadata)],
         );
       } catch (err) {
         logError("Classification result insert failed", { contentId, error: String(err) });
+      }
+
+      // 4c-ii. Sync category_id FK on content_item from taxonomy
+      try {
+        const taxName = normalizeCategoryToTaxonomy(classification.category);
+        const catResult = await query(
+          `SELECT category_id FROM taxonomy_category WHERE name = $1 LIMIT 1`,
+          [taxName],
+        );
+        if (catResult.rows.length > 0) {
+          await query(`UPDATE content_item SET category_id = $1 WHERE content_id = $2`,
+            [catResult.rows[0].category_id, contentId]);
+        }
+      } catch (err) {
+        logError("Category FK sync failed", { contentId, error: String(err) });
       }
 
       // 4d. Auto-redact non-target PII for non-OSINT content (Phase 3: Privacy)
@@ -194,7 +239,7 @@ export async function ingestItems(
              RETURNING alert_id`,
             [
               priority,
-              `${targetedPrefix}[${classification.category}] ${item.platform} — ${(item.contentText || "").slice(0, 100)}`,
+              `${targetedPrefix}${item.platform} — ${(item.contentText || "").slice(0, 100)}`,
               `Auto-detected ${classification.category} content from ${item.platform}. Risk score: ${classification.riskScore}. Author: ${item.authorHandle || "unknown"}. URL: ${item.contentUrl}`,
               contentId,
             ],

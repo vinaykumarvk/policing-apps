@@ -124,6 +124,7 @@ export default function WatchlistManager({ authHeaders, isOffline, isAdmin = fal
           <div className="empty-state"><h3>{t("watchlists.no_watchlists")}</h3></div>
         ) : (
           <>
+            <div className="table-scroll">
             <table className="entity-table">
               <thead>
                 <tr>
@@ -150,6 +151,7 @@ export default function WatchlistManager({ authHeaders, isOffline, isAdmin = fal
                 ))}
               </tbody>
             </table>
+            </div>
             <Pagination page={page} total={total} limit={LIMIT} onPageChange={setPage} />
           </>
         )}

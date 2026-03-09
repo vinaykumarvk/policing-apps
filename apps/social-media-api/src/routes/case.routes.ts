@@ -17,27 +17,34 @@ export async function registerCaseRoutes(app: FastifyInstance): Promise<void> {
         properties: {
           state_id: { type: "string", maxLength: 100 },
           priority: { type: "string", maxLength: 50 },
+          category: { type: "string", maxLength: 100 },
           limit: { type: "integer", minimum: 1, maximum: 200, default: 50 },
           offset: { type: "integer", minimum: 0, default: 0 },
         },
       },
     },
   }, async (request) => {
-    const { state_id, priority, limit: rawLimit, offset: rawOffset } = request.query as Record<string, string | undefined>;
+    const { state_id, priority, category, limit: rawLimit, offset: rawOffset } = request.query as Record<string, string | undefined>;
     const unitId = request.authUser?.unitId || null;
     const limit = Math.min(Math.max(parseInt(rawLimit || "50", 10) || 50, 1), 200);
     const offset = Math.max(parseInt(rawOffset || "0", 10) || 0, 0);
     const result = await query(
-      `SELECT case_id, case_ref, case_number, title, priority, state_id,
-              source_alert_id, assigned_to, due_at, closed_at, created_by, created_at,
+      `SELECT c.case_id, c.case_ref, c.case_number, c.title, c.priority, c.state_id,
+              c.source_alert_id, c.assigned_to, c.due_at, c.closed_at, c.created_by, c.created_at,
+              u.full_name AS assigned_to_name, u.designation AS assigned_to_designation,
+              tc.name AS category_name,
               COUNT(*) OVER() AS total_count
-       FROM case_record
-       WHERE ($1::text IS NULL OR state_id = $1)
-         AND ($2::text IS NULL OR priority = $2)
-         AND (unit_id = $3::uuid)
-       ORDER BY created_at DESC
+       FROM case_record c
+       LEFT JOIN user_account u ON u.user_id = c.assigned_to
+       LEFT JOIN sm_alert a ON a.alert_id = c.source_alert_id
+       LEFT JOIN taxonomy_category tc ON tc.category_id = a.category_id
+       WHERE ($1::text IS NULL OR c.state_id = $1)
+         AND ($2::text IS NULL OR c.priority = $2)
+         AND ($6::text IS NULL OR tc.name = $6)
+         AND (c.unit_id = $3::uuid OR c.unit_id IN (SELECT unit_id FROM organization_unit WHERE parent_unit_id = $3::uuid))
+       ORDER BY c.created_at DESC
        LIMIT $4 OFFSET $5`,
-      [state_id || null, priority || null, unitId, limit, offset],
+      [state_id || null, priority || null, unitId, limit, offset, category || null],
     );
     const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
     return { cases: result.rows.map(({ total_count, ...r }) => r), total };
@@ -45,11 +52,21 @@ export async function registerCaseRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/api/v1/cases/facets", async (request) => {
     const unitId = request.authUser?.unitId || null;
-    const [stateRows, priorityRows] = await Promise.all([
-      query(`SELECT state_id AS value, COUNT(*)::int AS count FROM case_record WHERE (unit_id = $1::uuid) GROUP BY state_id ORDER BY count DESC`, [unitId]),
-      query(`SELECT priority AS value, COUNT(*)::int AS count FROM case_record WHERE (unit_id = $1::uuid) GROUP BY priority ORDER BY count DESC`, [unitId]),
+    const unitClause = `(unit_id = $1::uuid OR unit_id IN (SELECT unit_id FROM organization_unit WHERE parent_unit_id = $1::uuid))`;
+    const [stateRows, priorityRows, categoryRows] = await Promise.all([
+      query(`SELECT state_id AS value, COUNT(*)::int AS count FROM case_record WHERE ${unitClause} GROUP BY state_id ORDER BY count DESC`, [unitId]),
+      query(`SELECT priority AS value, COUNT(*)::int AS count FROM case_record WHERE ${unitClause} GROUP BY priority ORDER BY count DESC`, [unitId]),
+      query(
+        `SELECT tc.name AS value, COUNT(*)::int AS count
+         FROM case_record c
+         JOIN sm_alert a ON a.alert_id = c.source_alert_id
+         JOIN taxonomy_category tc ON tc.category_id = a.category_id
+         WHERE ${unitClause.replace(/unit_id/g, 'c.unit_id')}
+         GROUP BY tc.name ORDER BY count DESC`,
+        [unitId],
+      ),
     ]);
-    return { facets: { state_id: stateRows.rows, priority: priorityRows.rows } };
+    return { facets: { state_id: stateRows.rows, priority: priorityRows.rows, category: categoryRows.rows } };
   });
 
   app.post("/api/v1/cases", {
@@ -79,16 +96,70 @@ export async function registerCaseRoutes(app: FastifyInstance): Promise<void> {
     const { id } = request.params as { id: string };
     const unitId = request.authUser?.unitId || null;
     const result = await query(
-      `SELECT case_id, case_ref, case_number, title, description, priority, state_id, row_version,
-              source_alert_id, assigned_to, due_at, closure_reason, closed_at,
-              created_by, created_at, updated_at
-       FROM case_record WHERE case_id = $1 AND (unit_id = $2::uuid)`,
+      `SELECT c.case_id, c.case_ref, c.case_number, c.title, c.description, c.priority, c.state_id, c.row_version,
+              c.source_alert_id, c.assigned_to, c.due_at, c.closure_reason, c.closed_at,
+              c.created_by, c.created_at, c.updated_at,
+              ua.full_name AS assigned_to_name, ua.designation AS assigned_to_designation,
+              uc.full_name AS created_by_name,
+              a.alert_ref AS source_alert_ref, a.title AS source_alert_title,
+              a.priority AS source_alert_priority, a.state_id AS source_alert_state,
+              a.content_id AS source_content_id
+       FROM case_record c
+       LEFT JOIN user_account ua ON ua.user_id = c.assigned_to
+       LEFT JOIN user_account uc ON uc.user_id = c.created_by
+       LEFT JOIN sm_alert a ON a.alert_id = c.source_alert_id
+       WHERE c.case_id = $1
+         AND (c.unit_id IS NULL OR c.unit_id = $2::uuid OR c.unit_id IN (SELECT unit_id FROM organization_unit WHERE parent_unit_id = $2::uuid))`,
       [id, unitId],
     );
     if (result.rows.length === 0) {
       return send404(reply, "CASE_NOT_FOUND", "Case not found");
     }
     return { case: result.rows[0] };
+  });
+
+  // Linked social media posts for a case (via source alert + evidence items)
+  app.get("/api/v1/cases/:id/linked-posts", {
+    schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const caseCheck = await query(`SELECT case_id FROM case_record WHERE case_id = $1`, [id]);
+    if (caseCheck.rows.length === 0) return send404(reply, "CASE_NOT_FOUND", "Case not found");
+
+    const result = await query(
+      `SELECT ci.content_id, ci.platform, ci.author_handle, ci.author_name,
+              ci.content_text, ci.content_url, ci.language, ci.threat_score,
+              ci.published_at, ci.sentiment,
+              cr.category AS classification_category, cr.risk_score AS classification_score
+       FROM content_item ci
+       LEFT JOIN classification_result cr ON cr.entity_type = 'content_item' AND cr.entity_id = ci.content_id
+       WHERE ci.content_id IN (
+         SELECT a.content_id FROM sm_alert a
+         WHERE a.alert_id = (SELECT source_alert_id FROM case_record WHERE case_id = $1)
+           AND a.content_id IS NOT NULL
+         UNION
+         SELECT e.content_id FROM evidence_item e WHERE e.case_id = $1 AND e.content_id IS NOT NULL
+       )
+       ORDER BY ci.published_at DESC`,
+      [id],
+    );
+    return { posts: result.rows };
+  });
+
+  // GET /api/v1/cases/assignable-officers — Officers available for case assignment
+  app.get("/api/v1/cases/assignable-officers", async (request) => {
+    const unitId = request.authUser?.unitId || null;
+    const result = await query(
+      `SELECT DISTINCT u.user_id, u.full_name, u.designation, u.username
+       FROM user_account u
+       JOIN user_role ur ON ur.user_id = u.user_id
+       JOIN role r ON r.role_id = ur.role_id
+       WHERE u.is_active = TRUE AND u.unit_id = $1::uuid
+         AND r.role_key IN ('INVESTIGATOR','SUPERVISOR','INTELLIGENCE_ANALYST')
+       ORDER BY u.full_name`,
+      [unitId],
+    );
+    return { officers: result.rows };
   });
 
   app.get("/api/v1/cases/:id/transitions", {
@@ -103,11 +174,11 @@ export async function registerCaseRoutes(app: FastifyInstance): Promise<void> {
   app.post("/api/v1/cases/:id/transition", {
     schema: {
       params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } },
-      body: { type: "object", additionalProperties: false, required: ["transitionId"], properties: { transitionId: { type: "string" }, remarks: { type: "string" } } },
+      body: { type: "object", additionalProperties: false, required: ["transitionId"], properties: { transitionId: { type: "string" }, remarks: { type: "string" }, assignedTo: { type: "string", format: "uuid" } } },
     },
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { transitionId, remarks } = request.body as { transitionId: string; remarks?: string };
+    const { transitionId, remarks, assignedTo } = request.body as { transitionId: string; remarks?: string; assignedTo?: string };
     const { userId, roles } = request.authUser!;
 
     const result = await executeTransition(
@@ -116,6 +187,14 @@ export async function registerCaseRoutes(app: FastifyInstance): Promise<void> {
     if (!result.success) {
       if (result.error === "ENTITY_NOT_FOUND") return send404(reply, "CASE_NOT_FOUND", "Case not found");
       return sendError(reply, 409, result.error || "TRANSITION_FAILED", "Case transition failed");
+    }
+
+    // Set assigned_to when ASSIGN transition includes an officer
+    if (transitionId === "ASSIGN" && assignedTo) {
+      await query(
+        `UPDATE case_record SET assigned_to = $1, updated_at = NOW() WHERE case_id = $2`,
+        [assignedTo, id],
+      );
     }
 
     // Auto-set closed_at when case transitions to a CLOSED state

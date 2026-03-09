@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert as AlertUI, Badge, Button, Field, Input, ProgressBar, Select, Tabs, Textarea, useToast } from "@puda/shared";
 import { apiBaseUrl, SMAlert } from "../types";
+import EmptyState from "../components/EmptyState";
 
 type Props = { id: string; authHeaders: () => Record<string, string>; isOffline: boolean; onBack: () => void };
 
@@ -63,7 +64,7 @@ export default function AlertDetail({ id, authHeaders, isOffline, onBack }: Prop
 
   useEffect(() => {
     if (!id) return;
-    fetch(`${apiBaseUrl}/api/v1/classify/alert/${id}`, authHeaders())
+    fetch(`${apiBaseUrl}/api/v1/classify/sm_alert/${id}`, authHeaders())
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setClassification(data); })
       .catch(() => {});
@@ -76,7 +77,7 @@ export default function AlertDetail({ id, authHeaders, isOffline, onBack }: Prop
   const handleClassify = async () => {
     setClassifyLoading(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/api/v1/classify/alert/${id}`, {
+      const res = await fetch(`${apiBaseUrl}/api/v1/classify/sm_alert/${id}`, {
         ...authHeaders(),
         method: "POST",
         body: JSON.stringify({}),
@@ -89,13 +90,13 @@ export default function AlertDetail({ id, authHeaders, isOffline, onBack }: Prop
     setClassifyLoading(false);
   };
 
-  const handleTranslate = async (sourceText: string) => {
+  const handleTranslate = async () => {
     setTranslating(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/translate`, {
         ...authHeaders(),
         method: "POST",
-        body: JSON.stringify({ text: sourceText, target_language: targetLang }),
+        body: JSON.stringify({ entityType: "sm_alert", entityId: id, targetLanguage: targetLang }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -110,7 +111,7 @@ export default function AlertDetail({ id, authHeaders, isOffline, onBack }: Prop
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/llm/risk-narrative`, {
         ...authHeaders(), method: "POST",
-        body: JSON.stringify({ entity_type: "alert", entity_id: id, text: alert?.description || "" }),
+        body: JSON.stringify({ entity_type: "sm_alert", entity_id: id, text: alert?.description || "" }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -237,15 +238,15 @@ export default function AlertDetail({ id, authHeaders, isOffline, onBack }: Prop
               {classification ? (
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginBottom: "var(--space-2)" }}>
-                    <Badge variant={classification.risk_score >= 0.7 ? "danger" : classification.risk_score >= 0.4 ? "warning" : "success"}>
+                    <Badge variant={parseFloat(classification.risk_score) >= 70 ? "danger" : parseFloat(classification.risk_score) >= 40 ? "warning" : "success"}>
                       {classification.category || t("classify.uncategorized")}
                     </Badge>
-                    <span style={{ fontWeight: 600 }}>{Math.round((classification.risk_score || 0) * 100)}%</span>
+                    <span style={{ fontWeight: 600 }}>{Math.round(parseFloat(classification.risk_score) || 0)}%</span>
                   </div>
-                  <ProgressBar current={Math.round((classification.risk_score || 0) * 100)} total={100} />
-                  {classification.factors && classification.factors.length > 0 && (
+                  <ProgressBar current={Math.round(parseFloat(classification.risk_score) || 0)} total={100} />
+                  {classification.risk_factors && classification.risk_factors.length > 0 && (
                     <ul style={{ marginTop: "var(--space-2)", paddingLeft: "var(--space-4)", fontSize: "0.875rem" }}>
-                      {classification.factors.map((f: string, i: number) => <li key={i}>{f}</li>)}
+                      {classification.risk_factors.map((f: any, i: number) => <li key={i}>{f.detail || f.factor}</li>)}
                     </ul>
                   )}
                 </div>
@@ -315,7 +316,7 @@ export default function AlertDetail({ id, authHeaders, isOffline, onBack }: Prop
                   <option value="te">{t("translate.telugu")}</option>
                   <option value="en">{t("translate.english")}</option>
                 </Select>
-                <Button onClick={() => handleTranslate(alert?.description || "")} disabled={isOffline || translating} variant="secondary">
+                <Button onClick={() => handleTranslate()} disabled={isOffline || translating} variant="secondary">
                   {translating ? t("common.loading") : t("translate.translate")}
                 </Button>
               </div>
@@ -374,7 +375,7 @@ export default function AlertDetail({ id, authHeaders, isOffline, onBack }: Prop
                 {t("notes.add")}
               </Button>
             </div>
-            {notes.length === 0 ? <p style={{ color: "var(--color-text-muted)" }}>{t("notes.empty")}</p> : (
+            {notes.length === 0 ? <EmptyState icon="inbox" title={t("notes.empty")} /> : (
               <ul className="notes-list">
                 {notes.map((n) => (
                   <li key={n.note_id} className="notes-list__item">
@@ -388,7 +389,7 @@ export default function AlertDetail({ id, authHeaders, isOffline, onBack }: Prop
         )},
         { key: "activity", label: t("detail.tab_activity"), content: (
           <div className="detail-section">
-            {activity.length === 0 ? <p style={{ color: "var(--color-text-muted)" }}>{t("activity.empty")}</p> : (
+            {activity.length === 0 ? <EmptyState icon="inbox" title={t("activity.empty")} /> : (
               <ul className="activity-list">
                 {activity.map((e) => (
                   <li key={e.event_id} className="activity-list__item">

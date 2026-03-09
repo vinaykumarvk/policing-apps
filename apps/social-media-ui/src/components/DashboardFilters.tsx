@@ -16,7 +16,6 @@ type Props = {
   value: FilterState;
   onChange: (f: FilterState) => void;
   authHeaders: () => Record<string, string>;
-  showGranularity?: boolean;
 };
 
 const DATE_PRESETS: { key: string; days: number }[] = [
@@ -25,8 +24,6 @@ const DATE_PRESETS: { key: string; days: number }[] = [
   { key: "dashboard.preset_30d", days: 30 },
   { key: "dashboard.preset_90d", days: 90 },
 ];
-
-const PLATFORMS = ["Twitter", "Facebook", "Instagram", "Telegram", "YouTube", "WhatsApp"];
 
 function daysAgo(n: number): string {
   const d = new Date();
@@ -46,7 +43,44 @@ export function defaultFilters(): FilterState {
   };
 }
 
-export default function DashboardFilters({ value, onChange, authHeaders, showGranularity = false }: Props) {
+/** Compact granularity + date-preset bar — rendered inline above trend chart */
+export function GranularityBar({ value, onChange }: { value: FilterState; onChange: (f: FilterState) => void }) {
+  const { t } = useTranslation();
+  const set = useCallback(
+    (patch: Partial<FilterState>) => onChange({ ...value, ...patch }),
+    [value, onChange],
+  );
+  return (
+    <div className="filter-bar filter-bar--inline">
+      <div className="filter-bar__presets">
+        {DATE_PRESETS.map((p) => (
+          <button
+            key={p.key}
+            type="button"
+            className={`filter-chip ${value.dateFrom === daysAgo(p.days) ? "filter-chip--active" : ""}`}
+            onClick={() => set({ dateFrom: daysAgo(p.days), dateTo: new Date().toISOString().slice(0, 10) })}
+          >
+            {t(p.key)}
+          </button>
+        ))}
+      </div>
+      <div className="filter-bar__chips">
+        {(["daily", "weekly", "monthly"] as const).map((g) => (
+          <button
+            key={g}
+            type="button"
+            className={`filter-chip ${value.granularity === g ? "filter-chip--active" : ""}`}
+            onClick={() => set({ granularity: g })}
+          >
+            {t(`dashboard.granularity_${g}`)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function DashboardFilters({ value, onChange, authHeaders }: Props) {
   const { t } = useTranslation();
   const [districts, setDistricts] = useState<{ unit_id: string; name: string }[]>([]);
 
@@ -62,29 +96,8 @@ export default function DashboardFilters({ value, onChange, authHeaders, showGra
     [value, onChange],
   );
 
-  const togglePlatform = (p: string) => {
-    const next = value.platforms.includes(p)
-      ? value.platforms.filter((x) => x !== p)
-      : [...value.platforms, p];
-    set({ platforms: next });
-  };
-
   return (
     <div className="filter-bar">
-      {/* Date presets */}
-      <div className="filter-bar__presets">
-        {DATE_PRESETS.map((p) => (
-          <button
-            key={p.key}
-            type="button"
-            className={`filter-chip ${value.dateFrom === daysAgo(p.days) ? "filter-chip--active" : ""}`}
-            onClick={() => set({ dateFrom: daysAgo(p.days), dateTo: new Date().toISOString().slice(0, 10) })}
-          >
-            {t(p.key)}
-          </button>
-        ))}
-      </div>
-
       {/* Date range inputs */}
       <div className="ui-field">
         <label className="ui-field__label">{t("dashboard.filter_from")}</label>
@@ -135,42 +148,6 @@ export default function DashboardFilters({ value, onChange, authHeaders, showGra
           <option value="LOW">{t("dashboard.priority_low")}</option>
         </select>
       </div>
-
-      {/* Platform chips */}
-      <div className="ui-field">
-        <label className="ui-field__label">{t("dashboard.filter_platform")}</label>
-        <div className="filter-bar__chips">
-          {PLATFORMS.map((p) => (
-            <button
-              key={p}
-              type="button"
-              className={`filter-chip ${value.platforms.includes(p) ? "filter-chip--active" : ""}`}
-              onClick={() => togglePlatform(p)}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Granularity toggle */}
-      {showGranularity && (
-        <div className="ui-field">
-          <label className="ui-field__label">{t("dashboard.granularity")}</label>
-          <div className="filter-bar__chips">
-            {(["daily", "weekly", "monthly"] as const).map((g) => (
-              <button
-                key={g}
-                type="button"
-                className={`filter-chip ${value.granularity === g ? "filter-chip--active" : ""}`}
-                onClick={() => set({ granularity: g })}
-              >
-                {t(`dashboard.granularity_${g}`)}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

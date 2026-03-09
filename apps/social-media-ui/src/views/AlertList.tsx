@@ -17,6 +17,8 @@ function facetOptions(entries: FacetEntry[] | undefined, fallback: string[]) {
   return fallback.map((v) => <option key={v} value={v}>{v}</option>);
 }
 
+const TERMINAL_STATES = ["CONVERTED_TO_CASE", "CLOSED_NO_ACTION", "FALSE_POSITIVE", "DISMISSED", "CLOSED"];
+
 export default function AlertList({ authHeaders, isOffline, onSelect }: Props) {
   const { t } = useTranslation();
   const [alerts, setAlerts] = useState<SMAlert[]>([]);
@@ -28,6 +30,10 @@ export default function AlertList({ authHeaders, isOffline, onSelect }: Props) {
   const [priorityFilter, setPriorityFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [facets, setFacets] = useState<Facets>({});
+  const [capturingIds, setCapturingIds] = useState<Set<string>>(new Set());
+  const [capturedIds, setCapturedIds] = useState<Set<string>>(new Set());
+  const [convertingIds, setConvertingIds] = useState<Set<string>>(new Set());
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOffline) return;
@@ -57,10 +63,65 @@ export default function AlertList({ authHeaders, isOffline, onSelect }: Props) {
       .finally(() => setLoading(false));
   }, [authHeaders, isOffline, page, stateFilter, priorityFilter, typeFilter]);
 
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  const handleScreenshot = async (alertId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (capturingIds.has(alertId) || capturedIds.has(alertId)) return;
+    setCapturingIds((prev) => new Set(prev).add(alertId));
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/v1/alerts/${alertId}/screenshot`, {
+        ...authHeaders(),
+        method: "POST",
+        body: "{}",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.message || `API ${res.status}`);
+      }
+      setCapturedIds((prev) => new Set(prev).add(alertId));
+      setToast(t("alerts.capture_success"));
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : t("common.error"));
+    } finally {
+      setCapturingIds((prev) => { const s = new Set(prev); s.delete(alertId); return s; });
+    }
+  };
+
+  const handleConvertToCase = async (alertId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (convertingIds.has(alertId)) return;
+    setConvertingIds((prev) => new Set(prev).add(alertId));
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/v1/alerts/${alertId}/convert-to-case`, {
+        ...authHeaders(),
+        method: "POST",
+        body: "{}",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.message || `API ${res.status}`);
+      }
+      setAlerts((prev) => prev.map((a) =>
+        a.alert_id === alertId ? { ...a, state_id: "CONVERTED_TO_CASE" } : a
+      ));
+      setToast(t("alerts.convert_success"));
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : t("common.error"));
+    } finally {
+      setConvertingIds((prev) => { const s = new Set(prev); s.delete(alertId); return s; });
+    }
+  };
+
   return (
     <>
       <div className="page__header"><h1>{t("alerts.title")}</h1></div>
       {error && <AlertUI variant="error">{error}</AlertUI>}
+      {toast && <AlertUI variant="success">{toast}</AlertUI>}
 
       <div className="filter-bar">
         <Field label={t("filter.state")} htmlFor="filter-state">
@@ -87,21 +148,61 @@ export default function AlertList({ authHeaders, isOffline, onSelect }: Props) {
         <div className="empty-state"><h3>{t("alerts.no_alerts")}</h3></div>
       ) : (
         <>
-          <table className="entity-table">
-            <thead><tr><th>{t("alerts.priority")}</th><th>{t("alerts.type")}</th><th>{t("common.title")}</th><th>{t("alerts.status")}</th><th>{t("alerts.assigned")}</th><th>{t("alerts.created")}</th></tr></thead>
-            <tbody>
-              {alerts.map((a) => (
-                <tr key={a.alert_id} className="entity-table__clickable" onClick={() => onSelect(a.alert_id)}>
-                  <td data-label={t("alerts.priority")}><span className={`badge badge--${a.priority?.toLowerCase() || "default"}`}>{a.priority}</span></td>
-                  <td data-label={t("alerts.type")}>{a.alert_type}</td>
-                  <td data-label={t("common.title")}>{a.title}</td>
-                  <td data-label={t("alerts.status")}><span className="badge badge--default">{a.state_id}</span></td>
-                  <td data-label={t("alerts.assigned")}>{a.assigned_to || "—"}</td>
-                  <td data-label={t("alerts.created")}>{a.created_at ? new Date(a.created_at).toLocaleDateString() : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="table-scroll">
+            <table className="entity-table entity-table--compact">
+              <thead><tr>
+                <th style={{ width: "7%" }}>{t("alerts.priority")}</th>
+                <th style={{ width: "10%" }}>{t("alerts.type")}</th>
+                <th style={{ width: "28%" }}>{t("common.title")}</th>
+                <th style={{ width: "12%" }}>{t("alerts.status")}</th>
+                <th style={{ width: "10%" }}>{t("alerts.assigned")}</th>
+                <th style={{ width: "9%" }}>{t("alerts.created")}</th>
+                <th style={{ width: "5%" }}>{t("alerts.screenshot")}</th>
+                <th style={{ width: "19%" }}>{t("alerts.actions")}</th>
+              </tr></thead>
+              <tbody>
+                {alerts.map((a) => (
+                  <tr key={a.alert_id} className="entity-table__clickable" onClick={() => onSelect(a.alert_id)}>
+                    <td data-label={t("alerts.priority")}><span className={`badge badge--${a.priority?.toLowerCase() || "default"}`}>{a.priority}</span></td>
+                    <td data-label={t("alerts.type")}>{a.alert_type}</td>
+                    <td data-label={t("common.title")}>{a.title}</td>
+                    <td data-label={t("alerts.status")}><span className="badge badge--default">{a.state_id}</span></td>
+                    <td data-label={t("alerts.assigned")}>{a.assigned_to || "—"}</td>
+                    <td data-label={t("alerts.created")}>{a.created_at ? new Date(a.created_at).toLocaleDateString() : "—"}</td>
+                    <td data-label={t("alerts.screenshot")}>
+                      <button
+                        className="btn btn--icon"
+                        disabled={isOffline || capturingIds.has(a.alert_id)}
+                        aria-label={t("alerts.screenshot")}
+                        onClick={(e) => handleScreenshot(a.alert_id, e)}
+                      >
+                        {capturingIds.has(a.alert_id) ? (
+                          <span className="spinner spinner--sm" />
+                        ) : capturedIds.has(a.alert_id) ? (
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                        ) : (
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                        )}
+                      </button>
+                    </td>
+                    <td data-label={t("alerts.actions")}>
+                      <button
+                        className="btn btn--sm btn--primary"
+                        disabled={isOffline || convertingIds.has(a.alert_id) || TERMINAL_STATES.includes(a.state_id)}
+                        onClick={(e) => handleConvertToCase(a.alert_id, e)}
+                      >
+                        {convertingIds.has(a.alert_id)
+                          ? t("alerts.converting")
+                          : TERMINAL_STATES.includes(a.state_id)
+                            ? t("alerts.converted")
+                            : t("alerts.convert_case")}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <Pagination page={page} total={total} limit={LIMIT} onPageChange={setPage} />
         </>
       )}

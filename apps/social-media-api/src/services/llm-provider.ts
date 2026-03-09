@@ -18,7 +18,10 @@ export type LlmUseCase =
   | "TRANSLATION"
   | "NARCOTICS_ANALYSIS"
   | "RISK_NARRATIVE"
-  | "INVESTIGATION_SUMMARY";
+  | "INVESTIGATION_SUMMARY"
+  | "CASE_SUMMARY"
+  | "LEGAL_REFERENCES"
+  | "FINAL_SUBMISSION";
 
 export interface LlmMessage {
   role: "system" | "user" | "assistant";
@@ -32,6 +35,8 @@ export interface LlmCompletionRequest {
   useCase?: LlmUseCase;
   entityType?: string;
   entityId?: string;
+  /** When true, request JSON mode from providers that support it (OpenAI response_format) */
+  jsonMode?: boolean;
 }
 
 export interface LlmCompletionResponse {
@@ -68,6 +73,7 @@ interface LlmProviderAdapter {
     messages: LlmMessage[],
     maxTokens: number,
     temperature: number,
+    options?: { jsonMode?: boolean },
   ): { url: string; headers: Record<string, string>; body: unknown };
 
   parseResponse(json: unknown): {
@@ -79,8 +85,26 @@ interface LlmProviderAdapter {
   testPayload(): { messages: LlmMessage[]; maxTokens: number; temperature: number };
 }
 
+const JSON_INSTRUCTION = "IMPORTANT: You MUST respond with valid JSON only. No markdown fences, no explanation, no text outside the JSON object.";
+
+/** Inject a JSON-output instruction into messages instead of using response_format */
+function injectJsonInstruction(messages: LlmMessage[]): LlmMessage[] {
+  const result = [...messages];
+  const sysIdx = result.findIndex((m) => m.role === "system");
+  if (sysIdx >= 0) {
+    result[sysIdx] = { ...result[sysIdx], content: `${result[sysIdx].content}\n\n${JSON_INSTRUCTION}` };
+  } else {
+    result.unshift({ role: "system", content: JSON_INSTRUCTION });
+  }
+  return result;
+}
+
 const OpenAiAdapter: LlmProviderAdapter = {
-  buildRequest(config, messages, maxTokens, temperature) {
+  buildRequest(config, messages, maxTokens, temperature, options) {
+    // Inject JSON instruction into messages instead of using response_format
+    const finalMessages = options?.jsonMode
+      ? injectJsonInstruction(messages)
+      : messages;
     return {
       url: `${config.api_base_url}/chat/completions`,
       headers: {
@@ -89,8 +113,8 @@ const OpenAiAdapter: LlmProviderAdapter = {
       },
       body: {
         model: config.model_id,
-        messages,
-        max_tokens: maxTokens,
+        messages: finalMessages,
+        max_completion_tokens: maxTokens,
         temperature,
       },
     };
@@ -116,9 +140,10 @@ const OpenAiAdapter: LlmProviderAdapter = {
 };
 
 const ClaudeAdapter: LlmProviderAdapter = {
-  buildRequest(config, messages, maxTokens, temperature) {
-    const systemMsg = messages.find((m) => m.role === "system");
-    const nonSystem = messages.filter((m) => m.role !== "system");
+  buildRequest(config, messages, maxTokens, temperature, options) {
+    const finalMessages = options?.jsonMode ? injectJsonInstruction(messages) : messages;
+    const systemMsg = finalMessages.find((m) => m.role === "system");
+    const nonSystem = finalMessages.filter((m) => m.role !== "system");
     return {
       url: `${config.api_base_url}/messages`,
       headers: {
@@ -155,9 +180,10 @@ const ClaudeAdapter: LlmProviderAdapter = {
 };
 
 const GeminiAdapter: LlmProviderAdapter = {
-  buildRequest(config, messages, maxTokens, temperature) {
-    const systemMsg = messages.find((m) => m.role === "system");
-    const nonSystem = messages.filter((m) => m.role !== "system");
+  buildRequest(config, messages, maxTokens, temperature, options) {
+    const finalMessages = options?.jsonMode ? injectJsonInstruction(messages) : messages;
+    const systemMsg = finalMessages.find((m) => m.role === "system");
+    const nonSystem = finalMessages.filter((m) => m.role !== "system");
     const url = `${config.api_base_url}/models/${config.model_id}:generateContent?key=${config.api_key_enc}`;
     return {
       url,
@@ -276,12 +302,22 @@ export function invalidateProviderCache() {
 async function loadDefaultConfig(): Promise<LlmProviderConfig | null> {
   if (cachedConfig && Date.now() < cacheExpiry) return cachedConfig;
 
+  const envKey = process.env.OPEN_AI_API_KEY;
+  const envModel = process.env.OPEN_AI_MODEL || "gpt-4o";
+
   try {
     const res = await query(
       `SELECT * FROM llm_provider_config WHERE is_default = TRUE AND is_active = TRUE LIMIT 1`,
     );
     if (res.rows.length > 0) {
       cachedConfig = res.rows[0] as unknown as LlmProviderConfig;
+      // If DB row has no API key, fill from env var (same provider or openai default)
+      if (!cachedConfig.api_key_enc && envKey) {
+        cachedConfig.api_key_enc = envKey;
+      }
+      if (envModel && cachedConfig.provider === "openai") {
+        cachedConfig.model_id = envModel;
+      }
       cacheExpiry = Date.now() + CACHE_TTL_MS;
       return cachedConfig;
     }
@@ -289,9 +325,7 @@ async function loadDefaultConfig(): Promise<LlmProviderConfig | null> {
     // Table may not exist yet
   }
 
-  // Env-var fallback
-  const envKey = process.env.OPEN_AI_API_KEY;
-  const envModel = process.env.OPEN_AI_MODEL || "gpt-4o";
+  // Env-var fallback (no DB config at all)
   if (envKey) {
     const envConfig: LlmProviderConfig = {
       config_id: "env-fallback",
@@ -311,6 +345,52 @@ async function loadDefaultConfig(): Promise<LlmProviderConfig | null> {
     cachedConfig = envConfig;
     cacheExpiry = Date.now() + CACHE_TTL_MS;
     return envConfig;
+  }
+
+  // Anthropic API key fallback
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  if (anthropicKey) {
+    const anthropicConfig: LlmProviderConfig = {
+      config_id: "env-fallback-anthropic",
+      provider: "claude",
+      display_name: "Claude (env)",
+      api_base_url: "https://api.anthropic.com/v1",
+      api_key_enc: anthropicKey,
+      model_id: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
+      is_active: true,
+      is_default: true,
+      max_tokens: 2048,
+      temperature: 0.3,
+      timeout_ms: 60_000,
+      max_retries: 2,
+      config_jsonb: {},
+    };
+    cachedConfig = anthropicConfig;
+    cacheExpiry = Date.now() + CACHE_TTL_MS;
+    return anthropicConfig;
+  }
+
+  // Gemini API key fallback
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (geminiKey) {
+    const geminiConfig: LlmProviderConfig = {
+      config_id: "env-fallback-gemini",
+      provider: "gemini",
+      display_name: "Gemini (env)",
+      api_base_url: "https://generativelanguage.googleapis.com/v1beta",
+      api_key_enc: geminiKey,
+      model_id: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+      is_active: true,
+      is_default: true,
+      max_tokens: 2048,
+      temperature: 0.3,
+      timeout_ms: 30_000,
+      max_retries: 2,
+      config_jsonb: {},
+    };
+    cachedConfig = geminiConfig;
+    cacheExpiry = Date.now() + CACHE_TTL_MS;
+    return geminiConfig;
   }
 
   return null;
@@ -453,21 +533,22 @@ export async function llmComplete(
     }
   }
 
-  const maxTokens = request.maxTokens || config.max_tokens;
-  const temperature = request.temperature ?? config.temperature;
+  const maxTokens = request.maxTokens || Number(config.max_tokens) || 2048;
+  const temperature = Number(request.temperature ?? config.temperature) || 0.3;
 
-  const { url, headers, body } = adapter.buildRequest(
+  const { url, headers: hdrs, body } = adapter.buildRequest(
     config,
     messages,
     maxTokens,
     temperature,
+    { jsonMode: request.jsonMode },
   );
 
   const start = Date.now();
   try {
     const json = await resilientFetch(
       url,
-      headers,
+      hdrs,
       body,
       config.timeout_ms,
       config.max_retries,
@@ -519,12 +600,84 @@ export async function llmComplete(
   }
 }
 
+// ── JSON-Mode Completion with Validation + Retry ─────────────────────────────
+
+/**
+ * Required fields for validation of LLM JSON response.
+ * Checks that each field exists and has the expected type.
+ */
+export type JsonFieldSpec = { field: string; type: "string" | "number" | "object" | "array" | "boolean" };
+
+/**
+ * LLM completion that enforces JSON output.
+ * 1. Requests JSON mode from the provider
+ * 2. Parses JSON from the response
+ * 3. Validates required fields
+ * 4. If invalid, retries once with a repair prompt
+ * Returns the parsed JSON object, or null if both attempts fail.
+ */
+export async function llmCompleteJson<T = Record<string, unknown>>(
+  request: LlmCompletionRequest,
+  requiredFields?: JsonFieldSpec[],
+): Promise<{ data: T; raw: LlmCompletionResponse } | null> {
+  const jsonRequest = { ...request, jsonMode: true };
+
+  const attempt = async (req: LlmCompletionRequest): Promise<{ data: T; raw: LlmCompletionResponse } | null> => {
+    const result = await llmComplete(req);
+    if (!result) return null;
+
+    let parsed: T;
+    try {
+      // Strip markdown fences if model wraps response
+      let content = result.content.trim();
+      if (content.startsWith("```")) {
+        content = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
+      }
+      parsed = JSON.parse(content) as T;
+    } catch {
+      logWarn("LLM JSON parse failed", { useCase: req.useCase, content: result.content.slice(0, 200) });
+      return null;
+    }
+
+    // Validate required fields
+    if (requiredFields) {
+      const obj = parsed as Record<string, unknown>;
+      for (const spec of requiredFields) {
+        const val = obj[spec.field];
+        if (val === undefined || val === null) return null;
+        if (spec.type === "array" && !Array.isArray(val)) return null;
+        if (spec.type !== "array" && typeof val !== spec.type) return null;
+      }
+    }
+
+    return { data: parsed, raw: result };
+  };
+
+  // First attempt
+  const first = await attempt(jsonRequest);
+  if (first) return first;
+
+  // Retry with repair prompt
+  logInfo("LLM JSON retry with repair prompt", { useCase: request.useCase });
+  const repairMessages: LlmMessage[] = [
+    ...jsonRequest.messages,
+    {
+      role: "user",
+      content: "Your previous output did not match the required JSON schema. Return ONLY corrected JSON. Do not omit required fields. Do not add markdown.",
+    },
+  ];
+  return attempt({ ...jsonRequest, messages: repairMessages });
+}
+
 /**
  * Check if any LLM provider is available (DB config or env).
  */
 export async function isLlmAvailable(): Promise<boolean> {
   const config = await loadDefaultConfig();
-  return config !== null;
+  if (!config) return false;
+  // Providers that need an API key (ollama is local, no key required)
+  if (config.provider !== "ollama" && !config.api_key_enc) return false;
+  return true;
 }
 
 /**
