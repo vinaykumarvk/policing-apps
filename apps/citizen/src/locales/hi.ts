@@ -763,6 +763,32 @@ const hi: Record<string, string> = {
   "onboarding.same_as_permanent": "स्थायी पते के समान",
   "onboarding.saving": "सहेज रहा है...",
   "onboarding.complete_profile": "प्रोफ़ाइल पूर्ण करें",
+
+  // NL Assistant
+  "assistant.open": "सहायक खोलें",
+  "assistant.close": "बंद करें",
+  "assistant.title": "सहायक",
+  "assistant.tab_query": "डेटा क्वेरी",
+  "assistant.tab_agent": "पेज सहायक",
+  "assistant.query_placeholder": "अपने डेटा के बारे में प्रश्न पूछें...",
+  "assistant.query_send": "पूछें",
+  "assistant.query_empty": "शुरू करने के लिए प्रश्न पूछें",
+  "assistant.query_loading": "खोज रहा है...",
+  "assistant.query_error": "कुछ गलत हो गया। कृपया पुनः प्रयास करें।",
+  "assistant.query_no_results": "कोई परिणाम नहीं मिला",
+  "assistant.query_source": "स्रोत: {{source}}",
+  "assistant.query_time": "{{ms}}ms",
+  "assistant.query_history": "हाल की क्वेरी",
+  "assistant.agent_placeholder": "इस पेज पर क्या करना है बताएं...",
+  "assistant.agent_execute": "चलाएं",
+  "assistant.agent_thinking": "काम कर रहा है...",
+  "assistant.agent_disabled": "पेज सहायक उपलब्ध नहीं है",
+  "assistant.mutation_title": "कार्रवाई की पुष्टि करें",
+  "assistant.mutation_message": "सहायक यह कार्रवाई करना चाहता है: {{action}}। यह डेटा बदल सकता है। क्या आप आगे बढ़ना चाहते हैं?",
+  "assistant.mutation_confirm": "हाँ, आगे बढ़ें",
+  "assistant.mutation_cancel": "रद्द करें",
+  "assistant.offline": "सहायक ऑफ़लाइन उपलब्ध नहीं है",
+  "assistant.feature_disabled": "यह सुविधा सक्षम नहीं है",
 };
 
 export default hi;

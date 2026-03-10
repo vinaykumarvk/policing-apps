@@ -12,14 +12,17 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/officer/package.json apps/officer/package.json
 COPY packages/shared/package.json packages/shared/package.json
+COPY packages/nl-assistant/package.json packages/nl-assistant/package.json
 
 # Install dependencies (including devDependencies for vite build)
-RUN npm ci --workspace=apps/officer --workspace=packages/shared --include-workspace-root
+RUN npm ci --workspace=apps/officer --workspace=packages/shared --workspace=packages/nl-assistant --include-workspace-root
 
 # Copy source files needed for compilation
 COPY tsconfig.base.json ./
 COPY packages/shared/tsconfig.json packages/shared/
 COPY packages/shared/src/ packages/shared/src/
+COPY packages/nl-assistant/tsconfig.json packages/nl-assistant/
+COPY packages/nl-assistant/src/ packages/nl-assistant/src/
 COPY apps/officer/tsconfig.json apps/officer/
 COPY apps/officer/vite.config.ts apps/officer/
 COPY apps/officer/index.html apps/officer/
@@ -27,7 +30,9 @@ COPY apps/officer/src/ apps/officer/src/
 
 # Build-time env vars for the SPA
 ARG VITE_API_BASE_URL=""
+ARG VITE_ENABLE_ASSISTANT="true"
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+ENV VITE_ENABLE_ASSISTANT=${VITE_ENABLE_ASSISTANT}
 
 # Build the officer SPA
 RUN npm run build:officer

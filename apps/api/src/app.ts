@@ -46,6 +46,14 @@ import { send400, sendError } from "./errors";
 import { logError } from "./logger";
 import { setLogContext } from "./log-context";
 import {
+  createLlmProvider,
+  createNlQueryRoutes,
+  createPageAgentRoutes,
+  createFeatureToggleRoutes,
+  createLlmConfigRoutes,
+} from "@puda/api-core";
+import { pudaQueryPatterns, pudaDbSchemaContext } from "./services/nl-query-patterns";
+import {
   getMetricsContentType,
   getMetricsSnapshot,
   recordHttpRequestMetric,
@@ -795,6 +803,23 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
   await registerComplaintRoutes(app);
   await registerTelemetryRoutes(app);
   await registerAIRoutes(app);
+
+  // NL Assistant routes — LLM provider, NL query, page agent, feature toggles, LLM config
+  {
+    const { query: dbQueryFn } = await import("./db");
+    const llmProvider = createLlmProvider({ queryFn: dbQueryFn });
+    const nlQueryRoutes = createNlQueryRoutes({
+      queryFn: dbQueryFn, llmProvider, queryPatterns: pudaQueryPatterns,
+      dbSchemaContext: pudaDbSchemaContext, appId: "puda",
+    });
+    const pageAgentRoutes = createPageAgentRoutes({ queryFn: dbQueryFn, llmProvider });
+    const featureToggleRoutes = createFeatureToggleRoutes({ queryFn: dbQueryFn });
+    const llmConfigRoutes = createLlmConfigRoutes({ queryFn: dbQueryFn, llmProvider });
+    await nlQueryRoutes(app);
+    await pageAgentRoutes(app);
+    await featureToggleRoutes(app);
+    await llmConfigRoutes(app);
+  }
 
   // ARC-016: HTTP-triggered internal jobs (when INTERNAL_JOB_SECRET is configured)
   if (process.env.INTERNAL_JOB_SECRET) {

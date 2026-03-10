@@ -14,14 +14,21 @@ import { SecondaryLanguageProvider } from "./SecondaryLanguageContext";
 import { ensureLocaleLoaded } from "./i18n";
 import { readCached, writeCached, clearOfficerCachedState } from "./cache";
 
+// NL Assistant — tree-shakeable via build-time flag
+const ENABLE_ASSISTANT = import.meta.env.VITE_ENABLE_ASSISTANT !== "false";
+const AssistantModule = ENABLE_ASSISTANT
+  ? lazy(() => import("./AssistantIntegration"))
+  : null;
+
 const Inbox = lazy(() => import("./Inbox"));
 const TaskDetail = lazy(() => import("./TaskDetail"));
 const SearchPanel = lazy(() => import("./SearchPanel"));
 const ComplaintManagement = lazy(() => import("./ComplaintManagement"));
 const ServiceConfigView = lazy(() => import("./ServiceConfigView"));
 const Settings = lazy(() => import("./Settings"));
+const AssistantAdmin = lazy(() => import("./AssistantAdmin"));
 
-type View = "inbox" | "task" | "search" | "complaints" | "service-config" | "settings";
+type View = "inbox" | "task" | "search" | "complaints" | "service-config" | "settings" | "assistant-admin";
 
 const PAGE_TITLE_KEYS: Record<View, string> = {
   inbox: "app.page_inbox",
@@ -30,6 +37,7 @@ const PAGE_TITLE_KEYS: Record<View, string> = {
   complaints: "app.page_complaints",
   "service-config": "app.page_service_config",
   settings: "app.page_settings",
+  "assistant-admin": "assistant.title",
 };
 
 export default function App() {
@@ -332,7 +340,7 @@ export default function App() {
 
   // --- Hash-based routing ---
 
-  const OFFICER_VALID_VIEWS = ["", "task", "search", "complaints", "service-config", "settings"] as const;
+  const OFFICER_VALID_VIEWS = ["", "task", "search", "complaints", "service-config", "assistant-admin", "settings"] as const;
 
   /** Map current officer state → hash string */
   const officerViewToHash = useCallback((): string => {
@@ -345,6 +353,7 @@ export default function App() {
     if (view === "search") return buildHash("search");
     if (view === "complaints") return buildHash("complaints");
     if (view === "service-config") return buildHash("service-config");
+    if (view === "assistant-admin") return buildHash("assistant-admin");
     if (view === "settings") return buildHash("settings");
     return buildHash("");
   }, [view, selectedTask?.task_id, fromSearch]);
@@ -396,6 +405,7 @@ export default function App() {
       search: "search",
       complaints: "complaints",
       "service-config": "service-config",
+      "assistant-admin": "assistant-admin",
       settings: "settings"
     };
     if (simpleMap[validView]) {
@@ -430,8 +440,8 @@ export default function App() {
       const validView = validateView(parsed.view, OFFICER_VALID_VIEWS, "");
       navDirectionRef.current = "none";
       navStackRef.current.pop();
-      if (validView === "" || validView === "search" || validView === "complaints" || validView === "service-config" || validView === "settings") {
-        const viewMap: Record<string, View> = { "": "inbox", search: "search", complaints: "complaints", "service-config": "service-config", settings: "settings" };
+      if (validView === "" || validView === "search" || validView === "complaints" || validView === "service-config" || validView === "assistant-admin" || validView === "settings") {
+        const viewMap: Record<string, View> = { "": "inbox", search: "search", complaints: "complaints", "service-config": "service-config", "assistant-admin": "assistant-admin", settings: "settings" };
         setView(viewMap[validView] || "inbox");
         setSelectedTask(null);
         setApplication(null);
@@ -537,6 +547,18 @@ export default function App() {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             </span>
             <span>{t("nav.service_config")}</span>
+          </button>
+        </li>
+        <li>
+          <button
+            className={`sidebar__item ${view === "assistant-admin" ? "sidebar__item--active" : ""}`}
+            onClick={() => navigate("assistant-admin")}
+            title={t("assistant.title")}
+          >
+            <span className="sidebar__item-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </span>
+            <span>{t("assistant.title")}</span>
           </button>
         </li>
         <li className="sidebar__divider" role="separator" />
@@ -773,6 +795,10 @@ export default function App() {
                   onUpdatePreference={updatePreference}
                 />
               )}
+
+              {view === "assistant-admin" && (
+                <AssistantAdmin authHeaders={authHeaders} />
+              )}
             </Suspense>
           </main>
         </div>
@@ -790,6 +816,17 @@ export default function App() {
       <Modal open={idleWarning} title={t("idle.warning_title")} onClose={dismissWarning} actions={<Button onClick={dismissWarning}>{t("idle.continue")}</Button>}>
         <p>{t("idle.warning_message")}</p>
       </Modal>
+      {AssistantModule && (
+        <Suspense fallback={null}>
+          <AssistantModule
+            appId="officer"
+            userType="OFFICER"
+            apiBaseUrl={apiBaseUrl}
+            authHeaders={authHeaders}
+            isOffline={isOffline}
+          />
+        </Suspense>
+      )}
     </SecondaryLanguageProvider>
   );
 }

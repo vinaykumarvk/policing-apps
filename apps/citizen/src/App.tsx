@@ -29,6 +29,12 @@ import ThemeToggle from "./ThemeToggle";
 import { SecondaryLanguageProvider } from "./SecondaryLanguageContext";
 import { Bilingual } from "./Bilingual";
 
+// NL Assistant — tree-shakeable via build-time flag
+const ENABLE_ASSISTANT = import.meta.env.VITE_ENABLE_ASSISTANT !== "false";
+const AssistantModule = ENABLE_ASSISTANT
+  ? lazy(() => import("./AssistantIntegration"))
+  : null;
+
 const Dashboard = lazy(() => import("./Dashboard"));
 const DocumentLocker = lazy(() => import("./DocumentLocker"));
 const Settings = lazy(() => import("./Settings"));
@@ -1493,6 +1499,17 @@ export default function App() {
       <Modal open={idleWarning} title={t("idle.warning_title")} onClose={dismissWarning} actions={<Button onClick={dismissWarning}>{t("idle.continue")}</Button>}>
         <p>{t("idle.warning_message")}</p>
       </Modal>
+      {AssistantModule && (
+        <Suspense fallback={null}>
+          <AssistantModule
+            appId="citizen"
+            userType="CITIZEN"
+            apiBaseUrl={apiBaseUrl}
+            authHeaders={authHeaders}
+            isOffline={isOffline}
+          />
+        </Suspense>
+      )}
     </SecondaryLanguageProvider>
   );
 

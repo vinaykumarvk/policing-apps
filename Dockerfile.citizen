@@ -12,14 +12,17 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/citizen/package.json apps/citizen/package.json
 COPY packages/shared/package.json packages/shared/package.json
+COPY packages/nl-assistant/package.json packages/nl-assistant/package.json
 
 # Install dependencies (including devDependencies for vite build)
-RUN npm ci --workspace=apps/citizen --workspace=packages/shared --include-workspace-root
+RUN npm ci --workspace=apps/citizen --workspace=packages/shared --workspace=packages/nl-assistant --include-workspace-root
 
 # Copy source files needed for compilation
 COPY tsconfig.base.json ./
 COPY packages/shared/tsconfig.json packages/shared/
 COPY packages/shared/src/ packages/shared/src/
+COPY packages/nl-assistant/tsconfig.json packages/nl-assistant/
+COPY packages/nl-assistant/src/ packages/nl-assistant/src/
 COPY apps/citizen/tsconfig.json apps/citizen/
 COPY apps/citizen/vite.config.ts apps/citizen/
 COPY apps/citizen/index.html apps/citizen/
@@ -28,7 +31,9 @@ COPY apps/citizen/src/ apps/citizen/src/
 # Build-time env vars for the SPA (baked into the JS bundle)
 # Override at build time: docker build --build-arg VITE_API_BASE_URL=https://api.puda.gov.in
 ARG VITE_API_BASE_URL=""
+ARG VITE_ENABLE_ASSISTANT="true"
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+ENV VITE_ENABLE_ASSISTANT=${VITE_ENABLE_ASSISTANT}
 
 # Build the citizen SPA
 RUN npm run build:citizen

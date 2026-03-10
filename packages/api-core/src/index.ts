@@ -60,6 +60,27 @@ export { createOidcRoutes } from "./routes/oidc-routes";
 export type { OidcRouteDeps } from "./routes/oidc-routes";
 export { createConfigGovernanceRoutes } from "./routes/config-governance-routes";
 export type { ConfigGovernanceRouteDeps } from "./routes/config-governance-routes";
+export { createNlQueryRoutes } from "./routes/nl-query-routes";
+export type { NlQueryRouteDeps, NlQueryPattern } from "./routes/nl-query-routes";
+export { createPageAgentRoutes } from "./routes/page-agent-routes";
+export type { PageAgentRouteDeps } from "./routes/page-agent-routes";
+export { createFeatureToggleRoutes } from "./routes/feature-toggle-routes";
+export type { FeatureToggleRouteDeps } from "./routes/feature-toggle-routes";
+export { createLlmConfigRoutes } from "./routes/llm-config-routes";
+export type { LlmConfigRouteDeps } from "./routes/llm-config-routes";
+
+// LLM
+export { createLlmProvider } from "./llm/llm-provider";
+export type {
+  LlmProvider,
+  LlmProviderDeps,
+  LlmProviderConfig,
+  LlmUseCase,
+  LlmMessage,
+  LlmCompletionRequest,
+  LlmCompletionResponse,
+  JsonFieldSpec,
+} from "./llm/llm-provider";
 
 // App builder
 export { createApp } from "./app-builder";

@@ -763,6 +763,32 @@ const en = {
   "onboarding.same_as_permanent": "Same as permanent address",
   "onboarding.saving": "Saving...",
   "onboarding.complete_profile": "Complete Profile",
+
+  // NL Assistant
+  "assistant.open": "Open Assistant",
+  "assistant.close": "Close",
+  "assistant.title": "Assistant",
+  "assistant.tab_query": "Data Query",
+  "assistant.tab_agent": "Page Helper",
+  "assistant.query_placeholder": "Ask a question about your data...",
+  "assistant.query_send": "Ask",
+  "assistant.query_empty": "Ask a question to get started",
+  "assistant.query_loading": "Searching...",
+  "assistant.query_error": "Something went wrong. Please try again.",
+  "assistant.query_no_results": "No results found",
+  "assistant.query_source": "Source: {{source}}",
+  "assistant.query_time": "{{ms}}ms",
+  "assistant.query_history": "Recent Queries",
+  "assistant.agent_placeholder": "Tell me what to do on this page...",
+  "assistant.agent_execute": "Go",
+  "assistant.agent_thinking": "Working...",
+  "assistant.agent_disabled": "Page helper is not available",
+  "assistant.mutation_title": "Confirm Action",
+  "assistant.mutation_message": "The assistant wants to perform: {{action}}. This action may modify data. Do you want to proceed?",
+  "assistant.mutation_confirm": "Yes, proceed",
+  "assistant.mutation_cancel": "Cancel",
+  "assistant.offline": "Assistant is unavailable offline",
+  "assistant.feature_disabled": "This feature is not enabled",
 } as const;
 
 export default en;

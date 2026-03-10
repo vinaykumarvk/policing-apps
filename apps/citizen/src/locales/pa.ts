@@ -763,6 +763,32 @@ const pa: Record<string, string> = {
   "onboarding.same_as_permanent": "ਸਥਾਈ ਪਤੇ ਵਰਗਾ ਹੀ",
   "onboarding.saving": "ਸੰਭਾਲ ਰਿਹਾ ਹੈ...",
   "onboarding.complete_profile": "ਪ੍ਰੋਫਾਈਲ ਪੂਰੀ ਕਰੋ",
+
+  // NL Assistant
+  "assistant.open": "ਸਹਾਇਕ ਖੋਲੋ",
+  "assistant.close": "ਬੰਦ ਕਰੋ",
+  "assistant.title": "ਸਹਾਇਕ",
+  "assistant.tab_query": "ਡੇਟਾ ਕਿਊਰੀ",
+  "assistant.tab_agent": "ਪੇਜ ਸਹਾਇਕ",
+  "assistant.query_placeholder": "ਆਪਣੇ ਡੇਟਾ ਬਾਰੇ ਸਵਾਲ ਪੁੱਛੋ...",
+  "assistant.query_send": "ਪੁੱਛੋ",
+  "assistant.query_empty": "ਸ਼ੁਰੂ ਕਰਨ ਲਈ ਸਵਾਲ ਪੁੱਛੋ",
+  "assistant.query_loading": "ਖੋਜ ਰਿਹਾ ਹੈ...",
+  "assistant.query_error": "ਕੁਝ ਗਲਤ ਹੋ ਗਿਆ। ਕਿਰਪਾ ਕਰਕੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  "assistant.query_no_results": "ਕੋਈ ਨਤੀਜੇ ਨਹੀਂ ਮਿਲੇ",
+  "assistant.query_source": "ਸਰੋਤ: {{source}}",
+  "assistant.query_time": "{{ms}}ms",
+  "assistant.query_history": "ਹਾਲੀਆ ਕਿਊਰੀਆਂ",
+  "assistant.agent_placeholder": "ਇਸ ਪੇਜ 'ਤੇ ਕੀ ਕਰਨਾ ਹੈ ਦੱਸੋ...",
+  "assistant.agent_execute": "ਚਲਾਓ",
+  "assistant.agent_thinking": "ਕੰਮ ਕਰ ਰਿਹਾ ਹੈ...",
+  "assistant.agent_disabled": "ਪੇਜ ਸਹਾਇਕ ਉਪਲਬਧ ਨਹੀਂ ਹੈ",
+  "assistant.mutation_title": "ਕਾਰਵਾਈ ਦੀ ਪੁਸ਼ਟੀ ਕਰੋ",
+  "assistant.mutation_message": "ਸਹਾਇਕ ਇਹ ਕਾਰਵਾਈ ਕਰਨਾ ਚਾਹੁੰਦਾ ਹੈ: {{action}}। ਇਹ ਡੇਟਾ ਬਦਲ ਸਕਦਾ ਹੈ। ਕੀ ਤੁਸੀਂ ਅੱਗੇ ਵਧਣਾ ਚਾਹੁੰਦੇ ਹੋ?",
+  "assistant.mutation_confirm": "ਹਾਂ, ਅੱਗੇ ਵਧੋ",
+  "assistant.mutation_cancel": "ਰੱਦ ਕਰੋ",
+  "assistant.offline": "ਸਹਾਇਕ ਔਫਲਾਈਨ ਉਪਲਬਧ ਨਹੀਂ ਹੈ",
+  "assistant.feature_disabled": "ਇਹ ਸੁਵਿਧਾ ਸਮਰੱਥ ਨਹੀਂ ਹੈ",
 };
 
 export default pa;

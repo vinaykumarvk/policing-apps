@@ -10,6 +10,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@puda/shared": path.resolve(__dirname, "../../packages/shared/src"),
+      "@puda/nl-assistant": path.resolve(__dirname, "../../packages/nl-assistant/src"),
     },
   },
   server: {
