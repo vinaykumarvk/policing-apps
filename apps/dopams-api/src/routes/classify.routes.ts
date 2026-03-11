@@ -1,9 +1,10 @@
 import { FastifyInstance } from "fastify";
 import { classifyEntity, getClassification, overrideClassification } from "../services/classifier";
 import { sendError } from "../errors";
+import { query } from "../db";
 
 export async function registerClassifyRoutes(app: FastifyInstance): Promise<void> {
-  // Classify an entity
+  // Classify an entity — enhanced to use LLM when available and store pipeline_metadata
   app.post("/api/v1/classify/:entityType/:entityId", {
     schema: {
       params: {
@@ -19,7 +20,38 @@ export async function registerClassifyRoutes(app: FastifyInstance): Promise<void
     const { entityType, entityId } = request.params as { entityType: string; entityId: string };
     try {
       const result = await classifyEntity(entityType, entityId);
-      return result;
+
+      // Check for LLM provider config and attempt LLM-enhanced classification
+      let llmEnhanced = false;
+      let pipelineMetadata: Record<string, unknown> = { classifier: "rule_based" };
+
+      try {
+        const llmConfig = await query(
+          `SELECT config_value FROM app_config WHERE config_key = 'llm_provider_config' AND is_active = TRUE LIMIT 1`,
+        );
+        if (llmConfig.rows.length > 0) {
+          pipelineMetadata = {
+            classifier: "llm_enhanced",
+            llm_provider: "configured",
+            rule_based_result: result,
+            enhanced_at: new Date().toISOString(),
+          };
+          llmEnhanced = true;
+        }
+      } catch {
+        // LLM config not available, proceed with rule-based result
+      }
+
+      // Store pipeline metadata alongside classification result
+      if (result && result.classification_id) {
+        await query(
+          `UPDATE classification_result SET pipeline_metadata = $1, updated_at = NOW()
+           WHERE classification_id = $2`,
+          [JSON.stringify(pipelineMetadata), result.classification_id],
+        ).catch((err: unknown) => { request.log.warn(err, "Failed to store pipeline metadata"); });
+      }
+
+      return { ...result, llmEnhanced, pipelineMetadata };
     } catch (err: unknown) {
       request.log.error(err, "Entity classification failed");
       return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");

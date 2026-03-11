@@ -1,4 +1,5 @@
 import { query } from "../db";
+import { resolveEntityTable } from "./entity-resolver";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,19 +29,7 @@ const PATTERNS: QueryPattern[] = [
   {
     regex: /how many (alerts?|cases?|leads?|subjects?|profiles?)/i,
     buildSql: (matches) => {
-      const entityMap: Record<string, string> = {
-        alert: "alert",
-        alerts: "alert",
-        case: "dopams_case",
-        cases: "dopams_case",
-        lead: "lead",
-        leads: "lead",
-        subject: "subject_profile",
-        subjects: "subject_profile",
-        profile: "subject_profile",
-        profiles: "subject_profile",
-      };
-      const table = entityMap[matches[1].toLowerCase()] || "alert";
+      const { table } = resolveEntityTable(matches[1].toLowerCase());
       return { sql: `SELECT COUNT(*) AS count FROM ${table}`, params: [] };
     },
     entityType: "count",
@@ -51,18 +40,12 @@ const PATTERNS: QueryPattern[] = [
   {
     regex: /(?:show|list|find)\s+(?:all\s+)?(?:open|pending|active)\s+(alerts?|cases?|leads?)/i,
     buildSql: (matches) => {
-      const entityMap: Record<string, { table: string; idCol: string; titleCol: string }> = {
-        alert: { table: "alert", idCol: "alert_id", titleCol: "title" },
-        alerts: { table: "alert", idCol: "alert_id", titleCol: "title" },
-        case: { table: "dopams_case", idCol: "case_id", titleCol: "title" },
-        cases: { table: "dopams_case", idCol: "case_id", titleCol: "title" },
-        lead: { table: "lead", idCol: "lead_id", titleCol: "summary" },
-        leads: { table: "lead", idCol: "lead_id", titleCol: "summary" },
-      };
-      const entity = entityMap[matches[1].toLowerCase()] || entityMap.alert;
-      const priorityCol = entity.table === "alert" ? "severity" : "priority";
+      const NL_TITLE_COL: Record<string, string> = { alert: "title", dopams_case: "title", lead: "summary" };
+      const { table, idCol } = resolveEntityTable(matches[1].toLowerCase());
+      const titleCol = NL_TITLE_COL[table] || "title";
+      const priorityCol = table === "alert" ? "severity" : "priority";
       return {
-        sql: `SELECT ${entity.idCol}, ${entity.titleCol} AS title, state_id, ${priorityCol} AS priority, created_at FROM ${entity.table} WHERE state_id NOT IN ('CLOSED', 'RESOLVED', 'ARCHIVED') ORDER BY created_at DESC LIMIT 20`,
+        sql: `SELECT ${idCol}, ${titleCol} AS title, state_id, ${priorityCol} AS priority, created_at FROM ${table} WHERE state_id NOT IN ('CLOSED', 'RESOLVED', 'ARCHIVED') ORDER BY created_at DESC LIMIT 20`,
         params: [],
       };
     },
@@ -96,25 +79,14 @@ const PATTERNS: QueryPattern[] = [
   {
     regex: /(?:recent|latest|new)\s+(alerts?|cases?|leads?|subjects?|profiles?|memos?)/i,
     buildSql: (matches) => {
-      const entityMap: Record<string, { table: string; idCol: string; titleCol: string }> = {
-        alert: { table: "alert", idCol: "alert_id", titleCol: "title" },
-        alerts: { table: "alert", idCol: "alert_id", titleCol: "title" },
-        case: { table: "dopams_case", idCol: "case_id", titleCol: "title" },
-        cases: { table: "dopams_case", idCol: "case_id", titleCol: "title" },
-        lead: { table: "lead", idCol: "lead_id", titleCol: "summary" },
-        leads: { table: "lead", idCol: "lead_id", titleCol: "summary" },
-        subject: { table: "subject_profile", idCol: "subject_id", titleCol: "full_name" },
-        subjects: { table: "subject_profile", idCol: "subject_id", titleCol: "full_name" },
-        profile: { table: "subject_profile", idCol: "subject_id", titleCol: "full_name" },
-        profiles: { table: "subject_profile", idCol: "subject_id", titleCol: "full_name" },
-        memo: { table: "memo", idCol: "memo_id", titleCol: "subject" },
-        memos: { table: "memo", idCol: "memo_id", titleCol: "subject" },
+      const NL_TITLE_COL: Record<string, string> = {
+        alert: "title", dopams_case: "title", lead: "summary",
+        subject_profile: "full_name", memo: "subject",
       };
-      const entity = entityMap[matches[1].toLowerCase()] || entityMap.alert;
-      const hasState = entity.table !== "subject_profile" || true; // all tables have state_id
-      const extraCols = hasState ? ", state_id" : "";
+      const { table, idCol } = resolveEntityTable(matches[1].toLowerCase());
+      const titleCol = NL_TITLE_COL[table] || "title";
       return {
-        sql: `SELECT ${entity.idCol}, ${entity.titleCol} AS title${extraCols}, created_at FROM ${entity.table} ORDER BY created_at DESC LIMIT 10`,
+        sql: `SELECT ${idCol}, ${titleCol} AS title, state_id, created_at FROM ${table} ORDER BY created_at DESC LIMIT 10`,
         params: [],
       };
     },

@@ -27,37 +27,47 @@ export async function registerLeadRoutes(app: FastifyInstance): Promise<void> {
         },
       },
     },
-  }, async (request) => {
-    const { state_id, priority, source_type, limit: rawLimit, offset: rawOffset } = request.query as Record<string, string | undefined>;
-    const unitId = request.authUser?.unitId || null;
-    const limit = Math.min(Math.max(parseInt(rawLimit || "50", 10) || 50, 1), 200);
-    const offset = Math.max(parseInt(rawOffset || "0", 10) || 0, 0);
+  }, async (request, reply) => {
+    try {
+      const { state_id, priority, source_type, limit: rawLimit, offset: rawOffset } = request.query as Record<string, string | undefined>;
+      const unitId = request.authUser?.unitId || null;
+      const limit = Math.min(Math.max(parseInt(rawLimit || "50", 10) || 50, 1), 200);
+      const offset = Math.max(parseInt(rawOffset || "0", 10) || 0, 0);
 
-    const result = await query(
-      `SELECT lead_id, lead_ref, source_type, summary, priority, state_id, subject_id,
-              assigned_to, created_by, created_at,
-              COUNT(*) OVER() AS total_count
-       FROM lead
-       WHERE ($1::text IS NULL OR state_id = $1)
-         AND ($2::text IS NULL OR priority = $2)
-         AND ($3::text IS NULL OR source_type = $3)
-         AND (unit_id = $4::uuid)
-       ORDER BY created_at DESC
-       LIMIT $5 OFFSET $6`,
-      [state_id || null, priority || null, source_type || null, unitId, limit, offset],
-    );
-    const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
-    return { leads: result.rows.map(({ total_count, ...r }) => r), total };
+      const result = await query(
+        `SELECT lead_id, lead_ref, source_type, summary, priority, state_id, subject_id,
+                assigned_to, created_by, created_at,
+                COUNT(*) OVER() AS total_count
+         FROM lead
+         WHERE ($1::text IS NULL OR state_id = $1)
+           AND ($2::text IS NULL OR priority = $2)
+           AND ($3::text IS NULL OR source_type = $3)
+           AND (unit_id = $4::uuid)
+         ORDER BY created_at DESC
+         LIMIT $5 OFFSET $6`,
+        [state_id || null, priority || null, source_type || null, unitId, limit, offset],
+      );
+      const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
+      return { leads: result.rows.map(({ total_count, ...r }) => r), total };
+    } catch (err) {
+      request.log.error(err, "Failed to list leads");
+      reply.code(500).send({ error: "INTERNAL_ERROR", message: "Failed to list leads" });
+    }
   });
 
-  app.get("/api/v1/leads/facets", async (request) => {
-    const unitId = request.authUser?.unitId || null;
-    const [stateRows, priorityRows, sourceRows] = await Promise.all([
-      query(`SELECT state_id AS value, COUNT(*)::int AS count FROM lead WHERE (unit_id = $1::uuid) GROUP BY state_id ORDER BY count DESC`, [unitId]),
-      query(`SELECT priority AS value, COUNT(*)::int AS count FROM lead WHERE (unit_id = $1::uuid) GROUP BY priority ORDER BY count DESC`, [unitId]),
-      query(`SELECT source_type AS value, COUNT(*)::int AS count FROM lead WHERE (unit_id = $1::uuid) GROUP BY source_type ORDER BY count DESC`, [unitId]),
-    ]);
-    return { facets: { state_id: stateRows.rows, priority: priorityRows.rows, source_type: sourceRows.rows } };
+  app.get("/api/v1/leads/facets", async (request, reply) => {
+    try {
+      const unitId = request.authUser?.unitId || null;
+      const [stateRows, priorityRows, sourceRows] = await Promise.all([
+        query(`SELECT state_id AS value, COUNT(*)::int AS count FROM lead WHERE (unit_id = $1::uuid) GROUP BY state_id ORDER BY count DESC`, [unitId]),
+        query(`SELECT priority AS value, COUNT(*)::int AS count FROM lead WHERE (unit_id = $1::uuid) GROUP BY priority ORDER BY count DESC`, [unitId]),
+        query(`SELECT source_type AS value, COUNT(*)::int AS count FROM lead WHERE (unit_id = $1::uuid) GROUP BY source_type ORDER BY count DESC`, [unitId]),
+      ]);
+      return { facets: { state_id: stateRows.rows, priority: priorityRows.rows, source_type: sourceRows.rows } };
+    } catch (err) {
+      request.log.error(err, "Failed to fetch lead facets");
+      reply.code(500).send({ error: "INTERNAL_ERROR", message: "Failed to fetch lead facets" });
+    }
   });
 
   app.post("/api/v1/leads", {
@@ -132,20 +142,25 @@ export async function registerLeadRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/v1/leads/:id", {
     schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
   }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const unitId = request.authUser?.unitId || null;
-    const result = await query(
-      `SELECT lead_id, lead_ref, source_type, summary, details, priority, state_id, row_version,
-              subject_id, assigned_to, channel, informant_name, informant_contact, urgency,
-              duplicate_of_lead_id, auto_memo_generated, geo_latitude, geo_longitude,
-              created_by, created_at, updated_at
-       FROM lead WHERE lead_id = $1 AND unit_id = $2::uuid`,
-      [id, unitId],
-    );
-    if (result.rows.length === 0) {
-      return send404(reply, "LEAD_NOT_FOUND", "Lead not found");
+    try {
+      const { id } = request.params as { id: string };
+      const unitId = request.authUser?.unitId || null;
+      const result = await query(
+        `SELECT lead_id, lead_ref, source_type, summary, details, priority, state_id, row_version,
+                subject_id, assigned_to, channel, informant_name, informant_contact, urgency,
+                duplicate_of_lead_id, auto_memo_generated, geo_latitude, geo_longitude,
+                created_by, created_at, updated_at
+         FROM lead WHERE lead_id = $1 AND unit_id = $2::uuid`,
+        [id, unitId],
+      );
+      if (result.rows.length === 0) {
+        return send404(reply, "LEAD_NOT_FOUND", "Lead not found");
+      }
+      return { lead: result.rows[0] };
+    } catch (err) {
+      request.log.error(err, "Failed to fetch lead");
+      reply.code(500).send({ error: "INTERNAL_ERROR", message: "Failed to fetch lead" });
     }
-    return { lead: result.rows[0] };
   });
 
   app.post("/api/v1/leads/:id/transition", {
@@ -192,9 +207,14 @@ export async function registerLeadRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/v1/leads/:id/transitions", {
     schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
   }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const result = await query(`SELECT state_id FROM lead WHERE lead_id = $1`, [id]);
-    if (result.rows.length === 0) return send404(reply, "LEAD_NOT_FOUND", "Lead not found");
-    return { transitions: getAvailableTransitions("dopams_lead", result.rows[0].state_id) };
+    try {
+      const { id } = request.params as { id: string };
+      const result = await query(`SELECT state_id FROM lead WHERE lead_id = $1`, [id]);
+      if (result.rows.length === 0) return send404(reply, "LEAD_NOT_FOUND", "Lead not found");
+      return { transitions: getAvailableTransitions("dopams_lead", result.rows[0].state_id) };
+    } catch (err) {
+      request.log.error(err, "Failed to fetch lead transitions");
+      reply.code(500).send({ error: "INTERNAL_ERROR", message: "Failed to fetch lead transitions" });
+    }
   });
 }

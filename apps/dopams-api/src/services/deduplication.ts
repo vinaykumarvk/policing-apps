@@ -54,7 +54,51 @@ export async function findDuplicates(minSimilarity = 0.5): Promise<number> {
      RETURNING candidate_id`,
     [minSimilarity],
   );
-  return result.rows.length;
+  const nameCount = result.rows.length;
+
+  // FR-25: Enhanced matching — find pairs sharing a normalized phone number
+  const phoneResult = await query(
+    `INSERT INTO dedup_candidate (subject_id_a, subject_id_b, similarity_score, match_fields)
+     SELECT
+       LEAST(spl1.subject_id, spl2.subject_id),
+       GREATEST(spl1.subject_id, spl2.subject_id),
+       0.85,
+       '["phone_match"]'::jsonb
+     FROM subject_phone_link spl1
+     JOIN subject_phone_link spl2 ON spl1.phone_id = spl2.phone_id AND spl1.subject_id < spl2.subject_id
+     JOIN subject_profile sp1 ON sp1.subject_id = spl1.subject_id AND sp1.is_merged = FALSE
+     JOIN subject_profile sp2 ON sp2.subject_id = spl2.subject_id AND sp2.is_merged = FALSE
+     WHERE NOT EXISTS (
+       SELECT 1 FROM dedup_candidate dc
+       WHERE (dc.subject_id_a = LEAST(spl1.subject_id, spl2.subject_id)
+         AND dc.subject_id_b = GREATEST(spl1.subject_id, spl2.subject_id))
+     )
+     ON CONFLICT DO NOTHING
+     RETURNING candidate_id`,
+  );
+
+  // FR-25: Enhanced matching — find pairs sharing a normalized identity document
+  const idResult = await query(
+    `INSERT INTO dedup_candidate (subject_id_a, subject_id_b, similarity_score, match_fields)
+     SELECT
+       LEAST(sil1.subject_id, sil2.subject_id),
+       GREATEST(sil1.subject_id, sil2.subject_id),
+       0.95,
+       '["identity_match"]'::jsonb
+     FROM subject_identity_link sil1
+     JOIN subject_identity_link sil2 ON sil1.document_pk = sil2.document_pk AND sil1.subject_id < sil2.subject_id
+     JOIN subject_profile sp1 ON sp1.subject_id = sil1.subject_id AND sp1.is_merged = FALSE
+     JOIN subject_profile sp2 ON sp2.subject_id = sil2.subject_id AND sp2.is_merged = FALSE
+     WHERE NOT EXISTS (
+       SELECT 1 FROM dedup_candidate dc
+       WHERE (dc.subject_id_a = LEAST(sil1.subject_id, sil2.subject_id)
+         AND dc.subject_id_b = GREATEST(sil1.subject_id, sil2.subject_id))
+     )
+     ON CONFLICT DO NOTHING
+     RETURNING candidate_id`,
+  );
+
+  return nameCount + phoneResult.rows.length + idResult.rows.length;
 }
 
 /**
@@ -156,10 +200,10 @@ export async function mergeSubjects(
        AND NOT EXISTS (SELECT 1 FROM watchlist_subject ws2 WHERE ws2.watchlist_id = watchlist_subject.watchlist_id AND ws2.subject_id = $1)`,
       [survivorId, mergedId],
     );
-    // Remove any duplicate watchlist links that couldn't be reassigned
+    // Remove any remaining watchlist links for the merged subject that couldn't be reassigned
     await client.query(
-      `DELETE FROM watchlist_subject WHERE subject_id = $1 AND subject_id != $2`,
-      [mergedId, survivorId],
+      `DELETE FROM watchlist_subject WHERE subject_id = $1`,
+      [mergedId],
     );
 
     // FR-25 AC-05: Re-link evidence custody events

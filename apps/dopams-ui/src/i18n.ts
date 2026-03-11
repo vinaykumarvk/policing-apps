@@ -5,6 +5,7 @@ import en from "./locales/en";
 export const SECONDARY_LANGUAGES = [
   { code: "none", label: "None (English only)" },
   { code: "hi", label: "हिन्दी (Hindi)" },
+  { code: "pa", label: "ਪੰਜਾਬੀ (Punjabi)" },
   { code: "te", label: "తెలుగు (Telugu)" },
 ] as const;
 
@@ -21,6 +22,7 @@ document.documentElement.lang = "en";
 
 const localeLoaders: Record<string, () => Promise<{ default: Record<string, string> }>> = {
   hi: () => import("./locales/hi"),
+  pa: () => import("./locales/pa"),
   te: () => import("./locales/te"),
 };
 const loadedLocales = new Set<string>(["en"]);

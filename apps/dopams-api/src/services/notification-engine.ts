@@ -56,6 +56,7 @@ export async function evaluateRules(
  * Conditions format: { "field": "value" } or { "field": { "gte": 5 } }
  */
 function matchesConditions(conditions: Record<string, unknown>, data: Record<string, unknown>): boolean {
+  if (Object.keys(conditions).length === 0) return false;
   for (const [key, expected] of Object.entries(conditions)) {
     const actual = data[key];
     if (typeof expected === "object" && expected !== null && !Array.isArray(expected)) {

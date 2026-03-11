@@ -110,7 +110,7 @@ export default function AlertList({ authHeaders, isOffline, onSelect }: Props) {
             </thead>
             <tbody>
               {alerts.map((a) => (
-                <tr key={a.alert_id} className="entity-table__clickable" onClick={() => onSelect(a.alert_id)}>
+                <tr key={a.alert_id} className="entity-table__clickable" onClick={() => onSelect(a.alert_id)} tabIndex={0} role="link" onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(a.alert_id); } }}>
                   <td data-label={t("alerts.severity")}><span className={`badge badge--${a.severity?.toLowerCase() || "default"}`}>{a.severity}</span></td>
                   <td data-label={t("alerts.type")}>{a.alert_type}</td>
                   <td data-label={t("common.title")}>{a.title}</td>

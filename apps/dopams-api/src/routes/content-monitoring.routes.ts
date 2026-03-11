@@ -1,6 +1,23 @@
 import { FastifyInstance } from "fastify";
 import { query } from "../db";
 import { send404, sendError } from "../errors";
+import { createRoleGuard } from "@puda/api-core";
+
+const MAX_PATTERN_LENGTH = 500;
+const MAX_REGEX_TEST_LENGTH = 50_000;
+
+/** Validate that a regex pattern compiles and is not excessively long. */
+function validateRegexPattern(pattern: string): { valid: boolean; error?: string } {
+  if (pattern.length > MAX_PATTERN_LENGTH) {
+    return { valid: false, error: `Pattern exceeds maximum length of ${MAX_PATTERN_LENGTH} characters` };
+  }
+  try {
+    new RegExp(pattern, "i");
+  } catch (err) {
+    return { valid: false, error: `Invalid regex: ${err instanceof Error ? err.message : String(err)}` };
+  }
+  return { valid: true };
+}
 
 const VALID_STATES = ["NEW", "REVIEWING", "ESCALATED", "CLOSED"] as const;
 const STATE_TRANSITIONS: Record<string, string[]> = {
@@ -11,6 +28,7 @@ const STATE_TRANSITIONS: Record<string, string[]> = {
 };
 
 export async function registerContentMonitoringRoutes(app: FastifyInstance): Promise<void> {
+  const requireContentAction = createRoleGuard(["INTELLIGENCE_ANALYST", "SUPERVISORY_OFFICER", "ADMINISTRATOR"]);
   // POST /api/v1/content/ingest — batch ingest content items
   app.post("/api/v1/content/ingest", {
     schema: {
@@ -89,8 +107,12 @@ export async function registerContentMonitoringRoutes(app: FastifyInstance): Pro
             const platforms = typeof rule.platforms === "string" ? JSON.parse(rule.platforms) : (rule.platforms || []);
             if (platforms.length > 0 && !platforms.includes(item.sourcePlatform)) continue;
 
+            if (rule.pattern.length > MAX_PATTERN_LENGTH) continue;
             const regex = new RegExp(rule.pattern, "i");
-            if (regex.test(item.rawText)) {
+            const testText = item.rawText.length > MAX_REGEX_TEST_LENGTH
+              ? item.rawText.slice(0, MAX_REGEX_TEST_LENGTH)
+              : item.rawText;
+            if (regex.test(testText)) {
               // Match found — auto-transition to REVIEWING and bump risk_score
               await query(
                 `UPDATE content_item SET state_id = 'REVIEWING',
@@ -198,6 +220,7 @@ export async function registerContentMonitoringRoutes(app: FastifyInstance): Pro
       },
     },
   }, async (request, reply) => {
+    if (!requireContentAction(request, reply)) return;
     try {
       const { id } = request.params as { id: string };
       const { targetState, remarks } = request.body as { targetState: string; remarks?: string };
@@ -282,9 +305,15 @@ export async function registerContentMonitoringRoutes(app: FastifyInstance): Pro
       },
     },
   }, async (request, reply) => {
+    if (!requireContentAction(request, reply)) return;
     try {
       const { ruleType, pattern, platforms } = request.body as { ruleType: string; pattern: string; platforms?: string[] };
       const userId = request.authUser?.userId || null;
+
+      const validation = validateRegexPattern(pattern);
+      if (!validation.valid) {
+        return sendError(reply, 400, "INVALID_PATTERN", validation.error || "Invalid regex pattern");
+      }
 
       const result = await query(
         `INSERT INTO monitoring_rule (rule_type, pattern, platforms, created_by) VALUES ($1, $2, $3, $4) RETURNING *`,
@@ -304,6 +333,7 @@ export async function registerContentMonitoringRoutes(app: FastifyInstance): Pro
       params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } },
     },
   }, async (request, reply) => {
+    if (!requireContentAction(request, reply)) return;
     try {
       const { id } = request.params as { id: string };
       const result = await query(`UPDATE monitoring_rule SET is_active = FALSE WHERE rule_id = $1 RETURNING rule_id`, [id]);

@@ -6,7 +6,7 @@ import compress from "@fastify/compress";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
-import { registerAuthMiddleware } from "./middleware/auth";
+import { registerAuthMiddleware, DEV_JWT_SECRET } from "./middleware/auth";
 import { registerAuditLogger } from "./middleware/audit-logger";
 import { setLogContext } from "./log-context";
 import { registerAuthRoutes } from "./routes/auth.routes";
@@ -46,6 +46,16 @@ import { registerCdrRoutes } from "./routes/cdr.routes";
 import { registerEvidenceRoutes } from "./routes/evidence.routes";
 import { registerContentMonitoringRoutes } from "./routes/content-monitoring.routes";
 import { registerAssertionConflictRoutes } from "./routes/assertion-conflict.routes";
+import { registerAssertionRoutes } from "./routes/assertion.routes";
+import { registerEntityRoutes } from "./routes/entity.routes";
+import { registerEarlyWarningRoutes } from "./routes/early-warning.routes";
+import { registerEscalationRoutes } from "./routes/escalation.routes";
+import { registerPrivacyRoutes } from "./routes/privacy.routes";
+import { registerSavedSearchRoutes } from "./routes/saved-search.routes";
+import { registerSlangRoutes } from "./routes/slang.routes";
+import { registerQueueRoutingRoutes } from "./routes/queue-routing.routes";
+import { registerReportTemplateRoutes } from "./routes/report-template.routes";
+import { registerReportGenerateRoutes } from "./routes/report-generate.routes";
 import { createOidcAuth, createOidcRoutes, createAuthMiddleware, createConfigGovernanceRoutes, createIdempotencyMiddleware, createLdapAuth, createAuthRoutes as createSharedAuthRoutes } from "@puda/api-core";
 import { query } from "./db";
 
@@ -81,7 +91,11 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
     },
   });
   await app.register(compress, { global: true, threshold: 1024 });
-  await app.register(cors, { origin: allowedOrigins, credentials: true });
+  await app.register(cors, {
+    origin: allowedOrigins,
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization", "X-Idempotency-Key"],
+  });
   await app.register(cookie);
 
   const globalRateLimitMax = Number.parseInt(process.env.RATE_LIMIT_MAX || "100", 10);
@@ -244,6 +258,16 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
   await registerEvidenceRoutes(app);
   await registerContentMonitoringRoutes(app);
   await registerAssertionConflictRoutes(app);
+  await registerAssertionRoutes(app);
+  await registerEntityRoutes(app);
+  await registerEarlyWarningRoutes(app);
+  await registerEscalationRoutes(app);
+  await registerPrivacyRoutes(app);
+  await registerSavedSearchRoutes(app);
+  await registerSlangRoutes(app);
+  await registerQueueRoutingRoutes(app);
+  await registerReportTemplateRoutes(app);
+  await registerReportGenerateRoutes(app);
 
   // Config governance routes (always available)
   const registerConfigGovernanceRoutes = createConfigGovernanceRoutes({ queryFn: query });
@@ -259,7 +283,7 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
     }, query);
     const auth = createAuthMiddleware({
       cookieName: "dopams_auth",
-      defaultDevSecret: "dopams-dev-secret-DO-NOT-USE-IN-PRODUCTION",
+      defaultDevSecret: DEV_JWT_SECRET,
       queryFn: query,
     });
     const registerLdapAuthRoutes = createSharedAuthRoutes({ queryFn: query, auth, ldapAuth });
@@ -270,7 +294,7 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
   if (process.env.OIDC_ISSUER_URL) {
     const auth = createAuthMiddleware({
       cookieName: "dopams_auth",
-      defaultDevSecret: "dopams-dev-secret-DO-NOT-USE-IN-PRODUCTION",
+      defaultDevSecret: DEV_JWT_SECRET,
       queryFn: query,
     });
     const oidc = createOidcAuth({

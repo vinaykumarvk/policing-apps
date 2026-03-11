@@ -239,7 +239,7 @@ export default function AlertDetail({ id, authHeaders, isOffline, onBack }: Prop
                 </Button>
               </div>
               {translatedText && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-3)" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(16rem, 1fr))", gap: "var(--space-3)" }}>
                   <div>
                     <strong>{t("translate.original")}</strong>
                     <p style={{ marginTop: "var(--space-1)", fontSize: "0.875rem" }}>{alert?.description || ""}</p>

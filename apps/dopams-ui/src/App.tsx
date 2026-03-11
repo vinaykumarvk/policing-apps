@@ -15,6 +15,13 @@ import { clearCachedState } from "./cache";
 import { apiBaseUrl } from "./types";
 
 const Dashboard = lazy(() => import("./views/Dashboard"));
+const DashboardHub = lazy(() => import("./views/DashboardHub"));
+const ControlRoomDashboard = lazy(() => import("./views/ControlRoomDashboard"));
+const LeadershipDashboard = lazy(() => import("./views/LeadershipDashboard"));
+const SupervisorDashboard = lazy(() => import("./views/SupervisorDashboard"));
+const EarlyWarningDashboard = lazy(() => import("./views/EarlyWarningDashboard"));
+const GeoDashboard = lazy(() => import("./views/GeoDashboard"));
+const PendencyDashboard = lazy(() => import("./views/PendencyDashboard"));
 const AlertList = lazy(() => import("./views/AlertList"));
 const AlertDetail = lazy(() => import("./views/AlertDetail"));
 const LeadList = lazy(() => import("./views/LeadList"));
@@ -30,10 +37,32 @@ const DrugDashboard = lazy(() => import("./views/DrugDashboard"));
 const ModelAdmin = lazy(() => import("./views/ModelAdmin"));
 const Settings = lazy(() => import("./views/Settings"));
 const Admin = lazy(() => import("./views/Admin"));
+const AdminHub = lazy(() => import("./views/AdminHub"));
 const AuditLog = lazy(() => import("./views/AuditLog"));
+const LegalRuleAdmin = lazy(() => import("./views/LegalRuleAdmin"));
+const DetectionDictionary = lazy(() => import("./views/DetectionDictionary"));
+const TemplateAdmin = lazy(() => import("./views/TemplateAdmin"));
+const PlatformConnectors = lazy(() => import("./views/PlatformConnectors"));
+const MonitoringConfig = lazy(() => import("./views/MonitoringConfig"));
+const CourtExportWizard = lazy(() => import("./views/CourtExportWizard"));
+const SupervisorAudit = lazy(() => import("./views/SupervisorAudit"));
+const EscalationQueue = lazy(() => import("./views/EscalationQueue"));
+const SlaDashboard = lazy(() => import("./views/SlaDashboard"));
+const ReportEditor = lazy(() => import("./views/ReportEditor"));
+const ReportGenerateHub = lazy(() => import("./views/ReportGenerateHub"));
+const ReportDetail = lazy(() => import("./views/ReportDetail"));
+const SubjectNetwork = lazy(() => import("./views/SubjectNetwork"));
+const TransactionNetwork = lazy(() => import("./views/TransactionNetwork"));
 
 type View =
   | "dashboard"
+  | "dashboard-hub"
+  | "control-room"
+  | "leadership-dashboard"
+  | "supervisor-dashboard"
+  | "early-warning"
+  | "geo-dashboard"
+  | "pendency-dashboard"
   | "alerts"
   | "alert-detail"
   | "leads"
@@ -49,12 +78,35 @@ type View =
   | "model-admin"
   | "settings"
   | "admin"
-  | "audit-log";
+  | "admin-hub"
+  | "audit-log"
+  | "legal-rules"
+  | "detection-dictionary"
+  | "template-admin"
+  | "platform-connectors"
+  | "monitoring-config"
+  | "court-export"
+  | "supervisor-audit"
+  | "escalation-queue"
+  | "sla-dashboard"
+  | "report-editor"
+  | "report-generate"
+  | "report-detail"
+  | "subject-network"
+  | "upi-network"
+  | "bank-network";
 
 const VALID_VIEWS = [
-  "", "dashboard", "alerts", "leads", "cases", "subjects", "inbox",
+  "", "dashboard", "dashboard-hub", "control-room", "leadership-dashboard",
+  "supervisor-dashboard", "early-warning", "geo-dashboard", "pendency-dashboard",
+  "alerts", "leads", "cases", "subjects", "inbox",
   "query-assistant", "network-graph", "drug-dashboard", "model-admin",
-  "settings", "admin", "audit-log",
+  "settings", "admin", "admin-hub", "audit-log",
+  "legal-rules", "detection-dictionary", "template-admin",
+  "platform-connectors", "monitoring-config", "court-export",
+  "supervisor-audit", "escalation-queue", "sla-dashboard",
+  "report-editor", "report-generate", "report-detail",
+  "subject-network", "upi-network", "bank-network",
 ] as const;
 
 const NAV_ITEMS: { view: View; key: string; icon: string }[] = [
@@ -84,6 +136,8 @@ export default function App() {
   const [resourceId, setResourceId] = useState<string | null>(null);
   const [isOffline, setIsOffline] = useState(() => typeof navigator !== "undefined" ? !navigator.onLine : false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [networkExpanded, setNetworkExpanded] = useState(true);
+  const [reportsExpanded, setReportsExpanded] = useState(true);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const avatarMenuRef = useRef<HTMLDivElement>(null);
   const avatarBtnRef = useRef<HTMLButtonElement>(null);
@@ -102,7 +156,7 @@ export default function App() {
   const searchRef = useRef<HTMLDivElement>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const isAdmin = roles.includes("admin");
+  const isAdmin = roles.some((r) => r === "ADMINISTRATOR" || r === "admin");
 
   const handleLogout = useCallback(() => {
     clearCachedState();
@@ -188,6 +242,10 @@ export default function App() {
 
   // Scroll to top on view change
   useEffect(() => { window.scrollTo(0, 0); }, [view]);
+  useEffect(() => {
+    if (["network-graph", "upi-network", "bank-network"].includes(view)) setNetworkExpanded(true);
+    if (["report-generate", "template-admin"].includes(view)) setReportsExpanded(true);
+  }, [view]);
 
   // --- Hash routing ---
   const viewToHash = useCallback((): string => {
@@ -195,19 +253,23 @@ export default function App() {
     if (view === "lead-detail" && resourceId) return buildHash("leads", resourceId);
     if (view === "case-detail" && resourceId) return buildHash("cases", resourceId);
     if (view === "subject-detail" && resourceId) return buildHash("subjects", resourceId);
-    if (view === "dashboard") return buildHash("dashboard");
-    if (view === "alerts") return buildHash("alerts");
-    if (view === "leads") return buildHash("leads");
-    if (view === "cases") return buildHash("cases");
-    if (view === "subjects") return buildHash("subjects");
-    if (view === "inbox") return buildHash("inbox");
-    if (view === "query-assistant") return buildHash("query-assistant");
-    if (view === "network-graph") return buildHash("network-graph");
-    if (view === "drug-dashboard") return buildHash("drug-dashboard");
-    if (view === "model-admin") return buildHash("model-admin");
-    if (view === "settings") return buildHash("settings");
-    if (view === "admin") return buildHash("admin");
-    if (view === "audit-log") return buildHash("audit-log");
+    if (view === "report-detail" && resourceId) return buildHash("report-detail", resourceId);
+    if (view === "report-editor" && resourceId) return buildHash("report-editor", resourceId);
+    if (view === "subject-network" && resourceId) return buildHash("subject-network", resourceId);
+    if (view === "court-export" && resourceId) return buildHash("court-export", resourceId);
+    // Simple view→hash for all views
+    const simpleViews: View[] = [
+      "dashboard", "dashboard-hub", "control-room", "leadership-dashboard",
+      "supervisor-dashboard", "early-warning", "geo-dashboard", "pendency-dashboard",
+      "alerts", "leads", "cases", "subjects", "inbox",
+      "query-assistant", "network-graph", "drug-dashboard", "model-admin",
+      "settings", "admin", "admin-hub", "audit-log",
+      "legal-rules", "detection-dictionary", "template-admin",
+      "platform-connectors", "monitoring-config",
+      "supervisor-audit", "escalation-queue", "sla-dashboard",
+      "report-generate", "upi-network", "bank-network",
+    ];
+    if (simpleViews.includes(view)) return buildHash(view);
     return buildHash("dashboard");
   }, [view, resourceId]);
 
@@ -234,6 +296,10 @@ export default function App() {
         leads: "lead-detail",
         cases: "case-detail",
         subjects: "subject-detail",
+        "report-detail": "report-detail",
+        "report-editor": "report-editor",
+        "court-export": "court-export",
+        "subject-network": "subject-network",
       };
       if (detailMap[validView]) {
         setView(detailMap[validView]);
@@ -243,6 +309,13 @@ export default function App() {
     }
     const simpleMap: Record<string, View> = {
       dashboard: "dashboard",
+      "dashboard-hub": "dashboard-hub",
+      "control-room": "control-room",
+      "leadership-dashboard": "leadership-dashboard",
+      "supervisor-dashboard": "supervisor-dashboard",
+      "early-warning": "early-warning",
+      "geo-dashboard": "geo-dashboard",
+      "pendency-dashboard": "pendency-dashboard",
       alerts: "alerts",
       leads: "leads",
       cases: "cases",
@@ -254,7 +327,19 @@ export default function App() {
       "model-admin": "model-admin",
       settings: "settings",
       admin: "admin",
+      "admin-hub": "admin-hub",
       "audit-log": "audit-log",
+      "legal-rules": "legal-rules",
+      "detection-dictionary": "detection-dictionary",
+      "template-admin": "template-admin",
+      "platform-connectors": "platform-connectors",
+      "monitoring-config": "monitoring-config",
+      "supervisor-audit": "supervisor-audit",
+      "escalation-queue": "escalation-queue",
+      "sla-dashboard": "sla-dashboard",
+      "report-generate": "report-generate",
+      "upi-network": "upi-network",
+      "bank-network": "bank-network",
     };
     setView(simpleMap[validView] || "dashboard");
   }, [auth]);
@@ -272,6 +357,10 @@ export default function App() {
           leads: "lead-detail",
           cases: "case-detail",
           subjects: "subject-detail",
+          "report-detail": "report-detail",
+          "report-editor": "report-editor",
+          "court-export": "court-export",
+        "subject-network": "subject-network",
         };
         if (detailMap[validView]) {
           setView(detailMap[validView]);
@@ -281,6 +370,13 @@ export default function App() {
       }
       const simpleMap: Record<string, View> = {
         dashboard: "dashboard",
+        "dashboard-hub": "dashboard-hub",
+        "control-room": "control-room",
+        "leadership-dashboard": "leadership-dashboard",
+        "supervisor-dashboard": "supervisor-dashboard",
+        "early-warning": "early-warning",
+        "geo-dashboard": "geo-dashboard",
+        "pendency-dashboard": "pendency-dashboard",
         alerts: "alerts",
         leads: "leads",
         cases: "cases",
@@ -292,7 +388,19 @@ export default function App() {
         "model-admin": "model-admin",
         settings: "settings",
         admin: "admin",
+        "admin-hub": "admin-hub",
         "audit-log": "audit-log",
+        "legal-rules": "legal-rules",
+        "detection-dictionary": "detection-dictionary",
+        "template-admin": "template-admin",
+        "platform-connectors": "platform-connectors",
+        "monitoring-config": "monitoring-config",
+        "supervisor-audit": "supervisor-audit",
+        "escalation-queue": "escalation-queue",
+        "sla-dashboard": "sla-dashboard",
+        "report-generate": "report-generate",
+        "upi-network": "upi-network",
+        "bank-network": "bank-network",
       };
       setView(simpleMap[validView] || "dashboard");
       setResourceId(null);
@@ -390,10 +498,11 @@ export default function App() {
             <span>{t("nav.query_assistant")}</span>
           </button>
         </li>
-        <li>
+        <li className="sidebar__group">
           <button
-            className={`sidebar__item ${view === "network-graph" ? "sidebar__item--active" : ""}`}
-            onClick={() => navigate("network-graph")}
+            className={`sidebar__item ${["network-graph", "upi-network", "bank-network"].includes(view) ? "sidebar__item--active" : ""}`}
+            onClick={() => setNetworkExpanded(p => !p)}
+            aria-expanded={networkExpanded}
             title={t("nav.network_graph")}
             type="button"
           >
@@ -401,7 +510,95 @@ export default function App() {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
             </span>
             <span>{t("nav.network_graph")}</span>
+            <svg className={`sidebar__chevron ${networkExpanded ? "sidebar__chevron--open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
+          {networkExpanded && (
+            <ul className="sidebar__subnav" role="group">
+              <li>
+                <button className={`sidebar__item sidebar__item--sub ${view === "network-graph" ? "sidebar__item--active" : ""}`} onClick={() => navigate("network-graph")} type="button">
+                  <span>{t("nav.subject_network")}</span>
+                </button>
+              </li>
+              <li>
+                <button className={`sidebar__item sidebar__item--sub ${view === "upi-network" ? "sidebar__item--active" : ""}`} onClick={() => navigate("upi-network")} type="button">
+                  <span>{t("nav.upi_network")}</span>
+                </button>
+              </li>
+              <li>
+                <button className={`sidebar__item sidebar__item--sub ${view === "bank-network" ? "sidebar__item--active" : ""}`} onClick={() => navigate("bank-network")} type="button">
+                  <span>{t("nav.bank_network")}</span>
+                </button>
+              </li>
+            </ul>
+          )}
+        </li>
+        <li>
+          <button
+            className={`sidebar__item ${view === "dashboard-hub" ? "sidebar__item--active" : ""}`}
+            onClick={() => navigate("dashboard-hub")}
+            title={t("nav.dashboard_hub")}
+            type="button"
+          >
+            <span className="sidebar__item-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            </span>
+            <span>{t("nav.dashboard_hub")}</span>
+          </button>
+        </li>
+        <li>
+          <button
+            className={`sidebar__item ${view === "early-warning" ? "sidebar__item--active" : ""}`}
+            onClick={() => navigate("early-warning")}
+            title={t("nav.early_warning")}
+            type="button"
+          >
+            <span className="sidebar__item-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </span>
+            <span>{t("nav.early_warning")}</span>
+          </button>
+        </li>
+        <li>
+          <button
+            className={`sidebar__item ${view === "escalation-queue" ? "sidebar__item--active" : ""}`}
+            onClick={() => navigate("escalation-queue")}
+            title={t("nav.escalation_queue")}
+            type="button"
+          >
+            <span className="sidebar__item-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>
+            </span>
+            <span>{t("nav.escalation_queue")}</span>
+          </button>
+        </li>
+        <li className="sidebar__group">
+          <button
+            className={`sidebar__item ${["report-generate", "template-admin"].includes(view) ? "sidebar__item--active" : ""}`}
+            onClick={() => setReportsExpanded(p => !p)}
+            aria-expanded={reportsExpanded}
+            title={t("nav.reports")}
+            type="button"
+          >
+            <span className="sidebar__item-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            </span>
+            <span>{t("nav.reports")}</span>
+            <svg className={`sidebar__chevron ${reportsExpanded ? "sidebar__chevron--open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          {reportsExpanded && (
+            <ul className="sidebar__subnav" role="group">
+              <li>
+                <button className={`sidebar__item sidebar__item--sub ${view === "report-generate" ? "sidebar__item--active" : ""}`} onClick={() => navigate("report-generate")} type="button">
+                  <span>{t("nav.report_hub")}</span>
+                </button>
+              </li>
+              <li>
+                <button className={`sidebar__item sidebar__item--sub ${view === "template-admin" ? "sidebar__item--active" : ""}`} onClick={() => navigate("template-admin")} type="button">
+                  <span>{t("nav.report_templates")}</span>
+                </button>
+              </li>
+            </ul>
+          )}
         </li>
         <li>
           <button
@@ -447,8 +644,8 @@ export default function App() {
           <>
           <li>
             <button
-              className={`sidebar__item ${view === "admin" ? "sidebar__item--active" : ""}`}
-              onClick={() => navigate("admin")}
+              className={`sidebar__item ${view === "admin-hub" || view === "admin" ? "sidebar__item--active" : ""}`}
+              onClick={() => navigate("admin-hub")}
               title={t("nav.admin")}
               type="button"
             >
@@ -456,6 +653,32 @@ export default function App() {
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
               </span>
               <span>{t("nav.admin")}</span>
+            </button>
+          </li>
+          <li>
+            <button
+              className={`sidebar__item ${view === "supervisor-audit" ? "sidebar__item--active" : ""}`}
+              onClick={() => navigate("supervisor-audit")}
+              title={t("nav.supervisor_audit")}
+              type="button"
+            >
+              <span className="sidebar__item-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </span>
+              <span>{t("nav.supervisor_audit")}</span>
+            </button>
+          </li>
+          <li>
+            <button
+              className={`sidebar__item ${view === "sla-dashboard" ? "sidebar__item--active" : ""}`}
+              onClick={() => navigate("sla-dashboard")}
+              title={t("nav.sla_dashboard")}
+              type="button"
+            >
+              <span className="sidebar__item-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </span>
+              <span>{t("nav.sla_dashboard")}</span>
             </button>
           </li>
           <li>
@@ -633,6 +856,13 @@ export default function App() {
           <main id="dopams-main" role="main">
             <Suspense fallback={suspenseFallback}>
               {view === "dashboard" && <Dashboard authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
+              {view === "dashboard-hub" && <DashboardHub authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
+              {view === "control-room" && <ControlRoomDashboard authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
+              {view === "leadership-dashboard" && <LeadershipDashboard authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
+              {view === "supervisor-dashboard" && <SupervisorDashboard authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
+              {view === "early-warning" && <EarlyWarningDashboard authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
+              {view === "geo-dashboard" && <GeoDashboard authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
+              {view === "pendency-dashboard" && <PendencyDashboard authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
               {view === "alerts" && <AlertList authHeaders={authHeaders} isOffline={isOffline} onSelect={(id) => navigate("alert-detail", id)} />}
               {view === "alert-detail" && resourceId && <AlertDetail id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => navigate("alerts")} />}
               {view === "leads" && <LeadList authHeaders={authHeaders} isOffline={isOffline} onSelect={(id) => navigate("lead-detail", id)} />}
@@ -640,7 +870,7 @@ export default function App() {
               {view === "cases" && <CaseList authHeaders={authHeaders} isOffline={isOffline} onSelect={(id) => navigate("case-detail", id)} />}
               {view === "case-detail" && resourceId && <CaseDetail id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => navigate("cases")} />}
               {view === "subjects" && <SubjectList authHeaders={authHeaders} isOffline={isOffline} onSelect={(id) => navigate("subject-detail", id)} />}
-              {view === "subject-detail" && resourceId && <SubjectDetail id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => navigate("subjects")} />}
+              {view === "subject-detail" && resourceId && <SubjectDetail id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => navigate("subjects")} onNavigate={navigate} />}
               {view === "inbox" && <TaskInbox authHeaders={authHeaders} isOffline={isOffline} />}
               {view === "query-assistant" && <QueryAssistant authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
               {view === "network-graph" && <NetworkGraph authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
@@ -649,6 +879,22 @@ export default function App() {
               {view === "settings" && <Settings />}
               {view === "audit-log" && <AuditLog authHeaders={authHeaders} isOffline={isOffline} />}
               {view === "admin" && <Admin authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "admin-hub" && <AdminHub authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
+              {view === "legal-rules" && <LegalRuleAdmin authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "detection-dictionary" && <DetectionDictionary authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "template-admin" && <TemplateAdmin authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "platform-connectors" && <PlatformConnectors authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "monitoring-config" && <MonitoringConfig authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "court-export" && resourceId && <CourtExportWizard id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => navigate("cases")} />}
+              {view === "supervisor-audit" && <SupervisorAudit authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "escalation-queue" && <EscalationQueue authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
+              {view === "sla-dashboard" && <SlaDashboard authHeaders={authHeaders} isOffline={isOffline} />}
+              {view === "report-generate" && <ReportGenerateHub authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
+              {view === "report-detail" && resourceId && <ReportDetail id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => navigate("report-generate")} />}
+              {view === "report-editor" && resourceId && <ReportEditor id={resourceId} authHeaders={authHeaders} isOffline={isOffline} onBack={() => navigate("report-generate")} />}
+              {view === "subject-network" && resourceId && <SubjectNetwork subjectId={resourceId} authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
+              {view === "upi-network" && <TransactionNetwork txnType="UPI" authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
+              {view === "bank-network" && <TransactionNetwork txnType="BANK" authHeaders={authHeaders} isOffline={isOffline} onNavigate={navigate} />}
             </Suspense>
           </main>
         </div>

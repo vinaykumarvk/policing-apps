@@ -1,4 +1,5 @@
 import { query } from "../db";
+import { resolveEntityTable } from "./entity-resolver";
 
 type DbRow = Record<string, unknown>;
 
@@ -63,17 +64,8 @@ export function classifyContent(text: string): ClassificationResult {
 }
 
 export async function classifyEntity(entityType: string, entityId: string): Promise<DbRow> {
-  // Determine table and text column based on entity type
-  let tableName: string;
-  let textColumn: string;
-  let idColumn: string;
-
-  switch (entityType) {
-    case "dopams_alert": tableName = "alert"; textColumn = "description"; idColumn = "alert_id"; break;
-    case "dopams_lead": tableName = "lead"; textColumn = "details"; idColumn = "lead_id"; break;
-    case "dopams_subject": tableName = "subject_profile"; textColumn = "full_name"; idColumn = "subject_id"; break;
-    default: throw new Error(`Unknown entity type: ${entityType}`);
-  }
+  // Determine table and text column via validated allowlist
+  const { table: tableName, idCol: idColumn, textCol: textColumn } = resolveEntityTable(entityType);
 
   const entityResult = await query(`SELECT ${textColumn} FROM ${tableName} WHERE ${idColumn} = $1`, [entityId]);
   if (entityResult.rows.length === 0) throw new Error("Entity not found");

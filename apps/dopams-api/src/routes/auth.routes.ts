@@ -2,10 +2,11 @@ import { FastifyInstance } from "fastify";
 import { createAuthRoutes } from "@puda/api-core";
 import { createAuthMiddleware } from "@puda/api-core";
 import { query } from "../db";
+import { DEV_JWT_SECRET } from "../middleware/auth";
 
 const auth = createAuthMiddleware({
   cookieName: "dopams_auth",
-  defaultDevSecret: "dopams-dev-secret-DO-NOT-USE-IN-PRODUCTION",
+  defaultDevSecret: DEV_JWT_SECRET,
   queryFn: query,
 });
 

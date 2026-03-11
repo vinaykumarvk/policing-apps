@@ -107,7 +107,7 @@ export default function LeadList({ authHeaders, isOffline, onSelect }: Props) {
             </thead>
             <tbody>
               {leads.map((l) => (
-                <tr key={l.lead_id} className="entity-table__clickable" onClick={() => onSelect(l.lead_id)}>
+                <tr key={l.lead_id} className="entity-table__clickable" onClick={() => onSelect(l.lead_id)} tabIndex={0} role="link" onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(l.lead_id); } }}>
                   <td data-label={t("leads.priority")}><span className={`badge badge--${l.priority?.toLowerCase() || "default"}`}>{l.priority}</span></td>
                   <td data-label={t("leads.source")}>{l.source_type}</td>
                   <td data-label={t("leads.summary")}>{l.summary}</td>

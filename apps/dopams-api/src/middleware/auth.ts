@@ -4,9 +4,14 @@ import { query } from "../db";
 // Re-export types so existing imports still work
 export type { AuthPayload } from "@puda/api-core";
 
+/** Single source of truth for the dev-only JWT secret. Import this constant
+ *  whenever you need to create an auth middleware instance elsewhere (e.g.
+ *  LDAP, OIDC conditional blocks in app.ts). */
+export const DEV_JWT_SECRET = "dopams-dev-secret-DO-NOT-USE-IN-PRODUCTION";
+
 const auth = createAuthMiddleware({
   cookieName: "dopams_auth",
-  defaultDevSecret: "dopams-dev-secret-DO-NOT-USE-IN-PRODUCTION",
+  defaultDevSecret: DEV_JWT_SECRET,
   queryFn: query,
 });
 

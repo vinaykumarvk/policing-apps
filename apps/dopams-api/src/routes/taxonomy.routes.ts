@@ -15,27 +15,32 @@ export async function registerTaxonomyRoutes(app: FastifyInstance): Promise<void
         },
       },
     },
-  }, async (request) => {
-    const { parent_id, flat } = request.query as Record<string, string | undefined>;
+  }, async (request, reply) => {
+    try {
+      const { parent_id, flat } = request.query as Record<string, string | undefined>;
 
-    if (flat === "true") {
+      if (flat === "true") {
+        const result = await query(
+          `SELECT category_id, category_name, parent_id, level, path, is_active, created_at
+           FROM taxonomy_category WHERE is_active = TRUE ORDER BY path, category_name`,
+        );
+        return { categories: result.rows };
+      }
+
+      // Tree: return only requested level
       const result = await query(
         `SELECT category_id, category_name, parent_id, level, path, is_active, created_at
-         FROM taxonomy_category WHERE is_active = TRUE ORDER BY path, category_name`,
+         FROM taxonomy_category
+         WHERE ($1::uuid IS NULL AND parent_id IS NULL OR parent_id = $1)
+           AND is_active = TRUE
+         ORDER BY category_name`,
+        [parent_id || null],
       );
       return { categories: result.rows };
+    } catch (err) {
+      request.log.error(err, "Failed to list taxonomy categories");
+      reply.code(500).send({ error: "INTERNAL_ERROR", message: "Failed to list taxonomy categories" });
     }
-
-    // Tree: return only requested level
-    const result = await query(
-      `SELECT category_id, category_name, parent_id, level, path, is_active, created_at
-       FROM taxonomy_category
-       WHERE ($1::uuid IS NULL AND parent_id IS NULL OR parent_id = $1)
-         AND is_active = TRUE
-       ORDER BY category_name`,
-      [parent_id || null],
-    );
-    return { categories: result.rows };
   });
 
   // POST /api/v1/taxonomy — Create category
@@ -84,15 +89,20 @@ export async function registerTaxonomyRoutes(app: FastifyInstance): Promise<void
 
   // --- Classification Thresholds ---
 
-  app.get("/api/v1/classification-thresholds", async () => {
-    const result = await query(
-      `SELECT t.threshold_id, t.category_id, c.category_name, t.min_score, t.max_score, t.action, t.is_active
-       FROM classification_threshold t
-       LEFT JOIN taxonomy_category c ON t.category_id = c.category_id
-       WHERE t.is_active = TRUE
-       ORDER BY c.category_name, t.min_score`,
-    );
-    return { thresholds: result.rows };
+  app.get("/api/v1/classification-thresholds", async (request, reply) => {
+    try {
+      const result = await query(
+        `SELECT t.threshold_id, t.category_id, c.category_name, t.min_score, t.max_score, t.action, t.is_active
+         FROM classification_threshold t
+         LEFT JOIN taxonomy_category c ON t.category_id = c.category_id
+         WHERE t.is_active = TRUE
+         ORDER BY c.category_name, t.min_score`,
+      );
+      return { thresholds: result.rows };
+    } catch (err) {
+      request.log.error(err, "Failed to list classification thresholds");
+      reply.code(500).send({ error: "INTERNAL_ERROR", message: "Failed to list classification thresholds" });
+    }
   });
 
   app.post("/api/v1/classification-thresholds", {

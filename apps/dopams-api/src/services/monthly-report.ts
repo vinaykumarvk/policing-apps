@@ -14,6 +14,7 @@ export interface KpiValue {
   targetValue: number | null;
   actualValue: number | null;
   achievementPct: number | null;
+  error?: string;
 }
 
 export interface MonthlyReportResult {
@@ -65,13 +66,20 @@ export async function getKpiValues(
   for (const kpi of kpiResult.rows) {
     let actualValue: number | null = null;
 
+    let kpiError: string | undefined;
     try {
-      // Run the KPI query.  Pass month window as $1/$2 so date-ranged KPIs
-      // work correctly.  KPIs that don't use parameters ignore them safely.
+      // Run the KPI query inside a read-only transaction with a statement
+      // timeout to prevent runaway queries from blocking the report.
+      await query("BEGIN");
+      await query("SET TRANSACTION READ ONLY");
+      await query("SET LOCAL statement_timeout = '5s'");
+
       const kpiQueryResult = await query(
         kpi.calculation_query as string,
         [monthStart.toISOString(), monthEnd.toISOString()],
       );
+
+      await query("COMMIT");
 
       if (kpiQueryResult.rows.length > 0) {
         const firstRow = kpiQueryResult.rows[0] as Record<string, unknown>;
@@ -83,9 +91,10 @@ export async function getKpiValues(
           }
         }
       }
-    } catch {
-      // Leave actualValue = null for failed KPIs; include in report so the
-      // operator can see which KPIs need attention.
+    } catch (err) {
+      // Ensure transaction is rolled back on error
+      await query("ROLLBACK").catch(() => {});
+      kpiError = err instanceof Error ? err.message : String(err);
     }
 
     const targetValue =
@@ -103,6 +112,7 @@ export async function getKpiValues(
       targetValue,
       actualValue,
       achievementPct,
+      ...(kpiError ? { error: kpiError } : {}),
     });
   }
 

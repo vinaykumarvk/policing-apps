@@ -16,20 +16,25 @@ export async function registerJurisdictionRoutes(app: FastifyInstance): Promise<
         },
       },
     },
-  }, async (request) => {
-    const { root_id, unit_type } = request.query as Record<string, string | undefined>;
-    if (root_id) {
-      const tree = await getUnitTree(root_id);
-      return { units: tree };
+  }, async (request, reply) => {
+    try {
+      const { root_id, unit_type } = request.query as Record<string, string | undefined>;
+      if (root_id) {
+        const tree = await getUnitTree(root_id);
+        return { units: tree };
+      }
+      const result = await query(
+        `SELECT unit_id, unit_name, parent_id, unit_type, level, path, is_active
+         FROM organization_unit
+         WHERE ($1::text IS NULL OR unit_type = $1)
+         ORDER BY COALESCE(path, unit_name)`,
+        [unit_type || null],
+      );
+      return { units: result.rows };
+    } catch (err) {
+      request.log.error(err, "Failed to list units");
+      reply.code(500).send({ error: "INTERNAL_ERROR", message: "Failed to list units" });
     }
-    const result = await query(
-      `SELECT unit_id, unit_name, parent_id, unit_type, level, path, is_active
-       FROM organization_unit
-       WHERE ($1::text IS NULL OR unit_type = $1)
-       ORDER BY COALESCE(path, unit_name)`,
-      [unit_type || null],
-    );
-    return { units: result.rows };
   });
 
   // POST /api/v1/units — Create unit
@@ -83,15 +88,25 @@ export async function registerJurisdictionRoutes(app: FastifyInstance): Promise<
   // GET /api/v1/units/:id/hierarchy — Get hierarchy for a unit
   app.get("/api/v1/units/:id/hierarchy", {
     schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
-  }, async (request) => {
-    const { id } = request.params as { id: string };
-    const hierarchy = await resolveUnitHierarchy(id);
-    return { unitId: id, ...hierarchy };
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const hierarchy = await resolveUnitHierarchy(id);
+      return { unitId: id, ...hierarchy };
+    } catch (err) {
+      request.log.error(err, "Failed to fetch unit hierarchy");
+      reply.code(500).send({ error: "INTERNAL_ERROR", message: "Failed to fetch unit hierarchy" });
+    }
   });
 
   // POST /api/v1/units/refresh-cache — Refresh jurisdiction cache
-  app.post("/api/v1/units/refresh-cache", async () => {
-    await refreshCache();
-    return { success: true, refreshedAt: new Date().toISOString() };
+  app.post("/api/v1/units/refresh-cache", async (request, reply) => {
+    try {
+      await refreshCache();
+      return { success: true, refreshedAt: new Date().toISOString() };
+    } catch (err) {
+      request.log.error(err, "Failed to refresh unit cache");
+      reply.code(500).send({ error: "INTERNAL_ERROR", message: "Failed to refresh unit cache" });
+    }
   });
 }

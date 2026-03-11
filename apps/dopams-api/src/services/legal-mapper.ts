@@ -94,6 +94,46 @@ export async function addManualMapping(entityType: string, entityId: string, sta
   return result.rows[0];
 }
 
+export async function getPendingMappings(limit: number, offset: number): Promise<{ rows: DbRow[]; total: number }> {
+  const result = await query(
+    `SELECT lm.*, sl.act_name, sl.section, sl.description, sl.penalty_summary,
+            COUNT(*) OVER() AS total_count
+     FROM legal_mapping lm
+     JOIN statute_library sl ON sl.statute_id = lm.statute_id
+     WHERE lm.confirmed = false AND lm.review_status IS NULL
+     ORDER BY lm.created_at DESC
+     LIMIT $1 OFFSET $2`,
+    [limit, offset]
+  );
+  const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count as string, 10) : 0;
+  return { rows: result.rows.map(({ total_count, ...r }: any) => r), total };
+}
+
+export async function reviewMapping(
+  mappingId: string,
+  userId: string,
+  decision: "APPROVED" | "REJECTED",
+  reason?: string,
+): Promise<DbRow | null> {
+  if (decision === "APPROVED") {
+    const result = await query(
+      `UPDATE legal_mapping SET confirmed = true, confirmed_by = $2, confirmed_at = NOW(),
+              review_status = 'APPROVED', review_reason = $3, reviewed_by = $2, reviewed_at = NOW()
+       WHERE mapping_id = $1 RETURNING *`,
+      [mappingId, userId, reason || null]
+    );
+    return result.rows[0] || null;
+  } else {
+    const result = await query(
+      `UPDATE legal_mapping SET review_status = 'REJECTED', review_reason = $3,
+              reviewed_by = $2, reviewed_at = NOW()
+       WHERE mapping_id = $1 RETURNING *`,
+      [mappingId, userId, reason || null]
+    );
+    return result.rows[0] || null;
+  }
+}
+
 export async function getStatutes(searchTerm?: string): Promise<DbRow[]> {
   if (searchTerm) {
     const result = await query(

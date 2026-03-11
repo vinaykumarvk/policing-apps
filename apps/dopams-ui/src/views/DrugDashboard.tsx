@@ -27,7 +27,7 @@ export default function DrugDashboard({ authHeaders, isOffline }: Props) {
       setDistribution(distData.distribution || []);
       setRecidivists(recData.recidivists || []);
     }).catch(() => setError(t("common.error"))).finally(() => setLoading(false));
-  }, []);
+  }, [authHeaders, isOffline]);
 
   const maxCount = Math.max(...distribution.map(d => d.count), 1);
 

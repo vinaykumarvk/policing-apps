@@ -2,6 +2,7 @@ import { FastifyInstance } from "fastify";
 import { extractAndStore, getEntityGraph, getEntitiesForSource } from "../services/entity-extractor";
 import { query } from "../db";
 import { sendError, send404 } from "../errors";
+import { resolveEntityTable } from "../services/entity-resolver";
 
 export async function registerExtractRoutes(app: FastifyInstance): Promise<void> {
   // Extract entities from a source entity
@@ -21,21 +22,24 @@ export async function registerExtractRoutes(app: FastifyInstance): Promise<void>
     try {
       const { entityType, entityId } = request.params as { entityType: string; entityId: string };
 
-      let sql: string;
+      // Validate entity type via allowlist (prevents SQL injection)
+      let resolved;
+      try {
+        resolved = resolveEntityTable(entityType);
+      } catch {
+        return sendError(reply, 400, "UNKNOWN_ENTITY_TYPE", `Unknown entity type: ${entityType}`);
+      }
+      const { table, idCol } = resolved;
 
-      switch (entityType) {
-        case "dopams_alert":
-          sql = `SELECT description AS text FROM alert WHERE alert_id = $1`;
-          break;
-        case "dopams_lead":
-          sql = `SELECT COALESCE(summary, '') || ' ' || COALESCE(details, '') AS text FROM lead WHERE lead_id = $1`;
-          break;
-        case "dopams_subject":
-          // subject_profile has no single remarks column; concatenate identifiers/addresses JSON + full_name
-          sql = `SELECT COALESCE(full_name, '') || ' ' || COALESCE(identifiers::text, '') || ' ' || COALESCE(addresses::text, '') AS text FROM subject_profile WHERE subject_id = $1`;
-          break;
-        default:
-          return sendError(reply, 400, "UNKNOWN_ENTITY_TYPE", `Unknown entity type: ${entityType}`);
+      // Build extraction SQL per table — some need multi-column concatenation
+      let sql: string;
+      if (table === "lead") {
+        sql = `SELECT COALESCE(summary, '') || ' ' || COALESCE(details, '') AS text FROM ${table} WHERE ${idCol} = $1`;
+      } else if (table === "subject_profile") {
+        // subject_profile has no single remarks column; concatenate identifiers/addresses JSON + full_name
+        sql = `SELECT COALESCE(full_name, '') || ' ' || COALESCE(identifiers::text, '') || ' ' || COALESCE(addresses::text, '') AS text FROM ${table} WHERE ${idCol} = $1`;
+      } else {
+        sql = `SELECT ${resolved.textCol} AS text FROM ${table} WHERE ${idCol} = $1`;
       }
 
       const row = await query(sql, [entityId]);

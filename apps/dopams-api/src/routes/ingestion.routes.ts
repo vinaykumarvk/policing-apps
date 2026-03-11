@@ -19,37 +19,47 @@ export async function registerIngestionRoutes(app: FastifyInstance): Promise<voi
         },
       },
     },
-  }, async (request) => {
-    const { state_id, connector_id, limit: rawLimit, offset: rawOffset } = request.query as Record<string, string | undefined>;
-    const limit = Math.min(parseInt(rawLimit || "50", 10) || 50, 200);
-    const offset = Math.max(parseInt(rawOffset || "0", 10) || 0, 0);
-    const result = await query(
-      `SELECT job_id, connector_id, job_type, state_id, total_records, processed_records,
-              failed_records, error_message, started_at, completed_at, created_at,
-              COUNT(*) OVER() AS total_count
-       FROM ingestion_job
-       WHERE ($1::text IS NULL OR state_id = $1)
-         AND ($2::uuid IS NULL OR connector_id = $2)
-       ORDER BY created_at DESC
-       LIMIT $3 OFFSET $4`,
-      [state_id || null, connector_id || null, limit, offset],
-    );
-    const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
-    return { jobs: result.rows.map(({ total_count, ...r }) => r), total };
+  }, async (request, reply) => {
+    try {
+      const { state_id, connector_id, limit: rawLimit, offset: rawOffset } = request.query as Record<string, string | undefined>;
+      const limit = Math.min(parseInt(rawLimit || "50", 10) || 50, 200);
+      const offset = Math.max(parseInt(rawOffset || "0", 10) || 0, 0);
+      const result = await query(
+        `SELECT job_id, connector_id, job_type, state_id, total_records, processed_records,
+                failed_records, error_message, started_at, completed_at, created_at,
+                COUNT(*) OVER() AS total_count
+         FROM ingestion_job
+         WHERE ($1::text IS NULL OR state_id = $1)
+           AND ($2::uuid IS NULL OR connector_id = $2)
+         ORDER BY created_at DESC
+         LIMIT $3 OFFSET $4`,
+        [state_id || null, connector_id || null, limit, offset],
+      );
+      const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
+      return { jobs: result.rows.map(({ total_count, ...r }) => r), total };
+    } catch (err) {
+      request.log.error(err, "Failed to list ingestion jobs");
+      reply.code(500).send({ error: "INTERNAL_ERROR", message: "Failed to list ingestion jobs" });
+    }
   });
 
   app.get("/api/v1/ingestion/jobs/:id", {
     schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
   }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const result = await query(
-      `SELECT job_id, connector_id, job_type, state_id, total_records, processed_records,
-              failed_records, error_message, warnings, started_at, completed_at, created_by, created_at
-       FROM ingestion_job WHERE job_id = $1`,
-      [id],
-    );
-    if (result.rows.length === 0) return send404(reply, "JOB_NOT_FOUND", "Ingestion job not found");
-    return { job: result.rows[0] };
+    try {
+      const { id } = request.params as { id: string };
+      const result = await query(
+        `SELECT job_id, connector_id, job_type, state_id, total_records, processed_records,
+                failed_records, error_message, warnings, started_at, completed_at, created_by, created_at
+         FROM ingestion_job WHERE job_id = $1`,
+        [id],
+      );
+      if (result.rows.length === 0) return send404(reply, "JOB_NOT_FOUND", "Ingestion job not found");
+      return { job: result.rows[0] };
+    } catch (err) {
+      request.log.error(err, "Failed to fetch ingestion job");
+      reply.code(500).send({ error: "INTERNAL_ERROR", message: "Failed to fetch ingestion job" });
+    }
   });
 
   // FR-02 AC-02: Validate ingestion job data against connector-type-specific required fields
@@ -107,15 +117,20 @@ export async function registerIngestionRoutes(app: FastifyInstance): Promise<voi
   app.post("/api/v1/ingestion/jobs/:id/retry", {
     schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
   }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const result = await query(
-      `UPDATE ingestion_job SET state_id = 'QUEUED', error_message = NULL, started_at = NULL, completed_at = NULL
-       WHERE job_id = $1 AND state_id IN ('FAILED', 'PARTIAL')
-       RETURNING job_id, state_id`,
-      [id],
-    );
-    if (result.rows.length === 0) return sendError(reply, 400, "RETRY_NOT_ALLOWED", "Job is not in a retryable state");
-    return { job: result.rows[0] };
+    try {
+      const { id } = request.params as { id: string };
+      const result = await query(
+        `UPDATE ingestion_job SET state_id = 'QUEUED', error_message = NULL, started_at = NULL, completed_at = NULL
+         WHERE job_id = $1 AND state_id IN ('FAILED', 'PARTIAL')
+         RETURNING job_id, state_id`,
+        [id],
+      );
+      if (result.rows.length === 0) return sendError(reply, 400, "RETRY_NOT_ALLOWED", "Job is not in a retryable state");
+      return { job: result.rows[0] };
+    } catch (err) {
+      request.log.error(err, "Failed to retry ingestion job");
+      reply.code(500).send({ error: "INTERNAL_ERROR", message: "Failed to retry ingestion job" });
+    }
   });
 
   // --- Connector Config ---
@@ -212,19 +227,29 @@ export async function registerIngestionRoutes(app: FastifyInstance): Promise<voi
         },
       },
     },
-  }, async (request) => {
-    const { limit: rawLimit, offset: rawOffset } = request.query as Record<string, string | undefined>;
-    const limit = Math.min(parseInt(rawLimit || "50", 10) || 50, 200);
-    const offset = Math.max(parseInt(rawOffset || "0", 10) || 0, 0);
-    return deadLetterQueue.listFailed(limit, offset);
+  }, async (request, reply) => {
+    try {
+      const { limit: rawLimit, offset: rawOffset } = request.query as Record<string, string | undefined>;
+      const limit = Math.min(parseInt(rawLimit || "50", 10) || 50, 200);
+      const offset = Math.max(parseInt(rawOffset || "0", 10) || 0, 0);
+      return deadLetterQueue.listFailed(limit, offset);
+    } catch (err) {
+      request.log.error(err, "Failed to list dead letter entries");
+      reply.code(500).send({ error: "INTERNAL_ERROR", message: "Failed to list dead letter entries" });
+    }
   });
 
   app.post("/api/v1/ingestion/dead-letter/:id/retry", {
     schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
   }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const found = await deadLetterQueue.retry(id);
-    if (!found) return send404(reply, "DLQ_NOT_FOUND", "Dead letter entry not found");
-    return { success: true };
+    try {
+      const { id } = request.params as { id: string };
+      const found = await deadLetterQueue.retry(id);
+      if (!found) return send404(reply, "DLQ_NOT_FOUND", "Dead letter entry not found");
+      return { success: true };
+    } catch (err) {
+      request.log.error(err, "Failed to retry dead letter entry");
+      reply.code(500).send({ error: "INTERNAL_ERROR", message: "Failed to retry dead letter entry" });
+    }
   });
 }

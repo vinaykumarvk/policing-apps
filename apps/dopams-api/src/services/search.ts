@@ -1,4 +1,5 @@
 import { query } from "../db";
+import { resolveEntityTable } from "./entity-resolver";
 
 export interface SearchResult {
   entityType: string;
@@ -57,34 +58,34 @@ function transliterate(input: string): string {
   return result;
 }
 
+/** Escape SQL LIKE/ILIKE wildcards so user input is treated as literal text. */
+function escapeLikePattern(s: string): string {
+  return s.replace(/[%_\\]/g, "\\$&");
+}
+
 // ---------------------------------------------------------------------------
 // Search-table definitions (DOPAMS)
 // ---------------------------------------------------------------------------
 
+/** Title column per table — used for search result display. */
+const SEARCH_TITLE_COL: Record<string, string> = {
+  alert: "title",
+  lead: "summary",
+  subject_profile: "full_name",
+};
+
 function getSearchTables(): SearchTableDef[] {
-  return [
-    {
-      entityType: "dopams_alert",
-      tableName: "alert",
-      idColumn: "alert_id",
-      titleColumn: "title",
-      textColumn: "description",
-    },
-    {
-      entityType: "dopams_lead",
-      tableName: "lead",
-      idColumn: "lead_id",
-      titleColumn: "summary",
-      textColumn: "details",
-    },
-    {
-      entityType: "dopams_subject",
-      tableName: "subject_profile",
-      idColumn: "subject_id",
-      titleColumn: "full_name",
-      textColumn: "full_name",
-    },
-  ];
+  const entityTypes = ["dopams_alert", "dopams_lead", "dopams_subject"] as const;
+  return entityTypes.map((et) => {
+    const { table, idCol, textCol } = resolveEntityTable(et);
+    return {
+      entityType: et,
+      tableName: table,
+      idColumn: idCol,
+      titleColumn: SEARCH_TITLE_COL[table] || textCol,
+      textColumn: textCol,
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -128,16 +129,17 @@ export async function globalSearch(params: {
       queryParams = [searchTerm, limit, offset];
     } else {
       // Full-text search with ts_rank, falling back to ILIKE
+      const escapedTerm = escapeLikePattern(searchTerm);
       sql = `SELECT ${table.idColumn} AS entity_id,
                     ${table.titleColumn} AS title,
                     LEFT(${table.textColumn}, 200) AS snippet,
                     ts_rank(search_vector, plainto_tsquery('english', $1)) AS score
              FROM ${table.tableName}
              WHERE search_vector @@ plainto_tsquery('english', $1)
-                OR ${table.textColumn} ILIKE '%' || $1 || '%'
+                OR ${table.textColumn} ILIKE '%' || $2 || '%' ESCAPE '\\'
              ORDER BY score DESC
-             LIMIT $2 OFFSET $3`;
-      queryParams = [searchTerm, limit, offset];
+             LIMIT $3 OFFSET $4`;
+      queryParams = [searchTerm, escapedTerm, limit, offset];
     }
 
     try {

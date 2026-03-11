@@ -16,8 +16,8 @@ async function seed() {
   ];
   for (const u of units) {
     await query(
-      `INSERT INTO organization_unit (unit_id, name, code, is_active)
-       VALUES (gen_random_uuid(), $1, $2, true)
+      `INSERT INTO organization_unit (unit_id, name, code)
+       VALUES (gen_random_uuid(), $1, $2)
        ON CONFLICT (code) DO NOTHING`,
       [u.name, u.code],
     );
@@ -28,8 +28,8 @@ async function seed() {
   const roles = ["DISTRICT_OPERATOR", "TOLL_FREE_OPERATOR", "INTELLIGENCE_ANALYST", "SUPERVISORY_OFFICER", "ZONAL_OFFICER", "INVESTIGATING_OFFICER", "ADMINISTRATOR"];
   for (const rk of roles) {
     await query(
-      `INSERT INTO role (role_id, role_key, description)
-       VALUES (gen_random_uuid(), $1, $1)
+      `INSERT INTO role (role_id, role_key, display_name, description)
+       VALUES (gen_random_uuid(), $1::varchar, $1::varchar, $1::text)
        ON CONFLICT (role_key) DO NOTHING`,
       [rk],
     );

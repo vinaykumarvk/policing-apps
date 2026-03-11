@@ -101,8 +101,8 @@ export default function AuditLog({ authHeaders, isOffline }: Props) {
         <p style={{ color: "var(--color-text-muted)" }}>{t("audit.no_entries")}</p>
       ) : (
         <>
-          <div style={{ overflowX: "auto" }}>
-            <table className="ui-table">
+          <div className="table-scroll">
+            <table className="entity-table">
               <thead>
                 <tr>
                   <th>{t("audit.col_timestamp")}</th>

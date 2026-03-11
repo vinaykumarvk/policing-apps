@@ -100,7 +100,7 @@ export default function CaseList({ authHeaders, isOffline, onSelect }: Props) {
             </thead>
             <tbody>
               {cases.map((c) => (
-                <tr key={c.case_id} className="entity-table__clickable" onClick={() => onSelect(c.case_id)}>
+                <tr key={c.case_id} className="entity-table__clickable" onClick={() => onSelect(c.case_id)} tabIndex={0} role="link" onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(c.case_id); } }}>
                   <td data-label={t("cases.case_number")}>{c.case_number}</td>
                   <td data-label={t("common.title")}>{c.title}</td>
                   <td data-label={t("cases.type")}>{c.case_type}</td>

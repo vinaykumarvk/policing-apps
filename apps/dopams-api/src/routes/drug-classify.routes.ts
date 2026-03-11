@@ -2,6 +2,7 @@ import { FastifyInstance } from "fastify";
 import { classifyAndStore, getClassification, reviewClassification, getRoleDistribution, getRecidivists } from "../services/drug-classifier";
 import { query } from "../db";
 import { sendError } from "../errors";
+import { resolveEntityTable } from "../services/entity-resolver";
 
 export async function registerDrugClassifyRoutes(app: FastifyInstance): Promise<void> {
   // Classify a subject/entity for drug role
@@ -20,22 +21,13 @@ export async function registerDrugClassifyRoutes(app: FastifyInstance): Promise<
     try {
       const { entityType, entityId } = request.params as { entityType: string; entityId: string };
 
-      let tableName: string;
-      let textColumn: string;
-      let idColumn: string;
-
-      switch (entityType) {
-        case "dopams_alert":
-          tableName = "alert"; textColumn = "description"; idColumn = "alert_id"; break;
-        case "dopams_lead":
-          tableName = "lead"; textColumn = "details"; idColumn = "lead_id"; break;
-        case "dopams_subject":
-          tableName = "subject_profile"; textColumn = "full_name"; idColumn = "subject_id"; break;
-        case "dopams_case":
-          tableName = "dopams_case"; textColumn = "description"; idColumn = "case_id"; break;
-        default:
-          return reply.code(400).send({ error: "UNKNOWN_ENTITY_TYPE", message: `Unsupported entity type: ${entityType}` });
+      let resolved;
+      try {
+        resolved = resolveEntityTable(entityType);
+      } catch {
+        return reply.code(400).send({ error: "UNKNOWN_ENTITY_TYPE", message: `Unsupported entity type: ${entityType}` });
       }
+      const { table: tableName, idCol: idColumn, textCol: textColumn } = resolved;
 
       const entityResult = await query(`SELECT ${textColumn} FROM ${tableName} WHERE ${idColumn} = $1`, [entityId]);
       if (entityResult.rows.length === 0) return reply.code(404).send({ error: "NOT_FOUND", message: "Entity not found" });
