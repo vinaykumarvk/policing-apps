@@ -5,6 +5,7 @@
  * periodic jobs, allowing Cloud Scheduler or cron to trigger them externally.
  * Each endpoint is gated by the X-Internal-Secret header.
  */
+import crypto from "node:crypto";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { detectSLABreaches } from "../sla-checker";
 import { cleanupClientTelemetryEvents } from "../telemetry-retention";
@@ -21,8 +22,11 @@ function verifyInternalSecret(request: FastifyRequest, reply: FastifyReply): boo
     reply.code(404).send({ error: "NOT_FOUND", message: "Not found", statusCode: 404 });
     return false;
   }
-  const provided = request.headers["x-internal-secret"];
-  if (provided !== expected) {
+  const provided = String(request.headers["x-internal-secret"] || "");
+  // Use timing-safe comparison to prevent timing attacks
+  const expectedBuf = Buffer.from(expected);
+  const providedBuf = Buffer.from(provided);
+  if (expectedBuf.length !== providedBuf.length || !crypto.timingSafeEqual(expectedBuf, providedBuf)) {
     reply.code(401).send({ error: "UNAUTHORIZED", message: "Invalid internal secret", statusCode: 401 });
     return false;
   }

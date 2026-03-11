@@ -44,6 +44,9 @@ async function main() {
 
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("unhandledRejection", (reason) => {
+    app.log.error({ reason: String(reason) }, "Unhandled promise rejection");
+  });
 
   try {
     await app.listen({ port, host });

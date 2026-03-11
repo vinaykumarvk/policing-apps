@@ -3,7 +3,7 @@
 -- ── NL Query Log ──────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS nl_query_log (
   query_id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id        UUID NOT NULL,
+  user_id        TEXT NOT NULL,
   question       TEXT NOT NULL,
   generated_sql  TEXT,
   summary        TEXT,
@@ -20,7 +20,7 @@ CREATE INDEX IF NOT EXISTS idx_nl_query_log_created_at ON nl_query_log (created_
 -- ── Page Agent Audit Log ──────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS page_agent_audit_log (
   audit_id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id          UUID NOT NULL,
+  user_id          TEXT NOT NULL,
   action_type      VARCHAR(100) NOT NULL,
   instruction      TEXT NOT NULL,
   target_selector  VARCHAR(500),
@@ -84,15 +84,15 @@ CREATE TABLE IF NOT EXISTS model_prediction_log (
 
 -- ── Feature Flags (if not exists) ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS feature_flag (
-  flag_id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  flag_key             VARCHAR(100) NOT NULL UNIQUE,
+  flag_key             TEXT PRIMARY KEY,
   enabled              BOOLEAN NOT NULL DEFAULT FALSE,
   description          TEXT,
   rollout_percentage   INTEGER NOT NULL DEFAULT 100,
-  rules_jsonb          JSONB DEFAULT '{}',
-  is_archived          BOOLEAN NOT NULL DEFAULT FALSE,
+  rules_jsonb          JSONB NOT NULL DEFAULT '{}',
+  updated_by_user_id   TEXT,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_by_user_id   UUID
+  is_archived          BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 -- Seed feature flags for NL assistant

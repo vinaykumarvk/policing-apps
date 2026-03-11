@@ -4,6 +4,7 @@ import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import compress from "@fastify/compress";
+import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
@@ -517,6 +518,10 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
     : true;
   await app.register(compress, { global: true, threshold: 1024 });
 
+  await app.register(helmet, {
+    contentSecurityPolicy: false,  // CSP handled by nginx
+  });
+
   await app.register(cors, {
     origin: allowedOrigins,
     credentials: true,
@@ -808,13 +813,19 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
   {
     const { query: dbQueryFn } = await import("./db");
     const llmProvider = createLlmProvider({ queryFn: dbQueryFn });
+    // PUDA uses authUser (not user) and officers can manage assistant config
+    const getUser = (r: any) => r.authUser || r.user;
     const nlQueryRoutes = createNlQueryRoutes({
       queryFn: dbQueryFn, llmProvider, queryPatterns: pudaQueryPatterns,
-      dbSchemaContext: pudaDbSchemaContext, appId: "puda",
+      dbSchemaContext: pudaDbSchemaContext, appId: "puda", getUser,
     });
-    const pageAgentRoutes = createPageAgentRoutes({ queryFn: dbQueryFn, llmProvider });
-    const featureToggleRoutes = createFeatureToggleRoutes({ queryFn: dbQueryFn });
-    const llmConfigRoutes = createLlmConfigRoutes({ queryFn: dbQueryFn, llmProvider });
+    const pageAgentRoutes = createPageAgentRoutes({ queryFn: dbQueryFn, llmProvider, getUser });
+    const featureToggleRoutes = createFeatureToggleRoutes({
+      queryFn: dbQueryFn, getUser, adminRoles: ["CLERK", "SDO", "SENIOR_ASSISTANT", "ACCOUNT_OFFICER", "JUNIOR_ENGINEER", "DRAFTSMAN"],
+    });
+    const llmConfigRoutes = createLlmConfigRoutes({
+      queryFn: dbQueryFn, llmProvider, getUser, adminRoles: ["CLERK", "SDO", "SENIOR_ASSISTANT", "ACCOUNT_OFFICER", "JUNIOR_ENGINEER", "DRAFTSMAN"],
+    });
     await nlQueryRoutes(app);
     await pageAgentRoutes(app);
     await featureToggleRoutes(app);

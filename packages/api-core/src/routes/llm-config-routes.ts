@@ -1,9 +1,9 @@
 /**
  * LLM Config Routes — provider config + system prompt management.
  *
- * GET/POST /api/v1/config/llm/providers — CRUD for provider configs
- * POST     /api/v1/config/llm/test      — test provider connection
- * GET/PUT  /api/v1/config/llm/prompts   — system prompt management
+ * GET/POST /api/v1/assistant/llm/providers — CRUD for provider configs
+ * POST     /api/v1/assistant/llm/test      — test provider connection
+ * GET/PUT  /api/v1/assistant/llm/prompts   — system prompt management
  */
 
 import { FastifyInstance } from "fastify";
@@ -15,22 +15,34 @@ export interface LlmConfigRouteDeps {
   queryFn: QueryFn;
   llmProvider: LlmProvider;
   adminRoles?: string[];
+  /** Extract user from request (varies by app — authUser, user, etc.) */
+  getUser?: (request: any) => any;
 }
 
 export function createLlmConfigRoutes(deps: LlmConfigRouteDeps) {
-  const { queryFn, llmProvider, adminRoles = ["ADMIN", "SUPER_ADMIN", "SYSTEM_ADMIN"] } = deps;
+  const { queryFn, llmProvider, adminRoles = ["ADMIN", "SUPER_ADMIN", "SYSTEM_ADMIN"], getUser = (r: any) => r.authUser || r.user } = deps;
 
   function isAdmin(user: any): boolean {
-    if (!user?.roles) return false;
-    return user.roles.some((r: string) => adminRoles.includes(r));
+    if (!user) return false;
+    if (user.roles?.length) {
+      return user.roles.some((r: string) => adminRoles.includes(r));
+    }
+    if (user.postings?.length) {
+      return user.postings.some((p: any) => {
+        const roles = p.system_role_ids || (p.role_key ? [p.role_key] : []);
+        return roles.some((r: string) => adminRoles.includes(r));
+      });
+    }
+    if (user.userType === "ADMIN") return true;
+    return false;
   }
 
   return async function registerLlmConfigRoutes(app: FastifyInstance): Promise<void> {
-    // ── GET /api/v1/config/llm/providers ───────────────────────────────────
-    app.get("/api/v1/config/llm/providers", {
+    // ── GET /api/v1/assistant/llm/providers ───────────────────────────────────
+    app.get("/api/v1/assistant/llm/providers", {
       config: { skipStrictReadSchema: true },
     }, async (request, reply) => {
-      const user = (request as any).user;
+      const user = getUser(request);
       if (!isAdmin(user)) return send403(reply, "FORBIDDEN", "Admin access required");
 
       const result = await queryFn(
@@ -44,8 +56,8 @@ export function createLlmConfigRoutes(deps: LlmConfigRouteDeps) {
       return { providers: result.rows };
     });
 
-    // ── POST /api/v1/config/llm/providers ──────────────────────────────────
-    app.post("/api/v1/config/llm/providers", {
+    // ── POST /api/v1/assistant/llm/providers ──────────────────────────────────
+    app.post("/api/v1/assistant/llm/providers", {
       schema: {
         body: {
           type: "object",
@@ -67,7 +79,7 @@ export function createLlmConfigRoutes(deps: LlmConfigRouteDeps) {
         },
       },
     }, async (request, reply) => {
-      const user = (request as any).user;
+      const user = getUser(request);
       if (!isAdmin(user)) return send403(reply, "FORBIDDEN", "Admin access required");
 
       const body = request.body as {
@@ -101,8 +113,8 @@ export function createLlmConfigRoutes(deps: LlmConfigRouteDeps) {
       return { provider: result.rows[0] };
     });
 
-    // ── POST /api/v1/config/llm/test ───────────────────────────────────────
-    app.post("/api/v1/config/llm/test", {
+    // ── POST /api/v1/assistant/llm/test ───────────────────────────────────────
+    app.post("/api/v1/assistant/llm/test", {
       schema: {
         body: {
           type: "object",
@@ -118,7 +130,7 @@ export function createLlmConfigRoutes(deps: LlmConfigRouteDeps) {
         },
       },
     }, async (request, reply) => {
-      const user = (request as any).user;
+      const user = getUser(request);
       if (!isAdmin(user)) return send403(reply, "FORBIDDEN", "Admin access required");
 
       const body = request.body as {
@@ -146,11 +158,11 @@ export function createLlmConfigRoutes(deps: LlmConfigRouteDeps) {
       return result;
     });
 
-    // ── GET /api/v1/config/llm/prompts ─────────────────────────────────────
-    app.get("/api/v1/config/llm/prompts", {
+    // ── GET /api/v1/assistant/llm/prompts ─────────────────────────────────────
+    app.get("/api/v1/assistant/llm/prompts", {
       config: { skipStrictReadSchema: true },
     }, async (request, reply) => {
-      const user = (request as any).user;
+      const user = getUser(request);
       if (!isAdmin(user)) return send403(reply, "FORBIDDEN", "Admin access required");
 
       const result = await queryFn(
@@ -161,8 +173,8 @@ export function createLlmConfigRoutes(deps: LlmConfigRouteDeps) {
       return { prompts: result.rows };
     });
 
-    // ── PUT /api/v1/config/llm/prompts ─────────────────────────────────────
-    app.put("/api/v1/config/llm/prompts", {
+    // ── PUT /api/v1/assistant/llm/prompts ─────────────────────────────────────
+    app.put("/api/v1/assistant/llm/prompts", {
       schema: {
         body: {
           type: "object",
@@ -175,7 +187,7 @@ export function createLlmConfigRoutes(deps: LlmConfigRouteDeps) {
         },
       },
     }, async (request, reply) => {
-      const user = (request as any).user;
+      const user = getUser(request);
       if (!isAdmin(user)) return send403(reply, "FORBIDDEN", "Admin access required");
 
       const { useCase, promptText } = request.body as { useCase: string; promptText: string };

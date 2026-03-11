@@ -63,16 +63,17 @@ export default function AssistantAdmin({ authHeaders }: Props) {
   const [editPrompt, setEditPrompt] = useState<{ useCase: string; text: string } | null>(null);
   const [savingPrompt, setSavingPrompt] = useState(false);
 
-  const headers = { ...authHeaders, "Content-Type": "application/json" };
+  const fetchOpts = { headers: { ...authHeaders, "Content-Type": "application/json" }, credentials: "include" as const };
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      const opts = { headers: authHeaders, credentials: "include" as const };
       const [featRes, provRes, promptRes] = await Promise.all([
-        fetch(`${apiBaseUrl}/api/v1/config/features`, { headers: authHeaders }),
-        fetch(`${apiBaseUrl}/api/v1/config/llm/providers`, { headers: authHeaders }),
-        fetch(`${apiBaseUrl}/api/v1/config/llm/prompts`, { headers: authHeaders }),
+        fetch(`${apiBaseUrl}/api/v1/assistant/features`, opts),
+        fetch(`${apiBaseUrl}/api/v1/assistant/llm/providers`, opts),
+        fetch(`${apiBaseUrl}/api/v1/assistant/llm/prompts`, opts),
       ]);
 
       if (featRes.ok) {
@@ -92,14 +93,14 @@ export default function AssistantAdmin({ authHeaders }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [authHeaders]);
+  }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
   const toggleFeature = async (flagKey: string, enabled: boolean) => {
     try {
-      await fetch(`${apiBaseUrl}/api/v1/config/features/${flagKey}`, {
-        method: "PUT", headers, body: JSON.stringify({ enabled }),
+      await fetch(`${apiBaseUrl}/api/v1/assistant/features/${flagKey}`, {
+        method: "PUT", ...fetchOpts, body: JSON.stringify({ enabled }),
       });
       setFeatures((prev) => prev.map((f) => f.flag_key === flagKey ? { ...f, enabled } : f));
     } catch {
@@ -111,8 +112,8 @@ export default function AssistantAdmin({ authHeaders }: Props) {
     setTestLoading(true);
     setTestResult(null);
     try {
-      const res = await fetch(`${apiBaseUrl}/api/v1/config/llm/test`, {
-        method: "POST", headers,
+      const res = await fetch(`${apiBaseUrl}/api/v1/assistant/llm/test`, {
+        method: "POST", ...fetchOpts,
         body: JSON.stringify({
           provider: provider.provider, apiBaseUrl: provider.api_base_url,
           modelId: provider.model_id, timeoutMs: provider.timeout_ms,
@@ -130,8 +131,8 @@ export default function AssistantAdmin({ authHeaders }: Props) {
   const addProvider = async () => {
     setAddingProvider(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/api/v1/config/llm/providers`, {
-        method: "POST", headers, body: JSON.stringify(newProvider),
+      const res = await fetch(`${apiBaseUrl}/api/v1/assistant/llm/providers`, {
+        method: "POST", ...fetchOpts, body: JSON.stringify(newProvider),
       });
       if (res.ok) {
         setShowAddProvider(false);
@@ -152,8 +153,8 @@ export default function AssistantAdmin({ authHeaders }: Props) {
     if (!editPrompt) return;
     setSavingPrompt(true);
     try {
-      await fetch(`${apiBaseUrl}/api/v1/config/llm/prompts`, {
-        method: "PUT", headers,
+      await fetch(`${apiBaseUrl}/api/v1/assistant/llm/prompts`, {
+        method: "PUT", ...fetchOpts,
         body: JSON.stringify({ useCase: editPrompt.useCase, promptText: editPrompt.text }),
       });
       setEditPrompt(null);

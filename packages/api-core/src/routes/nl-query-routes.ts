@@ -28,13 +28,17 @@ export interface NlQueryRouteDeps {
   appId: string;
   /** Optional SQL WHERE restrictions based on user role */
   scopeRestrictions?: (userId: string, roles: string[]) => string;
+  /** Extract user from request (varies by app — authUser, user, etc.) */
+  getUser?: (request: any) => any;
 }
 
-const SELECT_ONLY_RE = /^\s*SELECT\b/i;
+const SELECT_ONLY_RE = /^\s*(SELECT|WITH)\b/i;
 const DANGEROUS_RE = /\b(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|GRANT|REVOKE|EXEC|EXECUTE)\b/i;
+/** Reject multi-statement queries (semicolons followed by non-whitespace) to prevent stacked injections */
+const MULTI_STATEMENT_RE = /;\s*\S/;
 
 export function createNlQueryRoutes(deps: NlQueryRouteDeps) {
-  const { queryFn, llmProvider, queryPatterns, dbSchemaContext, appId, scopeRestrictions } = deps;
+  const { queryFn, llmProvider, queryPatterns, dbSchemaContext, appId, scopeRestrictions, getUser = (r: any) => r.authUser || r.user } = deps;
 
   return async function registerNlQueryRoutes(app: FastifyInstance): Promise<void> {
     // ── POST /api/v1/query ─────────────────────────────────────────────────
@@ -50,7 +54,7 @@ export function createNlQueryRoutes(deps: NlQueryRouteDeps) {
         },
       },
     }, async (request, reply) => {
-      const user = (request as any).user;
+      const user = getUser(request);
       if (!user) return sendError(reply, 401, "UNAUTHORIZED", "Authentication required");
 
       const { question } = request.body as { question: string };
@@ -60,9 +64,9 @@ export function createNlQueryRoutes(deps: NlQueryRouteDeps) {
       const llmAvailable = await llmProvider.isLlmAvailable();
       if (llmAvailable) {
         try {
-          const result = await llmGenerateAndExecute(question, user.user_id, user.roles || []);
+          const result = await llmGenerateAndExecute(question, user.userId || user.user_id, user.roles || []);
           if (result) {
-            await logQuery(user.user_id, question, result.sql, result.summary, result.citations, "LLM", Date.now() - startTime);
+            await logQuery(user.userId || user.user_id, question, result.sql, result.summary, result.citations, "LLM", Date.now() - startTime);
             return {
               summary: result.summary,
               data: result.data,
@@ -84,14 +88,16 @@ export function createNlQueryRoutes(deps: NlQueryRouteDeps) {
           const match = question.match(pattern.pattern);
           if (match) {
             try {
+              // Build parameterized query — capture groups become query params
+              const captureGroups = match.slice(1);
               let sql = pattern.sqlTemplate;
-              // Replace $1, $2 etc. with capture groups
-              match.slice(1).forEach((group, idx) => {
-                sql = sql.replace(`$${idx + 1}`, group);
+              // Re-index template placeholders to PostgreSQL $N params
+              captureGroups.forEach((_group, idx) => {
+                sql = sql.replace(`'$${idx + 1}'`, `$${idx + 1}`);
               });
-              const result = await queryFn(sql);
+              const result = await queryFn(sql, captureGroups);
               const summary = `Found ${result.rows.length} result(s) matching: ${pattern.description}`;
-              await logQuery(user.user_id, question, sql, summary, [], "REGEX", Date.now() - startTime);
+              await logQuery(user.userId || user.user_id, question, sql, summary, [], "REGEX", Date.now() - startTime);
               return {
                 summary,
                 data: result.rows,
@@ -113,7 +119,7 @@ export function createNlQueryRoutes(deps: NlQueryRouteDeps) {
     app.get("/api/v1/query/history", {
       config: { skipStrictReadSchema: true },
     }, async (request, reply) => {
-      const user = (request as any).user;
+      const user = getUser(request);
       if (!user) return sendError(reply, 401, "UNAUTHORIZED", "Authentication required");
 
       const result = await queryFn(
@@ -122,7 +128,7 @@ export function createNlQueryRoutes(deps: NlQueryRouteDeps) {
          WHERE user_id = $1
          ORDER BY created_at DESC
          LIMIT 50`,
-        [user.user_id],
+        [user.userId || user.user_id],
       );
       return { history: result.rows };
     });
@@ -166,13 +172,15 @@ ${scopeClause ? `- Always apply this scope filter: ${scopeClause}` : ""}
 
       const { sql, summary, citations } = result.data;
 
-      // Sanitize SQL — reject non-SELECT
-      if (!SELECT_ONLY_RE.test(sql) || DANGEROUS_RE.test(sql)) {
-        logWarn("LLM generated non-SELECT SQL, blocking", { sql: sql.slice(0, 200) });
+      // Sanitize SQL — reject non-SELECT, DML keywords, and multi-statement queries
+      if (!SELECT_ONLY_RE.test(sql) || DANGEROUS_RE.test(sql) || MULTI_STATEMENT_RE.test(sql)) {
+        logWarn("LLM generated unsafe SQL, blocking", { sql: sql.slice(0, 200) });
         return null;
       }
 
-      const queryResult = await queryFn(sql);
+      // Strip any trailing semicolons to prevent statement stacking
+      const safeSql = sql.replace(/;\s*$/, "");
+      const queryResult = await queryFn(safeSql);
       return { sql, summary, citations, data: queryResult.rows };
     }
 

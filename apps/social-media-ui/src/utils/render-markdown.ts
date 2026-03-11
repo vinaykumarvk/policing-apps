@@ -1,6 +1,18 @@
-/** Simple markdown → HTML renderer for LLM output preview */
+/** Escape HTML entities to prevent XSS in user/LLM content */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** Simple markdown → HTML renderer for LLM output preview.
+ * Content is HTML-escaped first to prevent XSS, then markdown formatting is applied. */
 export function renderMarkdown(md: string): string {
-  let html = md
+  // Escape HTML first to prevent XSS injection
+  let html = escapeHtml(md)
     // Headings
     .replace(/^### (.+)$/gm, "<h4>$1</h4>")
     .replace(/^## (.+)$/gm, "<h3>$1</h3>")

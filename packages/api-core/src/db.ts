@@ -41,6 +41,7 @@ export function createPool(config: CreatePoolConfig) {
     max: Number.parseInt(process.env.PG_POOL_MAX || "20", 10) || 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 5000,
+    statement_timeout: Number(process.env.DB_STATEMENT_TIMEOUT_MS) || 30000,
     ssl: resolveSslConfig(),
   });
 

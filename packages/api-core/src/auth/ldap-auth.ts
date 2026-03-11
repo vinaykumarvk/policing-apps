@@ -47,7 +47,11 @@ export function createLdapAuth(config: LdapAuthConfig, queryFn: QueryFn): LdapAu
     }
 
     // Stub: in production this would perform an LDAP bind + search.
-    // For now we validate against the local user table with auth_source = 'ldap'.
+    // Hard fail in production — stub must never be used for real authentication.
+    if (process.env.NODE_ENV === "production") {
+      logWarn("LDAP_STUB_BLOCKED", { message: "LDAP stub authentication blocked in production — configure real LDAP provider" });
+      return { success: false, error: "LDAP stub not allowed in production" };
+    }
     logWarn("LDAP_STUB_MODE", { message: "Using stub LDAP implementation — replace with real ldapjs bind in production" });
 
     try {

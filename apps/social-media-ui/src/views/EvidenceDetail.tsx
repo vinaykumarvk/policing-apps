@@ -31,6 +31,9 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
   const [holdRef, setHoldRef] = useState("");
   const [applyingHold, setApplyingHold] = useState(false);
   const [showCourtExport, setShowCourtExport] = useState(false);
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [fileLoading, setFileLoading] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
 
   const fetchNotes = () => {
     fetch(`${apiBaseUrl}/api/v1/evidence/${id}/notes`, authHeaders())
@@ -49,7 +52,7 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
   const handleVerify = async () => {
     setVerifying(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/api/v1/evidence/${id}/verify`, { ...authHeaders(), method: "POST" });
+      const res = await fetch(`${apiBaseUrl}/api/v1/evidence/${id}/verify`, authHeaders());
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
       const data = await res.json();
       setVerifyResult(data.result || data.hash_verification_result || "UNKNOWN");
@@ -66,7 +69,7 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/evidence/${id}/legal-hold`, {
         ...authHeaders(), method: "POST",
-        body: JSON.stringify({ hold_reason: holdReason, legal_reference: holdRef }),
+        body: JSON.stringify({ holdReason: holdReason, legalReference: holdRef }),
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
       setHoldReason(""); setHoldRef("");
@@ -94,9 +97,23 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
   useEffect(() => {
     fetch(`${apiBaseUrl}/api/v1/evidence/${id}`, authHeaders())
       .then((r) => { if (!r.ok) throw new Error(`API ${r.status}`); return r.json(); })
-      .then((data) => { setEvidence(data.evidence || data); fetchNotes(); fetchActivity(); fetchLegalHolds(); })
+      .then((data) => {
+        const ev = data.evidence || data;
+        setEvidence(ev);
+        fetchNotes(); fetchActivity(); fetchLegalHolds();
+        // Fetch the evidence file if it has a screenshot or archive
+        if (ev.screenshot_url || ev.archive_url) {
+          setFileLoading(true);
+          fetch(`${apiBaseUrl}/api/v1/evidence/${id}/file`, authHeaders())
+            .then((r) => { if (!r.ok) throw new Error(`${r.status}`); return r.blob(); })
+            .then((blob) => setFileUrl(URL.createObjectURL(blob)))
+            .catch(() => setFileError("FILE_NOT_AVAILABLE"))
+            .finally(() => setFileLoading(false));
+        }
+      })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed"))
       .finally(() => setLoading(false));
+    return () => { if (fileUrl) URL.revokeObjectURL(fileUrl); };
   }, [id, authHeaders]);
 
   const handleAddNote = async () => {
@@ -151,8 +168,11 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
     try {
       const formData = new FormData();
       formData.append("file", pendingFile);
+      const stored = JSON.parse(localStorage.getItem("sm_auth") || "{}");
       const res = await fetch(`${apiBaseUrl}/api/v1/evidence/${id}/upload`, {
-        method: "POST", credentials: "include", body: formData,
+        method: "POST",
+        headers: stored.token ? { Authorization: `Bearer ${stored.token}` } : {},
+        body: formData,
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
       setUploadProgress(100);
@@ -192,6 +212,28 @@ export default function EvidenceDetail({ id, authHeaders, isOffline, onBack }: P
                 )}
               </div>
             </div>
+            {(evidence.screenshot_url || evidence.archive_url) && (
+              <div className="detail-section">
+                <h3 className="detail-section__title">{t("evidence.file_preview")}</h3>
+                {fileLoading ? (
+                  <p style={{ color: "var(--color-text-muted)", fontSize: "0.875rem" }}>{t("common.loading")}</p>
+                ) : fileError ? (
+                  <p style={{ color: "var(--color-text-muted)", fontSize: "0.875rem" }}>{t("evidence.file_unavailable")}</p>
+                ) : fileUrl ? (
+                  <div>
+                    {evidence.screenshot_url ? (
+                      <img
+                        src={fileUrl}
+                        alt={t("evidence.file_preview")}
+                        style={{ maxWidth: "100%", maxHeight: "70dvh", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border)" }}
+                      />
+                    ) : (
+                      <a href={fileUrl} download style={{ color: "var(--color-brand)" }}>{t("evidence.download_file")}</a>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            )}
             <div className="detail-section">
               <h3 className="detail-section__title">{t("evidence.verify_integrity")}</h3>
               <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
