@@ -822,7 +822,7 @@ export default function App() {
             appId="officer"
             userType="OFFICER"
             apiBaseUrl={apiBaseUrl}
-            authHeaders={authHeaders}
+            authHeaders={{}}
             isOffline={isOffline}
           />
         </Suspense>

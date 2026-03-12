@@ -132,7 +132,7 @@ export default function ContentDetail({ id, authHeaders, isOffline, onBack }: Pr
     startPipelineProgress();
     try {
       const res = await fetch(`${apiBaseUrl}/api/v1/classify/content_item/${id}`, {
-        method: "POST", credentials: "include",
+        method: "POST", ...authHeaders(),
       });
       if (res.ok) {
         const data = await res.json();

@@ -28,6 +28,8 @@ Options the user may append:
 
 If no target is specified, ask the user which app to deploy.
 
+When the user specifies just an app name (e.g., `dopams`, `forensic`, `social-media`), expand it to both `-api` and `-ui` services. For example, `dopams` means deploy both `apps/dopams-api` and `apps/dopams-ui`.
+
 ## Operating Rules
 
 - Evidence-first: cite exact files, line numbers, and command output for every finding.
@@ -40,6 +42,108 @@ If no target is specified, ask the user which app to deploy.
 - Prefer small, reversible fixes; propose phased migration for larger changes.
 - Save the deployment readiness report to `docs/reviews/deploy-readiness-{targetSlug}-{YYYY-MM-DD}.md`.
 - Log all deployment commands and their outputs in the report.
+
+## Project-Specific Infrastructure
+
+### Service Registry
+
+| Service | Dockerfile | Cloud Run Name | Region | Image Registry |
+|---------|-----------|----------------|--------|----------------|
+| apps/api | Dockerfile.api | puda-api | asia-southeast1 | `asia-southeast1-docker.pkg.dev/policing-apps/policing-apps/puda-api` |
+| apps/citizen | Dockerfile.citizen | puda-citizen | asia-southeast1 | `asia-southeast1-docker.pkg.dev/policing-apps/policing-apps/puda-citizen` |
+| apps/officer | Dockerfile.officer | puda-officer | asia-southeast1 | `asia-southeast1-docker.pkg.dev/policing-apps/policing-apps/puda-officer` |
+| apps/dopams-api | Dockerfile.dopams-api | dopams-api | asia-southeast1 | `asia-southeast1-docker.pkg.dev/policing-apps/policing-apps/dopams-api` |
+| apps/dopams-ui | Dockerfile.dopams-ui | dopams-ui | asia-southeast1 | `asia-southeast1-docker.pkg.dev/policing-apps/policing-apps/dopams-ui` |
+| apps/forensic-api | Dockerfile.forensic-api | forensic-api | asia-southeast1 | `asia-southeast1-docker.pkg.dev/policing-apps/policing-apps/forensic-api` |
+| apps/forensic-ui | Dockerfile.forensic-ui | forensic-ui | asia-southeast1 | `asia-southeast1-docker.pkg.dev/policing-apps/policing-apps/forensic-ui` |
+| apps/social-media-api | Dockerfile.social-media-api | social-media-api | asia-southeast1 | `asia-southeast1-docker.pkg.dev/policing-apps/policing-apps/social-media-api` |
+| apps/social-media-ui | Dockerfile.social-media-ui | social-media-ui | asia-southeast1 | `asia-southeast1-docker.pkg.dev/policing-apps/policing-apps/social-media-ui` |
+
+### Cloud SQL
+
+- Instance: `policing-apps:asia-southeast1:policing-db-v2` (PostgreSQL 15, db-f1-micro)
+- All API services connect via Cloud SQL socket (not public IP)
+- Database URLs stored in Secret Manager (e.g., `dopams-database-url`, `puda-database-url`)
+- JWT secrets stored in Secret Manager (e.g., `dopams-jwt-secret`, `puda-jwt-secret`)
+
+### Cloud Build with Custom Dockerfiles
+
+**CRITICAL**: `gcloud builds submit --tag` does NOT support `--dockerfile`. For Dockerfiles not named `Dockerfile`, use a `--config` cloudbuild YAML:
+
+```bash
+# Create a temporary cloudbuild config
+cat > /tmp/cloudbuild-<app>.yaml << 'EOF'
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-f', 'Dockerfile.<app>', '-t', '$_IMAGE', '.']
+images: ['$_IMAGE']
+EOF
+
+# Submit with substitution for the image tag
+gcloud builds submit \
+  --config /tmp/cloudbuild-<app>.yaml \
+  --substitutions="_IMAGE=asia-southeast1-docker.pkg.dev/policing-apps/policing-apps/<app>:latest" \
+  --project policing-apps \
+  --region asia-southeast1 \
+  --gcs-source-staging-dir="gs://policing-apps_cloudbuild/source" \
+  .
+```
+
+For UI apps with build args (e.g., `VITE_API_BASE_URL`), add the `--build-arg` to the docker build step:
+
+```yaml
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-f', 'Dockerfile.<app-ui>', '--build-arg', 'VITE_API_BASE_URL=$_API_URL', '-t', '$_IMAGE', '.']
+images: ['$_IMAGE']
+```
+
+### Deploy Order for Multi-Service Apps
+
+When deploying an app with both API and UI (e.g., `dopams`):
+1. **Build API image first** → deploy API to Cloud Run
+2. **Get the API service URL** from the deployment output
+3. **Build UI image** with `VITE_API_BASE_URL=<api-url>` build arg → deploy UI
+4. **Verify CORS**: API's `ALLOWED_ORIGINS` must include the UI service URL
+
+### Docker Desktop May Not Be Available
+
+If `docker ps` fails with "Cannot connect to Docker daemon":
+1. `docker info` may show the client version but the daemon can be down
+2. **Do NOT block on local Docker** — skip to `cloud-only` mode
+3. Verify the local build passes with `npm run build:<app>` (TypeScript + Vite) instead
+4. Use Cloud Build for the Docker build step
+
+### cloud-sql-proxy Authentication
+
+```bash
+# Use --gcloud-auth flag (not Application Default Credentials)
+cloud-sql-proxy "policing-apps:asia-southeast1:policing-db-v2" --port 15435 --gcloud-auth &
+
+# Then connect
+psql "postgresql://puda:Welcome%4001@127.0.0.1:15435/<dbname>"
+```
+
+The `GOOGLE_APPLICATION_CREDENTIALS` env var may point to a stale or wrong service account file. Always use `--gcloud-auth` which inherits from `gcloud auth login`.
+
+### Auth Testing
+
+Login endpoints use `username` field (not `login`):
+```bash
+curl -s $SERVICE_URL/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"password"}'
+```
+
+API endpoints require both `Authorization: Bearer $TOKEN` header AND `Cookie: token=$TOKEN`.
+
+### Seed Data Sync
+
+After deploying, if the cloud database has stale/incomplete seed data:
+1. Connect via cloud-sql-proxy (see above)
+2. Run seed SQL files: `psql -f apps/<app>/scripts/seed-*.sql`
+3. Seed files use `ON CONFLICT DO NOTHING` — safe to re-run
+4. Some seed files resolve subjects by name (`ILIKE '%name%'`); if names don't match exactly, some inserts will be silently skipped with NOTICE logs
 
 ## Quality Bar (Definition of Done)
 
@@ -731,12 +835,20 @@ EOF
 docker stop <app-name>-test 2>/dev/null
 docker rm <app-name>-test 2>/dev/null
 
-# Check Docker daemon is running
-docker info 2>&1 | head -5 || echo "Docker daemon not running — cannot proceed"
+# Check Docker daemon is ACTUALLY running (not just the client)
+# IMPORTANT: `docker info` shows client info even when daemon is down.
+# Use `docker ps` to verify the daemon is reachable.
+docker ps 2>&1 | head -3
+if [ $? -ne 0 ]; then
+  echo "Docker daemon not running — switching to cloud-only mode"
+  echo "Will use Cloud Build for Docker image creation"
+fi
 
 # Check disk space (Docker builds can be large)
 docker system df 2>/dev/null
 ```
+
+**If Docker daemon is not running**: Skip Phase 4 and Phase 5 entirely. Ensure the local build passed in Phase 2.14 (TypeScript + Vite), then proceed directly to Phase 6 (Cloud Build + Deploy). This is the `cloud-only` path.
 
 ### 4.2: Docker Build
 
@@ -990,32 +1102,63 @@ cat deploy.sh cloudbuild.yaml app.yaml Makefile 2>/dev/null | head -50
 npm run 2>/dev/null | grep -i deploy
 ```
 
-If a deployment script exists, use it. Otherwise:
+If a deployment script exists, use it. Otherwise, follow the two-step approach (build image, then deploy):
+
+**Step 1: Build the image with Cloud Build.**
+
+For this project, Dockerfiles are named `Dockerfile.<app>` (not just `Dockerfile`). Since `gcloud builds submit --tag` does NOT support `--dockerfile`, use a cloudbuild config:
+
+```bash
+# Create temp cloudbuild config
+cat > /tmp/cloudbuild-<app>.yaml << 'EOF'
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-f', 'Dockerfile.<app>', '-t', '$_IMAGE', '.']
+images: ['$_IMAGE']
+EOF
+
+# For UI apps, add --build-arg for VITE_API_BASE_URL:
+# args: ['build', '-f', 'Dockerfile.<app-ui>', '--build-arg', 'VITE_API_BASE_URL=$_API_URL', '-t', '$_IMAGE', '.']
+
+gcloud builds submit \
+  --config /tmp/cloudbuild-<app>.yaml \
+  --substitutions="_IMAGE=<registry>/<app>:latest" \
+  --project <project> \
+  --region <region> \
+  --gcs-source-staging-dir="gs://<project>_cloudbuild/source" \
+  .
+```
+
+**Step 2: Deploy the image to Cloud Run.**
 
 ```bash
 gcloud run deploy <service-name> \
-  --source . \
-  --dockerfile <Dockerfile> \
-  --platform managed \
+  --image "<registry>/<app>:latest" \
+  --project <project> \
   --region <region> \
+  --platform managed \
   --allow-unauthenticated \
   --port 8080 \
   --memory 512Mi \
   --cpu 1 \
   --min-instances 0 \
   --max-instances 10 \
-  --timeout 300 \
-  --set-env-vars "NODE_ENV=production,PORT=8080,<OTHER_ENV_VARS>" \
+  --set-env-vars "NODE_ENV=production,<OTHER_ENV_VARS>" \
+  --set-secrets "<SECRET_NAME>=<secret-id>:latest" \
   --quiet \
   2>&1
 ```
 
+**CRITICAL: Do NOT use `gcloud run deploy --source`** for this project. It only supports a file named `Dockerfile` (no custom names). Always use the two-step build+deploy approach.
+
 **Important Cloud Run flags to verify:**
-- `--port`: Must match the port the app listens on.
-- `--memory`: Sufficient for the app (512Mi minimum, 1Gi for apps with heavy processing).
-- `--allow-unauthenticated`: Only for public-facing apps. Ask user if unsure.
+- `--port`: Must match the port the app listens on (8080 for all apps in this project).
+- `--memory`: 512Mi for API apps, 256Mi for UI apps (nginx).
+- `--allow-unauthenticated`: All apps in this project are public-facing.
 - `--set-env-vars`: All required env vars from Phase 1 inventory.
-- For database access: `--add-cloudsql-instances` or `--vpc-connector` may be needed.
+- `--set-secrets`: Database URLs and JWT secrets from Secret Manager (e.g., `DOPAMS_DATABASE_URL=dopams-database-url:latest`).
+- For API apps: Verify `ALLOWED_ORIGINS` includes the UI service URL.
+- UI apps need NO env vars (all config is baked in at build time via `VITE_API_BASE_URL`).
 
 ### 6.3: Deployment Verification
 
@@ -1084,11 +1227,14 @@ curl -sI -X OPTIONS $SERVICE_URL/api/v1/auth/login \
 
 ### 7.3: Authentication on Cloud
 
+**IMPORTANT**: Check the "Auth Testing" section in Project-Specific Infrastructure for the correct field name and credentials. Common mistakes: using `login` instead of `username`, using `admin123` instead of `password`.
+
 ```bash
-# Test login
+# Test login — use credentials from seed.ts
+# For this project: field is "username" (not "login"), password is "password" (not "admin123")
 LOGIN_RESPONSE=$(curl -s $SERVICE_URL/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"login":"<test-user>","password":"<test-password>"}')
+  -d '{"username":"admin","password":"password"}')
 echo "Login: $(echo $LOGIN_RESPONSE | head -c 300)"
 
 # Extract token
@@ -1243,3 +1389,119 @@ Verdict definitions:
 - **DEPLOYED**: All phases passed. App is live and verified on cloud. Service URL is active.
 - **DOCKER-VERIFIED**: Local Docker tests passed but cloud deploy was skipped (`docker-only` option or cloud deploy failed with rollback).
 - **BLOCKED**: One or more phases failed after max retries. Blocker details and recommended next steps listed.
+
+---
+
+## Appendix: Common Post-Deploy Troubleshooting
+
+These are the most frequent issues encountered during and after deployment. The phases above should catch them, but this serves as a quick diagnostic reference when something goes wrong.
+
+### T1: UI Cannot Reach API (Wrong Port / Wrong URL)
+
+**Symptoms**: Frontend loads but shows network errors, CORS errors, or "Failed to fetch" in browser console. All API calls fail.
+
+**Root Causes & Fixes**:
+
+| Cause | How to Detect | Fix |
+|-------|--------------|-----|
+| `VITE_API_BASE_URL` baked wrong at build time | Inspect the built JS: `curl -s $UI_URL/assets/index-*.js \| grep -o 'https://[^"]*'` — does it point to the correct API URL? | Rebuild UI image with correct `--build-arg VITE_API_BASE_URL=<api-url>` |
+| API not deployed yet when UI was built | UI points to old/nonexistent API URL | Deploy API first, get URL, then build+deploy UI (see Deploy Order) |
+| CORS: API doesn't allow UI origin | `curl -sI -X OPTIONS $API_URL/api/v1/auth/login -H "Origin: $UI_URL"` — no `Access-Control-Allow-Origin` | Add UI URL to API's `ALLOWED_ORIGINS` env var, redeploy API |
+| Local dev: Vite proxy port mismatch | Frontend calls `/api/v1/...` but proxy target port doesn't match running API | Check `vite.config.ts` proxy target vs actual API port in `.env` |
+| Local dev: API on wrong port | `.env` says PORT=3001 but API started on 3002 (EADDRINUSE auto-increment) | Kill stale process on 3001, restart API |
+
+**Quick diagnostic**:
+```bash
+# Cloud: Check what API URL is baked into the UI
+curl -s $UI_URL/ | grep -oP 'https://[^"]+\.run\.app' | sort -u
+
+# Cloud: Verify API CORS allows UI
+curl -sI -X OPTIONS "$API_URL/api/v1/auth/login" \
+  -H "Origin: $UI_URL" -H "Access-Control-Request-Method: POST" | grep -i access-control
+
+# Local: Check Vite proxy config
+rg "proxy|target" <app-dir>/vite.config.* 2>/dev/null
+```
+
+### T2: Login Fails (Password / Field Name Mismatch)
+
+**Symptoms**: Login form submits but returns "Invalid credentials", "Validation error", or a 400/401 response.
+
+**Root Causes & Fixes**:
+
+| Cause | How to Detect | Fix |
+|-------|--------------|-----|
+| Wrong field name (`login` vs `username`) | Login returns validation error: `"body must have required property 'username'"` | Check seed.ts or auth route schema for the correct field name |
+| Wrong password | Login returns `{"error":"INVALID_CREDENTIALS"}` | Check `apps/<app>/scripts/seed.ts` for the actual seeded password — it's often `"password"`, not `"admin123"` or `"Password@123"` |
+| Password hashed differently | Login returns invalid credentials even with correct plaintext | Check if seed uses bcrypt hash vs plaintext; if hash, the password is whatever was hashed |
+| User doesn't exist in DB | Login returns not found or invalid credentials | Run seed script: `psql -f apps/<app>/scripts/seed.ts` or check `SELECT * FROM users LIMIT 5` |
+| Auth middleware not registered | Login endpoint returns 404 | Check `app.ts` for auth route registration: `app.register(authRoutes)` |
+
+**Quick diagnostic**:
+```bash
+# Find the correct field name and test credentials
+rg -n "username\|login\|password" apps/<app>/scripts/seed.ts | head -20
+
+# Find the auth schema to see required fields
+rg -n "loginSchema\|LoginBody\|loginBody" apps/<app>/src/ --glob '*.ts' | head -10
+
+# Test login with discovered credentials
+curl -s $API_URL/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"password"}' | head -c 300
+```
+
+### T3: Empty Data After Login (Authenticated But No Data)
+
+**Symptoms**: Login succeeds, dashboard/list pages load, but all data sections show "No results", empty tables, or zero counts.
+
+**Root Causes & Fixes**:
+
+| Cause | How to Detect | Fix |
+|-------|--------------|-----|
+| Database not seeded | `SELECT COUNT(*) FROM <main_table>` returns 0 | Run seed scripts via cloud-sql-proxy |
+| Auth token not sent with API calls | Browser DevTools → Network tab shows 401 on data endpoints | Ensure `credentials: "include"` on all fetch calls, or `Authorization: Bearer` header |
+| Cookie not set after login | `document.cookie` is empty after login | Check `Set-Cookie` header has correct `SameSite`, `Secure`, `Domain` attributes |
+| Role-based filtering returns nothing | Login works but user's role has no data assigned | Check seed data assigns records to the test user's district/unit/role |
+| API returns data but UI doesn't render | `curl` with token returns data, but UI shows empty | Check browser console for JS errors; check if UI component expects different response shape |
+| CORS blocks data requests (not login) | Login works (simple POST) but GET with custom headers fails | Verify CORS allows `Authorization` header: `Access-Control-Allow-Headers` |
+| Database has data but wrong offender_status/status values | All records show "UNKNOWN" or default values | Re-run enrichment seed scripts (e.g., `seed-crime-history.sql`) |
+
+**Quick diagnostic**:
+```bash
+# Verify data exists in DB (via cloud-sql-proxy)
+psql "$DB_URL" -c "SELECT COUNT(*) FROM subject_profile" 2>/dev/null
+psql "$DB_URL" -c "SELECT offender_status, COUNT(*) FROM subject_profile GROUP BY offender_status" 2>/dev/null
+
+# Verify API returns data when authenticated
+TOKEN=$(curl -s $API_URL/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"password"}' | python3 -c "import json,sys; print(json.load(sys.stdin).get('token',''))")
+
+curl -s "$API_URL/api/v1/subjects?page=1&limit=5" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Cookie: token=$TOKEN" | python3 -c "
+import json,sys
+data = json.load(sys.stdin)
+if isinstance(data, dict):
+    items = data.get('data', data.get('items', []))
+    print(f'Items: {len(items)}, Total: {data.get(\"total\", \"?\")}')
+else:
+    print(f'Response type: {type(data).__name__}, length: {len(data)}')
+"
+
+# If empty, check if seed data exists
+psql "$DB_URL" -c "\dt" 2>/dev/null | head -20
+```
+
+### Quick Reference: The Big Three Checklist
+
+Before declaring a deployment complete, verify these three things explicitly:
+
+```text
+□ T1 — UI→API connectivity: Frontend JS contains correct API URL; CORS allows UI origin
+□ T2 — Authentication works: Correct field name + password; token returned in response
+□ T3 — Data is visible: At least one list endpoint returns >0 items; dashboard has non-zero counts
+```
+
+If any fails, use the corresponding T1/T2/T3 diagnostic above.

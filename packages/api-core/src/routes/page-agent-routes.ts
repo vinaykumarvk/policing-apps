@@ -14,10 +14,12 @@ import { logWarn } from "../logging/logger";
 export interface PageAgentRouteDeps {
   queryFn: QueryFn;
   llmProvider: LlmProvider;
+  /** Extract user from request (varies by app — authUser, user, etc.) */
+  getUser?: (request: any) => any;
 }
 
 export function createPageAgentRoutes(deps: PageAgentRouteDeps) {
-  const { queryFn, llmProvider } = deps;
+  const { queryFn, llmProvider, getUser = (r: any) => r.authUser || r.user } = deps;
 
   return async function registerPageAgentRoutes(app: FastifyInstance): Promise<void> {
     // ── POST /api/v1/page-agent/complete ───────────────────────────────────
@@ -47,7 +49,7 @@ export function createPageAgentRoutes(deps: PageAgentRouteDeps) {
         },
       },
     }, async (request, reply) => {
-      const user = (request as any).user;
+      const user = getUser(request);
       if (!user) return sendError(reply, 401, "UNAUTHORIZED", "Authentication required");
 
       const { messages, maxTokens, temperature } = request.body as {
@@ -95,7 +97,7 @@ export function createPageAgentRoutes(deps: PageAgentRouteDeps) {
         },
       },
     }, async (request, reply) => {
-      const user = (request as any).user;
+      const user = getUser(request);
       if (!user) return sendError(reply, 401, "UNAUTHORIZED", "Authentication required");
 
       const body = request.body as {
@@ -113,7 +115,7 @@ export function createPageAgentRoutes(deps: PageAgentRouteDeps) {
            (user_id, action_type, instruction, target_selector, was_blocked, user_confirmed, page_url, metadata_jsonb, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())`,
         [
-          user.user_id,
+          user.userId || user.user_id,
           body.actionType,
           body.instruction,
           body.targetSelector || null,

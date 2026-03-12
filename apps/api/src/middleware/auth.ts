@@ -38,6 +38,7 @@ export const PUBLIC_ROUTES = [
   "/api/v1/auth/forgot-password",
   "/api/v1/auth/reset-password",
   "/api/v1/payments/callback",
+  "/api/v1/assistant/features/status",
   ...(process.env.NODE_ENV !== "production" ? DEV_ONLY_ROUTES : []),
 ];
 

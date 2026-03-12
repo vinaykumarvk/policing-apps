@@ -42,9 +42,15 @@ export default function QueryAssistant({ authHeaders, isOffline, onNavigate }: P
       });
       if (res.ok) {
         const data = await res.json();
+        // Show clean summary — strip methodology explanations when table data exists
+        const hasTable = data.table && data.table.rows && data.table.rows.length > 0;
+        const isMethodology = /\b(using trigram|trigram|fuzzy match|joins?\s+\w+\s+table|queries the|node_type|edge_type|relationship edges|ranked by|Lists up to \d+|SELECT|FROM\s+\w+|CTE|subquery)\b/i.test(data.summary || "");
+        const summary = (hasTable && isMethodology)
+          ? `Found ${data.table.rows.length} result${data.table.rows.length === 1 ? "" : "s"}.`
+          : (data.summary || t("query.no_results"));
         setMessages(prev => [...prev, {
           role: "assistant",
-          text: data.summary || t("query.no_results"),
+          text: summary,
           data: data.table || null,
           citations: data.citations || [],
         }]);

@@ -66,7 +66,7 @@ export default function AuditLog({ authHeaders, isOffline }: Props) {
     <div className="panel">
       <h1>{t("audit.title")}</h1>
 
-      <div className="detail-grid" style={{ marginBottom: "var(--space-4)" }}>
+      <div className="filter-bar">
         <Field label={t("audit.date_from")} htmlFor="audit-from">
           <Input id="audit-from" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
         </Field>
@@ -88,7 +88,7 @@ export default function AuditLog({ authHeaders, isOffline }: Props) {
         <Field label={t("audit.entity_id")} htmlFor="audit-eid">
           <Input id="audit-eid" value={entityId} onChange={(e) => setEntityId(e.target.value)} placeholder={t("audit.entity_id_placeholder")} />
         </Field>
-        <div style={{ display: "flex", alignItems: "flex-end" }}>
+        <div className="filter-bar__actions">
           <Button onClick={handleFilter} disabled={isOffline}>{t("audit.apply_filters")}</Button>
         </div>
       </div>

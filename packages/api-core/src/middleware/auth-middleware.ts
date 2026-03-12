@@ -78,10 +78,11 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig) {
   }
 
   function setAuthCookie(reply: FastifyReply, token: string): void {
+    const isProduction = process.env.NODE_ENV === "production";
     reply.setCookie(cookieName, token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
       path: "/",
       maxAge: 1800,
     });

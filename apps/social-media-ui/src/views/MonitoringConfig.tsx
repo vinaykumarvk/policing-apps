@@ -212,10 +212,10 @@ export default function MonitoringConfig({ authHeaders, isOffline, isAdmin }: Pr
     setImporting(true);
     try {
       const text = await file.text();
+      const stored = JSON.parse(localStorage.getItem("sm_auth") || "{}");
       const res = await fetch(`${apiBaseUrl}/api/v1/monitoring/profiles/import`, {
         method: "POST",
-        headers: { "Content-Type": "text/csv" },
-        credentials: "include",
+        headers: { "Content-Type": "text/csv", ...(stored.token ? { Authorization: `Bearer ${stored.token}` } : {}) },
         body: text,
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);

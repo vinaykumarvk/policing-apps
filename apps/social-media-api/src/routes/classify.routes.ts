@@ -32,7 +32,7 @@ export async function registerClassifyRoutes(app: FastifyInstance): Promise<void
 
       // Auto-create alert for content_item with high risk score (if none exists)
       if (entityType === "content_item") {
-        const riskScore = parseFloat(result.risk_score) || 0;
+        const riskScore = parseFloat(String(result.risk_score ?? "0")) || 0;
         if (riskScore >= ALERT_THRESHOLD) {
           const existing = await query(
             `SELECT alert_id FROM sm_alert WHERE content_id = $1 LIMIT 1`,

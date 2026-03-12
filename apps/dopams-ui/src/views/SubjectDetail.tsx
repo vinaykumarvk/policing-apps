@@ -5,7 +5,38 @@ import { apiBaseUrl, SubjectProfile, SubjectEntities } from "../types";
 
 const SubjectNetwork = lazy(() => import("./SubjectNetwork"));
 
+/* ---------- Avatar helper ---------- */
+
+function nameHue(name: string | undefined | null): number {
+  if (!name) return 210;
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return Math.abs(hash) % 360;
+}
+
+function SubjectAvatar({ name, size = "sm" }: { name: string | undefined | null; size?: "sm" | "lg" }) {
+  const hue = nameHue(name);
+  const cls = size === "lg" ? "subject-avatar subject-avatar--lg" : "subject-avatar subject-avatar--sm";
+  return (
+    <span className={cls} style={{ "--avatar-hue": hue } as React.CSSProperties} aria-hidden="true">
+      <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="20" cy="20" r="20" fill={`hsl(${hue} 45% 65%)`} />
+        <circle cx="20" cy="16" r="7" fill="#fff" opacity="0.85" />
+        <ellipse cx="20" cy="34" rx="12" ry="10" fill="#fff" opacity="0.85" />
+      </svg>
+    </span>
+  );
+}
+
 /* ---------- Inline helpers ---------- */
+
+/** Format an ISO date string as date-only (no timestamp) */
+function fmtDate(val: string | null | undefined): string | null {
+  if (!val) return null;
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return val;
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
 
 function DetailField({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -305,7 +336,7 @@ export default function SubjectDetail({ id, authHeaders, isOffline, onBack, onNa
   const [transitioning, setTransitioning] = useState(false);
   const [availableTransitions, setAvailableTransitions] = useState<Array<{ transitionId: string; toStateId: string; label: string }>>([]);
   const [notes, setNotes] = useState<Array<{ note_id: string; note_text: string; created_by: string; created_at: string }>>([]);
-  const [activity, setActivity] = useState<Array<{ event_id: string; event_type: string; actor_id: string; created_at: string; payload_jsonb?: any }>>([]);
+  const [activity, setActivity] = useState<Array<{ event_id: string; event_type: string; sub_type?: string; summary?: string; severity?: string; detail_status?: string; actor_id?: string; actor_name?: string; created_at: string }>>([]);
   const [newNote, setNewNote] = useState("");
   const [submittingNote, setSubmittingNote] = useState(false);
 
@@ -394,6 +425,7 @@ export default function SubjectDetail({ id, authHeaders, isOffline, onBack, onNa
         <button className="detail-header__back" onClick={onBack} aria-label={t("detail.back")} type="button">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
+        <SubjectAvatar name={s.full_name} size="lg" />
         <h1>{s.full_name}</h1>
         <span className={`badge badge--${s.risk_score >= 7 ? "critical" : s.risk_score >= 4 ? "warning" : "low"}`}>
           Risk: {s.risk_score}
@@ -424,7 +456,7 @@ export default function SubjectDetail({ id, authHeaders, isOffline, onBack, onNa
                 <DetailField label={t("subject.father_name")} value={s.father_name} />
                 <DetailField label={t("subject.mother_name")} value={s.mother_name} />
                 <DetailField label={t("subject.spouse_name")} value={s.spouse_name} />
-                <DetailField label={t("subjects.dob")} value={s.date_of_birth} />
+                <DetailField label={t("subjects.dob")} value={fmtDate(s.date_of_birth)} />
                 <DetailField label={t("subject.age")} value={s.age} />
                 <DetailField label={t("subjects.gender")} value={s.gender} />
                 <DetailField label={t("subject.nationality")} value={s.nationality} />
@@ -445,6 +477,8 @@ export default function SubjectDetail({ id, authHeaders, isOffline, onBack, onNa
                 <DetailField label={t("subject.police_station")} value={s.police_station} />
                 <DetailField label={t("subject.crime_number")} value={s.crime_number} />
                 <DetailField label={t("subject.section_of_law")} value={<ArrayChips items={s.section_of_law} />} />
+                <DetailField label={t("subject.last_seen_at")} value={fmtDate(s.last_seen_at)} />
+                <DetailField label={t("subject.last_seen_location")} value={s.last_seen_location} />
               </div>
             </div>
 
@@ -455,10 +489,14 @@ export default function SubjectDetail({ id, authHeaders, isOffline, onBack, onNa
                 {ids.aadhaarHash && <MaskedField label={t("subject.aadhaar")} value={ids.aadhaarHash} />}
                 {ids.panNumber && <MaskedField label={t("subject.pan")} value={ids.panNumber} />}
                 <DetailField label={t("subject.ration_card")} value={s.ration_card_number} />
-                <DetailField label={t("subject.passport")} value={s.passport_details ? JSON.stringify(s.passport_details) : null} />
-                <DetailField label={t("subject.visa")} value={s.visa_details ? JSON.stringify(s.visa_details) : null} />
-                <DetailField label={t("subject.driving_license")} value={s.driving_license_details ? JSON.stringify(s.driving_license_details) : null} />
-                <DetailField label={t("subject.vehicle_rc")} value={Array.isArray(s.vehicle_rc_details) && s.vehicle_rc_details.length > 0 ? JSON.stringify(s.vehicle_rc_details) : null} />
+                <DetailField label={t("subject.passport")} value={s.passport_details ? `${(s.passport_details as Record<string, string>).number || "—"} (${(s.passport_details as Record<string, string>).place_of_issue || "—"}, ${(s.passport_details as Record<string, string>).status || "—"})` : null} />
+                <DetailField label={t("subject.visa")} value={s.visa_details ? `${(s.visa_details as Record<string, string>).type || "—"} — ${(s.visa_details as Record<string, string>).country || "—"} (${(s.visa_details as Record<string, string>).status || "—"})` : null} />
+                <DetailField label={t("subject.driving_license")} value={s.driving_license_details ? `${(s.driving_license_details as Record<string, string>).number || "—"} (${(s.driving_license_details as Record<string, string>).vehicle_class || "—"}, ${(s.driving_license_details as Record<string, string>).status || "—"})` : null} />
+                <DetailField label={t("subject.vehicle_rc")} value={
+                  Array.isArray(s.vehicle_rc_details) && s.vehicle_rc_details.length > 0
+                    ? (s.vehicle_rc_details as Array<Record<string, string>>).map((rc) => `${rc.registration} — ${rc.vehicle} (${rc.status || "Active"})`).join("; ")
+                    : null
+                } />
                 {ids.voterId && <DetailField label={t("subject.voter_id")} value={ids.voterId} />}
               </div>
             </div>
@@ -483,7 +521,7 @@ export default function SubjectDetail({ id, authHeaders, isOffline, onBack, onNa
                   typeof s.bank_account_details === "string" && s.bank_account_details === "[REDACTED]"
                     ? <MaskedField label="" value="[REDACTED]" />
                     : Array.isArray(s.bank_account_details) && s.bank_account_details.length > 0
-                      ? JSON.stringify(s.bank_account_details)
+                      ? <ArrayChips items={(s.bank_account_details as Array<Record<string, string>>).map((b) => `${b.bank} ${b.account} (${b.status || "Active"})`)} />
                       : null
                 } />
                 <DetailField label={t("subject.transaction_mode")} value={s.transaction_mode} />
@@ -530,9 +568,17 @@ export default function SubjectDetail({ id, authHeaders, isOffline, onBack, onNa
                 <DetailField label={t("subject.typical_quantity")} value={s.typical_quantity} />
                 <DetailField label={t("subject.quantity_category")} value={s.quantity_category} />
                 <DetailField label={t("subject.concealment_methods")} value={<ArrayChips items={s.concealment_methods} />} />
-                <DetailField label={t("subject.transport_routes")} value={<ArrayChips items={s.transport_routes} />} />
+                <DetailField label={t("subject.transport_routes")} value={
+                  Array.isArray(s.transport_routes) && s.transport_routes.length > 0
+                    ? <ArrayChips items={(s.transport_routes as Array<string | Record<string, string>>).map((r) => typeof r === "string" ? r : `${r.from} → ${r.to} (${r.mode})`)} />
+                    : null
+                } />
                 <DetailField label={t("subject.communication_methods")} value={<ArrayChips items={s.communication_methods} />} />
-                <DetailField label={t("subject.known_code_words")} value={<ArrayChips items={s.known_code_words} />} />
+                <DetailField label={t("subject.known_code_words")} value={
+                  s.known_code_words && typeof s.known_code_words === "object" && !Array.isArray(s.known_code_words)
+                    ? <ArrayChips items={Object.entries(s.known_code_words as Record<string, string>).map(([k, v]) => `${k} = "${v}"`)} />
+                    : Array.isArray(s.known_code_words) ? <ArrayChips items={s.known_code_words} /> : null
+                } />
               </div>
             </div>
 
@@ -554,7 +600,7 @@ export default function SubjectDetail({ id, authHeaders, isOffline, onBack, onNa
               <div className="detail-grid">
                 <DetailField label={t("subject.criminal_history")} value={s.criminal_history} />
                 <DetailField label={t("subject.ndps_history")} value={s.ndps_history} />
-                <DetailField label={t("subject.first_arrested")} value={s.first_arrested_at ? new Date(s.first_arrested_at).toLocaleDateString() : null} />
+                <DetailField label={t("subject.first_arrested")} value={fmtDate(s.first_arrested_at)} />
                 <DetailField label={t("subject.total_arrests")} value={s.total_arrests} />
                 <DetailField label={t("subject.bail_status")} value={s.bail_status} />
                 <DetailField label={t("subject.monitoring_status")} value={s.monitoring_status} />
@@ -575,7 +621,7 @@ export default function SubjectDetail({ id, authHeaders, isOffline, onBack, onNa
                 <DetailField label={t("subject.jail_name")} value={s.jail_name} />
                 <DetailField label={t("subject.total_convictions")} value={s.total_convictions} />
                 <DetailField label={t("subject.total_acquittals")} value={s.total_acquittals} />
-                <DetailField label={t("subject.last_arrested_at")} value={s.last_arrested_at ? new Date(s.last_arrested_at).toLocaleDateString() : null} />
+                <DetailField label={t("subject.last_arrested_at")} value={fmtDate(s.last_arrested_at)} />
                 <DetailField label={t("subject.is_recidivist")} value={<BoolBadge value={s.is_recidivist} />} />
                 <DetailField label={t("subject.is_proclaimed_offender")} value={<BoolBadge value={s.is_proclaimed_offender} />} />
                 <DetailField label={t("subject.is_habitual_offender")} value={<BoolBadge value={s.is_habitual_offender} />} />
@@ -694,17 +740,17 @@ export default function SubjectDetail({ id, authHeaders, isOffline, onBack, onNa
                   <div key={fir.fir_record_id} style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", padding: "var(--space-3)", marginBottom: "var(--space-3)" }}>
                     <div className="detail-grid">
                       <DetailField label={t("subject.fir_number")} value={fir.fir_number} />
-                      <DetailField label={t("subject.fir_date")} value={fir.fir_date ? new Date(fir.fir_date).toLocaleDateString() : null} />
+                      <DetailField label={t("subject.fir_date")} value={fmtDate(fir.fir_date)} />
                       <DetailField label={t("subject.police_station")} value={fir.police_station} />
                       <DetailField label={t("subject.district")} value={fir.district} />
                       <DetailField label={t("subject.sections_of_law")} value={<ArrayChips items={fir.sections_of_law} />} />
                       <DetailField label={t("subject.role_in_case")} value={fir.role_in_case} />
-                      <DetailField label={t("subject.arrest_date")} value={fir.arrest_date ? new Date(fir.arrest_date).toLocaleDateString() : null} />
+                      <DetailField label={t("subject.arrest_date")} value={fmtDate(fir.arrest_date)} />
                       <DetailField label={t("subject.case_stage")} value={fir.case_stage} />
                       <DetailField label={t("subject.court_name")} value={fir.court_name} />
                       <DetailField label={t("subject.verdict")} value={fir.verdict} />
                       {fir.bail_type && <DetailField label={t("subject.bail_type")} value={fir.bail_type} />}
-                      {fir.next_hearing_date && <DetailField label={t("subject.next_hearing")} value={new Date(fir.next_hearing_date).toLocaleDateString()} />}
+                      {fir.next_hearing_date && <DetailField label={t("subject.next_hearing")} value={fmtDate(fir.next_hearing_date)} />}
                     </div>
                   </div>
                 ))}
@@ -719,7 +765,7 @@ export default function SubjectDetail({ id, authHeaders, isOffline, onBack, onNa
                   <div key={sz.seizure_id} style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", padding: "var(--space-3)", marginBottom: "var(--space-3)" }}>
                     <div className="detail-grid">
                       <DetailField label={t("subject.drug_type")} value={sz.drug_type} />
-                      <DetailField label={t("subject.seizure_date")} value={sz.seizure_date ? new Date(sz.seizure_date).toLocaleDateString() : null} />
+                      <DetailField label={t("subject.seizure_date")} value={fmtDate(sz.seizure_date)} />
                       <DetailField label={t("subject.seizure_location")} value={sz.seizure_location} />
                       <DetailField label={t("subject.gross_weight")} value={sz.gross_weight_grams ? `${sz.gross_weight_grams}g` : null} />
                       <DetailField label={t("subject.net_weight")} value={sz.net_weight_grams ? `${sz.net_weight_grams}g` : null} />
@@ -744,7 +790,7 @@ export default function SubjectDetail({ id, authHeaders, isOffline, onBack, onNa
                     <div className="detail-grid">
                       <DetailField label={t("subject.warrant_type")} value={w.warrant_type} />
                       <DetailField label={t("subject.warrant_number")} value={w.warrant_number} />
-                      <DetailField label={t("subject.warrant_date")} value={w.warrant_date ? new Date(w.warrant_date).toLocaleDateString() : null} />
+                      <DetailField label={t("subject.warrant_date")} value={fmtDate(w.warrant_date)} />
                       <DetailField label={t("subject.issuing_court")} value={w.issuing_court} />
                       <DetailField label={t("subject.warrant_status")} value={
                         <span className={`badge badge--${w.is_executed ? "success" : "warning"}`}>{w.status}</span>
@@ -941,7 +987,7 @@ export default function SubjectDetail({ id, authHeaders, isOffline, onBack, onNa
                     <div className="detail-grid">
                       <DetailField label={t("subject.sighting_type")} value={ls.sighting_type} />
                       <DetailField label={t("subject.location")} value={ls.location_description} />
-                      <DetailField label={t("subject.observed_at")} value={ls.observed_at ? new Date(ls.observed_at).toLocaleString() : null} />
+                      <DetailField label={t("subject.observed_at")} value={fmtDate(ls.observed_at)} />
                       {ls.latitude && ls.longitude && (
                         <DetailField label={t("subject.coordinates")} value={`${ls.latitude}, ${ls.longitude}`} />
                       )}
@@ -1007,14 +1053,36 @@ export default function SubjectDetail({ id, authHeaders, isOffline, onBack, onNa
         { key: "activity", label: t("detail.tab_activity"), content: (
           <div className="detail-section">
             {activity.length === 0 ? <p style={{ color: "var(--color-text-muted)" }}>{t("activity.empty")}</p> : (
-              <ul className="activity-list">
-                {activity.map((e) => (
-                  <li key={e.event_id} className="activity-list__item">
-                    <span className="activity-list__type">{e.event_type}</span>
-                    <small style={{ color: "var(--color-text-muted)" }}>{e.actor_id} — {new Date(e.created_at).toLocaleString()}</small>
-                  </li>
-                ))}
-              </ul>
+              <ol className="activity-timeline">
+                {activity.map((e) => {
+                  const typeMap: Record<string, { icon: string; color: string; label: string }> = {
+                    ALERT_RAISED: { icon: "\u26A0", color: "var(--color-warning)", label: t("activity.alert_raised") },
+                    FIR_FILED: { icon: "\uD83D\uDCC4", color: "var(--color-danger)", label: t("activity.fir_filed") },
+                    SEIZURE_RECORDED: { icon: "\uD83D\uDCE6", color: "var(--color-brand)", label: t("activity.seizure_recorded") },
+                    LEAD_CREATED: { icon: "\uD83D\uDD0D", color: "var(--color-info, #3b82f6)", label: t("activity.lead_created") },
+                    WARRANT_ISSUED: { icon: "\u2696\uFE0F", color: "var(--color-danger)", label: t("activity.warrant_issued") },
+                    NOTE_ADDED: { icon: "\uD83D\uDCDD", color: "var(--color-text-muted)", label: t("activity.note_added") },
+                    STATUS_CHANGE: { icon: "\u21C4", color: "var(--color-success)", label: t("activity.status_change") },
+                  };
+                  const meta = typeMap[e.event_type] || { icon: "\u2022", color: "var(--color-text-muted)", label: e.event_type };
+                  return (
+                    <li key={e.event_id} className="activity-timeline__item">
+                      <span className="activity-timeline__icon" style={{ background: meta.color }}>{meta.icon}</span>
+                      <div className="activity-timeline__body">
+                        <div className="activity-timeline__header">
+                          <strong className="activity-timeline__label">{meta.label}</strong>
+                          {e.severity && <span className={`badge badge--${e.severity === "CRITICAL" ? "danger" : e.severity === "HIGH" ? "warning" : "default"}`}>{e.severity}</span>}
+                          {e.detail_status && <span className="badge badge--default">{e.detail_status}</span>}
+                        </div>
+                        {e.summary && <p className="activity-timeline__summary">{e.summary}</p>}
+                        <small className="activity-timeline__meta">
+                          {e.actor_name || e.actor_id || t("activity.system")} — {new Date(e.created_at).toLocaleString()}
+                        </small>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
             )}
           </div>
         )},

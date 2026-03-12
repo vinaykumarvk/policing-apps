@@ -2,6 +2,7 @@ import { createAdminRoutes } from "@puda/api-core";
 import { FastifyInstance } from "fastify";
 import { query } from "../db";
 import { sendError, send400 } from "../errors";
+import { syncAllEntities } from "../services/entity-sync";
 
 const baseAdminRoutes = createAdminRoutes({ queryFn: query });
 
@@ -48,6 +49,22 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     } catch (err: unknown) {
       request.log.error(err, "Failed to initiate export");
       return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  // Sync JSONB data → normalized entity tables + rebuild graph
+  app.post("/api/v1/admin/sync-entities", async (request, reply) => {
+    try {
+      const roles = request.authUser?.roles || [];
+      if (!roles.some((r: string) => ["ADMINISTRATOR", "SUPERVISORY_OFFICER"].includes(r))) {
+        return sendError(reply, 403, "FORBIDDEN", "Admin access required");
+      }
+
+      const stats = await syncAllEntities();
+      return { success: true, stats };
+    } catch (err: unknown) {
+      request.log.error(err, "Entity sync failed");
+      return sendError(reply, 500, "SYNC_FAILED", "Entity sync failed");
     }
   });
 }

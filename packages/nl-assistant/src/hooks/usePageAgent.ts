@@ -43,6 +43,7 @@ export function usePageAgent(config: AssistantConfig) {
           fetch(`${config.apiBaseUrl}/api/v1/page-agent/audit`, {
             method: "POST",
             headers: { ...config.authHeaders, "Content-Type": "application/json" },
+            credentials: "include",
             body: JSON.stringify({
               actionType: action.actionType,
               instruction: action.instruction,

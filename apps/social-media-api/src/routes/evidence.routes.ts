@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { query } from "../db";
 import { sendError, send404 } from "../errors";
 import { validateFilePath, createRoleGuard } from "@puda/api-core";
@@ -95,6 +96,57 @@ export async function registerEvidenceRoutes(app: FastifyInstance): Promise<void
       return { evidence: result.rows[0] };
     } catch (err: unknown) {
       request.log.error(err, "Failed to get evidence");
+      return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
+    }
+  });
+
+  // Serve evidence file (screenshot or archive) to frontend
+  app.get("/api/v1/evidence/:id/file", {
+    schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const unitId = request.authUser?.unitId || null;
+      const result = await query(
+        `SELECT evidence_id, screenshot_url, archive_url FROM evidence_item WHERE evidence_id = $1 AND (unit_id = $2::uuid OR unit_id IS NULL)`,
+        [id, unitId],
+      );
+      if (result.rows.length === 0) return send404(reply, "EVIDENCE_NOT_FOUND", "Evidence not found");
+      const ev = result.rows[0];
+
+      const fileUrl = ev.screenshot_url || ev.archive_url;
+      if (!fileUrl) return sendError(reply, 404, "NO_FILE", "No file associated with this evidence");
+
+      // fileUrl may be relative (e.g. "screenshots/xxx.png") — join with base dir
+      const fullPath = fileUrl.startsWith("/") ? fileUrl : join(EVIDENCE_BASE_DIR, fileUrl);
+      const safePath = validateFilePath(fullPath, EVIDENCE_BASE_DIR);
+      if (!safePath) return sendError(reply, 400, "INVALID_FILE_PATH", "File path is outside the allowed storage directory");
+
+      let buffer: Buffer;
+      try {
+        buffer = await readFile(safePath);
+      } catch {
+        return sendError(reply, 404, "FILE_NOT_FOUND", "Evidence file not found on disk");
+      }
+
+      // Log access as custody event
+      const { userId } = request.authUser!;
+      await query(
+        `INSERT INTO custody_event (evidence_id, event_type, actor_id, details) VALUES ($1, 'FILE_ACCESSED', $2, '{}')`,
+        [id, userId],
+      ).catch((err: unknown) => { app.log.warn(err, "Custody event write failed"); });
+
+      const ext = safePath.split(".").pop()?.toLowerCase();
+      const mimeMap: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", pdf: "application/pdf", zip: "application/zip" };
+      const contentType = mimeMap[ext || ""] || "application/octet-stream";
+      const filename = safePath.split("/").pop() || "evidence-file";
+
+      reply.header("Content-Type", contentType);
+      reply.header("Content-Disposition", `inline; filename="${filename}"`);
+      reply.header("Cache-Control", "private, max-age=300");
+      return reply.send(buffer);
+    } catch (err: unknown) {
+      request.log.error(err, "Failed to serve evidence file");
       return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");
     }
   });

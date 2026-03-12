@@ -8,6 +8,28 @@ const LIMIT = 20;
 type FacetEntry = { value: string; label?: string; count: number };
 type Facets = Record<string, FacetEntry[]>;
 
+/** Deterministic hue from name string for consistent avatar colours */
+function nameHue(name: string | undefined | null): number {
+  if (!name) return 210;
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return Math.abs(hash) % 360;
+}
+
+function SubjectAvatar({ name, size = "sm" }: { name: string | undefined | null; size?: "sm" | "lg" }) {
+  const hue = nameHue(name);
+  const cls = size === "lg" ? "subject-avatar subject-avatar--lg" : "subject-avatar subject-avatar--sm";
+  return (
+    <span className={cls} style={{ "--avatar-hue": hue } as React.CSSProperties} aria-hidden="true">
+      <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="20" cy="20" r="20" fill={`hsl(${hue} 45% 65%)`} />
+        <circle cx="20" cy="16" r="7" fill="#fff" opacity="0.85" />
+        <ellipse cx="20" cy="34" rx="12" ry="10" fill="#fff" opacity="0.85" />
+      </svg>
+    </span>
+  );
+}
+
 type Props = {
   authHeaders: () => Record<string, string>;
   isOffline: boolean;
@@ -172,6 +194,7 @@ export default function SubjectList({ authHeaders, isOffline, onSelect }: Props)
           <table className="entity-table">
             <thead>
               <tr>
+                <th className="entity-table__col--avatar">{t("subjects.photo")}</th>
                 <th>{t("subjects.name")}</th>
                 <th>{t("subjects.aliases")}</th>
                 <th>{t("subjects.risk_score")}</th>
@@ -184,6 +207,7 @@ export default function SubjectList({ authHeaders, isOffline, onSelect }: Props)
             <tbody>
               {subjects.map((s) => (
                 <tr key={s.subject_id} className="entity-table__clickable" onClick={() => onSelect(s.subject_id)} tabIndex={0} role="link" onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(s.subject_id); } }}>
+                  <td className="entity-table__cell--avatar" data-label={t("subjects.photo")}><SubjectAvatar name={s.full_name} size="sm" /></td>
                   <td data-label={t("subjects.name")}>{s.full_name}</td>
                   <td data-label={t("subjects.aliases")}>{Array.isArray(s.aliases) ? s.aliases.join(", ") : "—"}</td>
                   <td data-label={t("subjects.risk_score")}>

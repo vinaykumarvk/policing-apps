@@ -250,11 +250,123 @@ Review shared components and high-use local components for:
 
 ### D) Established Component Patterns
 
-Verify these recently added components follow design system rules:
+Verify these components follow design system rules:
 
 - **`.stat-card--clickable`**: Must have `cursor: pointer`, `:hover` (brand border + shadow), `:active` (scale transform), `:focus-visible` (3px outline with offset). Transitions must use design tokens. Must be consistent across all 3 policing app `app.css` files.
 - **Login card (`.login-container`)**: Must use `var(--radius-xl)`, `var(--shadow-md)`, `100dvh` (not `100vh`), fluid heading via `clamp()`, `accent-color: var(--color-brand)` for checkbox. Mobile breakpoint at `max-width: 30rem`. Must be in dedicated `login.css` (not `app.css`).
 - **Facet option rendering**: `facetOptions()` helper must produce `<option>` elements with `VALUE (count)` format. Must gracefully fall back to plain values when facets are empty.
+
+### E) Underline Tabs Pattern
+
+The shared `<Tabs>` component (`@puda/shared` `ui.tsx`) renders `ui-tabs__*` class names. Every app that uses `<Tabs>` MUST have underline tab styles defined in its `app.css`. The canonical pattern:
+
+```css
+.ui-tabs__list {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.ui-tabs__list::-webkit-scrollbar { display: none; }
+
+.ui-tabs__tab {
+  position: relative;
+  background: none;
+  border: none;
+  padding: var(--space-3) var(--space-4);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  min-height: 2.75rem;
+  transition: color 0.15s;
+}
+.ui-tabs__tab::after {
+  content: "";
+  position: absolute;
+  left: var(--space-2); right: var(--space-2);
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background 0.2s;
+}
+.ui-tabs__tab:hover { color: var(--color-text); }
+.ui-tabs__tab:active { opacity: 0.8; }
+.ui-tabs__tab--active { color: var(--color-brand); font-weight: 600; }
+.ui-tabs__tab--active::after { background: var(--color-brand); }
+.ui-tabs__tab:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+.ui-tabs__panel { padding-top: var(--space-5); }
+```
+
+**Review checks:**
+- Every app using `<Tabs>` must have `ui-tabs__*` styles. Check with: `rg 'ui-tabs' apps/*/src --glob '*.css'`.
+- Tab bar must be horizontally scrollable on mobile (no overflow).
+- Active tab: brand-color text + 2px brand-color underline.
+- Inactive tab: muted text, no underline.
+- All tabs meet 44px min-height touch target.
+- Must have `:hover`, `:active`, and `:focus-visible` states.
+- Panel has top padding to separate content from tab bar.
+
+### F) Keyboard-Navigable Table Rows
+
+Clickable table rows (that navigate on click) MUST be keyboard-accessible. The pattern:
+
+```tsx
+<tr
+  tabIndex={0}
+  role="link"
+  onClick={() => navigate(view)}
+  onKeyDown={(e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate(view); }
+  }}
+>
+```
+
+**Review checks:**
+- Every `<tr>` with an `onClick` handler must also have `tabIndex={0}`, `role="link"`, and `onKeyDown` for Enter/Space.
+- Check with: `rg 'onClick.*navigate' apps/*/src/views --glob '*.tsx' -l` then verify each file has matching `onKeyDown`.
+- Must NOT use `<tr role="button">` — use `role="link"` since the action is navigation.
+
+### G) Mobile-Responsive Detail Grids
+
+Detail views that display key-value grids (e.g., subject profile, alert details, lead details) must use auto-fit columns instead of fixed column counts:
+
+```css
+/* BAD: breaks on mobile */
+grid-template-columns: 1fr 1fr;
+
+/* GOOD: responsive reflow */
+grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+```
+
+**Review checks:**
+- Search for `gridTemplateColumns.*1fr 1fr` in detail views — all should use `auto-fit`.
+- Verify with: `rg 'gridTemplateColumns.*1fr 1fr' apps/*/src/views --glob '*.tsx'`.
+
+### H) Boolean Badge i18n
+
+Components that render boolean values as badges (e.g., "Yes"/"No") MUST use i18n keys, not hardcoded English strings:
+
+```tsx
+// BAD
+{value ? "Yes" : "No"}
+
+// GOOD
+{value ? t("common.yes") : t("common.no")}
+```
+
+**Review checks:**
+- Search for hardcoded `"Yes"` / `"No"` in views: `rg '"Yes"|"No"' apps/*/src/views --glob '*.tsx'`.
+- Ensure `common.yes` and `common.no` keys exist in all locale files.
 
 ## Phase 3: Responsive and Device Behavior
 
@@ -538,6 +650,25 @@ rg -n 'stat-card--clickable' apps/dopams-ui/src/views/Dashboard.tsx apps/forensi
 rg -n 'onNavigate' apps/dopams-ui/src/views/Dashboard.tsx apps/forensic-ui/src/views/Dashboard.tsx apps/social-media-ui/src/views/Dashboard.tsx
 # Verify clickable stat card CSS has hover + active + focus-visible
 rg -n 'stat-card--clickable' apps/dopams-ui/src/app.css apps/forensic-ui/src/app.css apps/social-media-ui/src/app.css
+
+# Underline tabs pattern checks
+# Verify tab styles exist in every app that uses <Tabs>
+rg -l 'Tabs' apps/dopams-ui/src/views apps/forensic-ui/src/views apps/social-media-ui/src/views --glob '*.tsx'
+rg -n 'ui-tabs' apps/dopams-ui/src/app.css apps/forensic-ui/src/app.css apps/social-media-ui/src/app.css
+
+# Keyboard-navigable table row checks
+# Find clickable <tr> rows without keyboard handlers
+rg -n 'onClick.*navigate' apps/*/src/views --glob '*.tsx' -l
+rg -n 'onKeyDown' apps/*/src/views --glob '*.tsx' -l
+# These two lists should match — any file in the first but not the second is a violation
+
+# Mobile-responsive grid checks
+# Find hardcoded 2-column grids in detail views
+rg -n 'gridTemplateColumns.*1fr 1fr' apps/*/src/views --glob '*.tsx'
+# All should use repeat(auto-fit, minmax(16rem, 1fr)) instead
+
+# Boolean badge i18n checks
+rg -n '"Yes"|"No"' apps/*/src/views --glob '*.tsx'
 
 # i18n completeness checks
 # Verify all 3 locale files exist per app

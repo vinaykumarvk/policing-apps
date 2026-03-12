@@ -26,7 +26,13 @@ export function createSlaScheduler(config: SlaSchedulerConfig) {
   let tickCount = 0;
 
   async function checkOverdueTasks(): Promise<void> {
-    const client = await getClientFn();
+    let client;
+    try {
+      client = await getClientFn();
+    } catch (err) {
+      logError("SLA check failed — cannot acquire DB client", { error: String(err) });
+      return;
+    }
     try {
       const lockResult = await client.query("SELECT pg_try_advisory_lock($1) AS acquired", [lockId]);
       if (!lockResult.rows[0]?.acquired) {
@@ -84,14 +90,14 @@ export function createSlaScheduler(config: SlaSchedulerConfig) {
   function start(intervalMs = 60000): void {
     if (intervalId) return;
     logInfo("SLA scheduler started", { intervalMs });
-    intervalId = setInterval(async () => {
-      await checkOverdueTasks();
+    intervalId = setInterval(() => {
+      checkOverdueTasks().catch((err) => logError("SLA scheduler tick failed", { error: String(err) }));
       tickCount++;
       if (tickCount % AUTH_CLEANUP_INTERVAL === 0) {
-        await cleanupExpiredAuthData();
+        cleanupExpiredAuthData().catch((err) => logError("Auth cleanup tick failed", { error: String(err) }));
       }
     }, intervalMs);
-    checkOverdueTasks();
+    checkOverdueTasks().catch((err) => logError("SLA scheduler initial check failed", { error: String(err) }));
   }
 
   function stop(): void {

@@ -1505,7 +1505,7 @@ export default function App() {
             appId="citizen"
             userType="CITIZEN"
             apiBaseUrl={apiBaseUrl}
-            authHeaders={authHeaders}
+            authHeaders={{}}
             isOffline={isOffline}
           />
         </Suspense>

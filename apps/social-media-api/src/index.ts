@@ -46,8 +46,8 @@ async function main() {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
   process.on("unhandledRejection", (reason) => {
-    app.log.error({ reason: String(reason) }, "Unhandled promise rejection — shutting down");
-    process.exit(1);
+    app.log.error({ reason: String(reason) }, "Unhandled promise rejection");
+    // Don't crash on transient errors (DB timeouts from background tasks)
   });
   process.on("uncaughtException", (err) => {
     app.log.error(err, "Uncaught exception — shutting down");

@@ -37,6 +37,7 @@ export function createAgentBridge(bridgeConfig: AgentBridgeConfig) {
       const res = await fetch(`${assistantConfig.apiBaseUrl}/api/v1/page-agent/complete`, {
         method: "POST",
         headers: { ...assistantConfig.authHeaders, "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           messages: [
             {

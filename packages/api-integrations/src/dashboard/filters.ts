@@ -50,7 +50,7 @@ export function buildFilterClauses(
 
   if (filters.dateTo) {
     const col = safeColumn(filters.dateColumn || "created_at", "created_at");
-    conditions.push(`${col} <= $${paramIdx}`);
+    conditions.push(`${col} < $${paramIdx}::date + interval '1 day'`);
     params.push(filters.dateTo);
     paramIdx++;
   }

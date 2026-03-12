@@ -10,8 +10,9 @@ export function useFeatureFlags(config: AssistantConfig) {
   const refresh = useCallback(async () => {
     if (config.isOffline) return;
     try {
-      const res = await fetch(`${config.apiBaseUrl}/api/v1/config/features/status`, {
+      const res = await fetch(`${config.apiBaseUrl}/api/v1/assistant/features/status`, {
         headers: config.authHeaders,
+        credentials: "include",
       });
       if (res.ok) {
         const data = await res.json();

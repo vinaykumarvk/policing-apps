@@ -102,7 +102,13 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function runPollCycle(connectors: Map<string, PlatformConnector>, apify: ApifyConnector | null): Promise<void> {
-  const client = await getClient();
+  let client;
+  try {
+    client = await getClient();
+  } catch (err) {
+    logError("Connector poll cycle — cannot acquire DB client", { error: String(err) });
+    return;
+  }
   try {
     const lockResult = await client.query("SELECT pg_try_advisory_lock($1) AS acquired", [CONNECTOR_LOCK_ID]);
     if (!lockResult.rows[0]?.acquired) {
@@ -385,15 +391,17 @@ export function startConnectorScheduler(): void {
   logInfo("Connector scheduler started", { intervalMs: POLL_INTERVAL_MS, platforms, apifyEnabled: !!apify });
 
   intervalId = setInterval(() => {
-    runPollCycle(connectors, apify);
+    runPollCycle(connectors, apify).catch((err) => logError("Poll cycle failed", { error: String(err) }));
   }, POLL_INTERVAL_MS);
 
   // Run first poll after a short delay to let the server finish startup
-  setTimeout(() => runPollCycle(connectors, apify), 5000);
+  setTimeout(() => runPollCycle(connectors, apify).catch((err) => logError("Initial poll failed", { error: String(err) })), 5000);
 
   // Start compliance jobs on hourly schedule
-  complianceIntervalId = setInterval(runComplianceJobs, COMPLIANCE_INTERVAL_MS);
-  setTimeout(runComplianceJobs, 30_000); // first run after 30s
+  complianceIntervalId = setInterval(() => {
+    runComplianceJobs().catch((err) => logError("Compliance jobs interval failed", { error: String(err) }));
+  }, COMPLIANCE_INTERVAL_MS);
+  setTimeout(() => runComplianceJobs().catch((err) => logError("Initial compliance jobs failed", { error: String(err) })), 30_000);
 }
 
 export function stopConnectorScheduler(): void {

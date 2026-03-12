@@ -313,6 +313,15 @@ export async function registerSubjectRoutes(app: FastifyInstance): Promise<void>
     }
     const subject = maskSubjectPII(result.rows[0], request.authUser?.roles ?? []);
     subject.completeness_score = computeCompleteness(result.rows[0]);
+    // Compute age from date_of_birth instead of relying on stored value
+    if (subject.date_of_birth) {
+      const dob = new Date(subject.date_of_birth as string);
+      const now = new Date();
+      let computedAge = now.getFullYear() - dob.getFullYear();
+      const m = now.getMonth() - dob.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) computedAge--;
+      subject.age = computedAge;
+    }
 
     // Optional includes: ?include=entities,assertions
     const includeParam = ((request.query as Record<string, string | undefined>).include || "").split(",").map((s: string) => s.trim()).filter(Boolean);

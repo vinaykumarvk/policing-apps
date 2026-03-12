@@ -28,6 +28,7 @@ export function useNlQuery(config: AssistantConfig) {
       const res = await fetch(`${config.apiBaseUrl}/api/v1/query`, {
         method: "POST",
         headers: { ...config.authHeaders, "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ question: question.trim() }),
         signal: controller.signal,
       });
@@ -38,8 +39,14 @@ export function useNlQuery(config: AssistantConfig) {
       }
 
       const data = await res.json();
+      // Strip methodology-style summaries — show clean direct answers
+      const hasData = Array.isArray(data.data) && data.data.length > 0;
+      const isMethodology = /\b(using trigram|trigram|fuzzy match|joins?\s+\w+\s+table|queries the|node_type|edge_type|relationship edges|ranked by|Lists up to \d+|SELECT|FROM\s+\w+|CTE|subquery)\b/i.test(data.summary || "");
+      const cleanSummary = (hasData && isMethodology)
+        ? `Found ${data.data.length} result${data.data.length === 1 ? "" : "s"}.`
+        : (data.summary || "No results");
       const assistantMsg: QueryMessage = {
-        id: nextId(), role: "assistant", content: data.summary || "No results",
+        id: nextId(), role: "assistant", content: cleanSummary,
         data: data.data, citations: data.citations, source: data.source,
         executionTimeMs: data.executionTimeMs, timestamp: Date.now(),
       };

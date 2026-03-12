@@ -13,6 +13,7 @@ export type UserAccount = {
 
 export type AuthState = {
   user: UserAccount;
+  token: string;
 };
 
 export type ContentItem = {
