@@ -31,7 +31,20 @@ export async function registerNlQueryRoutes(app: FastifyInstance): Promise<void>
 
     try {
       const result = await executeNlQuery(question.trim(), userId, unitId);
-      return result;
+
+      // Transform to frontend-expected shape:
+      // - table: { columns, rows } (already in correct shape)
+      // - citations: { entity_type, entity_id, title } (mapped from camelCase)
+      return {
+        summary: result.summary,
+        table: result.table,
+        citations: result.citations.map(c => ({
+          entity_type: c.entityType,
+          entity_id: c.entityId,
+          title: c.field,
+        })),
+        source: result.source,
+      };
     } catch (err: unknown) {
       request.log.error(err, "NL query execution failed");
       return sendError(reply, 500, "INTERNAL_ERROR", "An internal error occurred");

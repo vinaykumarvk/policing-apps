@@ -21,7 +21,8 @@ export type LlmUseCase =
   | "INVESTIGATION_SUMMARY"
   | "CASE_SUMMARY"
   | "LEGAL_REFERENCES"
-  | "FINAL_SUBMISSION";
+  | "FINAL_SUBMISSION"
+  | "NL_QUERY";
 
 export interface LlmMessage {
   role: "system" | "user" | "assistant";
