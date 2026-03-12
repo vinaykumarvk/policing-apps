@@ -21,7 +21,7 @@ export function createPool(config: CreatePoolConfig) {
   function resolveSslConfig(): any {
     const sslEnv = process.env.DATABASE_SSL;
     if (sslEnv === "false") {
-      const dbUrl = process.env[`${envPrefix}_DATABASE_URL`] || "";
+      const dbUrl = process.env[`${envPrefix}_DATABASE_URL`] || process.env.DATABASE_URL || "";
       const isUnixSocket = dbUrl.includes("/cloudsql/");
       if (process.env.NODE_ENV === "production" && !isUnixSocket) {
         throw new Error("FATAL: DATABASE_SSL=false is not allowed in production (except Cloud SQL Unix sockets)");
