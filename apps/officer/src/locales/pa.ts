@@ -231,6 +231,25 @@ export default {
   "error.reported_refresh": "ਇਸ ਗਲਤੀ ਦੀ ਰਿਪੋਰਟ ਕੀਤੀ ਗਈ ਹੈ। ਪੇਜ ਰਿਫ੍ਰੈਸ਼ ਕਰਨ ਦੀ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
   "error.refresh_page": "ਪੇਜ ਰਿਫ੍ਰੈਸ਼ ਕਰੋ",
 
+  // Feedback & Errors
+  "feedback.failed_feature_toggle": "ਫ਼ੀਚਰ ਫ਼ਲੈਗ ਅੱਪਡੇਟ ਕਰਨ ਵਿੱਚ ਅਸਫ਼ਲ",
+  "feedback.failed_add_provider": "ਪ੍ਰਦਾਤਾ ਜੋੜਨ ਵਿੱਚ ਅਸਫ਼ਲ",
+  "feedback.failed_save_prompt": "ਪ੍ਰੋਂਪਟ ਸੁਰੱਖਿਅਤ ਕਰਨ ਵਿੱਚ ਅਸਫ਼ਲ",
+  "feedback.config_title": "ਸੰਰਚਨਾ",
+  "feedback.feature_toggles": "ਫ਼ੀਚਰ ਟੋਗਲ",
+  "feedback.failed_download_doc": "ਦਸਤਾਵੇਜ਼ ਡਾਊਨਲੋਡ ਕਰਨ ਵਿੱਚ ਅਸਫ਼ਲ।",
+  "feedback.failed_preview_doc": "ਦਸਤਾਵੇਜ਼ ਪੂਰਵਦਰਸ਼ਨ ਲੋਡ ਕਰਨ ਵਿੱਚ ਅਸਫ਼ਲ।",
+  "feedback.provide_rejection_reason": "ਕਿਰਪਾ ਕਰਕੇ ਅਸਵੀਕ੍ਰਿਤੀ/ਸਵਾਲ ਦਾ ਕਾਰਨ ਦਿਓ।",
+  "feedback.doc_status_updated": "ਦਸਤਾਵੇਜ਼ {{status}} ਵਜੋਂ ਚਿੰਨ੍ਹਿਤ",
+  "feedback.offline_workflow": "ਤੁਸੀਂ ਆਫ਼ਲਾਈਨ ਹੋ। ਰੀਡ-ਓਨਲੀ ਮੋਡ ਵਿੱਚ ਵਰਕਫ਼ਲੋ ਕਾਰਵਾਈਆਂ ਅਯੋਗ ਹਨ।",
+  "feedback.query_message_required": "ਸਵਾਲ ਸਬਮਿਟ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਸਵਾਲ ਸੁਨੇਹਾ ਲੋੜੀਂਦਾ ਹੈ।",
+  "feedback.remarks_required_rejection": "ਅਰਜ਼ੀ ਰੱਦ ਕਰਨ ਸਮੇਂ ਟਿੱਪਣੀਆਂ ਲੋੜੀਂਦੀਆਂ ਹਨ।",
+  "feedback.action_completed": "ਕਾਰਵਾਈ {{action}} ਸਫ਼ਲਤਾਪੂਰਵਕ ਪੂਰੀ ਹੋਈ।",
+  "feedback.offline_complaints": "ਆਫ਼ਲਾਈਨ ਮੋਡ ਸਰਗਰਮ ਹੈ। ਸ਼ਿਕਾਇਤ ਡੇਟਾ ਉਪਲਬਧ ਨਹੀਂ ਹੈ।",
+  "feedback.failed_load_complaints": "ਸ਼ਿਕਾਇਤਾਂ ਲੋਡ ਕਰਨ ਵਿੱਚ ਅਸਫ਼ਲ",
+  "feedback.failed_load_complaint": "ਸ਼ਿਕਾਇਤ ਲੋਡ ਕਰਨ ਵਿੱਚ ਅਸਫ਼ਲ",
+  "feedback.failed_load_evidence": "ਸਬੂਤ ਫ਼ਾਈਲ ਲੋਡ ਕਰਨ ਵਿੱਚ ਅਸਫ਼ਲ।",
+
   // NL Assistant
   "assistant.open": "ਸਹਾਇਕ ਖੋਲੋ",
   "assistant.close": "ਬੰਦ ਕਰੋ",

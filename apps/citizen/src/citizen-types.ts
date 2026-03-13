@@ -25,7 +25,7 @@ export type Application = {
 };
 
 export type ResumeSnapshot = {
-  view: "catalog" | "create" | "track" | "applications" | "locker" | "settings" | "profile" | "complaints";
+  view: "catalog" | "create" | "track" | "applications" | "locker" | "settings" | "profile" | "profile-update" | "guide" | "complaints";
   showDashboard: boolean;
   selectedService: ServiceSummary | null;
   currentApplication: Application | null;
@@ -151,7 +151,7 @@ export function isServiceConfigPayload(value: unknown): value is Record<string, 
 export function isResumeSnapshotPayload(value: unknown): value is ResumeSnapshot {
   return (
     isRecord(value) &&
-    (value.view === "catalog" || value.view === "create" || value.view === "track" || value.view === "applications" || value.view === "locker" || value.view === "settings" || value.view === "profile" || value.view === "guide" || value.view === "complaints") &&
+    (value.view === "catalog" || value.view === "create" || value.view === "track" || value.view === "applications" || value.view === "locker" || value.view === "settings" || value.view === "profile" || value.view === "profile-update" || value.view === "guide" || value.view === "complaints") &&
     typeof value.showDashboard === "boolean" &&
     "formData" in value &&
     typeof value.updatedAt === "string" &&

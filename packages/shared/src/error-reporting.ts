@@ -54,10 +54,15 @@ export function initErrorReporting(options: {
         release: options.release,
         platform: "javascript",
       });
-      const endpoint = `https://sentry.io/api/0/envelope/`;
+      // Parse DSN: https://<key>@<host>/<project-id>
+      const dsnMatch = dsn.match(/^https?:\/\/([^@]+)@([^/]+)\/(.+)$/);
+      const sentryKey = dsnMatch?.[1] ?? dsn.split("@")[0]?.split("//")[1];
+      const sentryHost = dsnMatch?.[2] ?? "sentry.io";
+      const sentryProject = dsnMatch?.[3] ?? "0";
+      const endpoint = `https://${sentryHost}/api/${sentryProject}/envelope/`;
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
-        "X-Sentry-Auth": `Sentry sentry_key=${dsn.split("@")[0]?.split("//")[1]}, sentry_version=7`,
+        "X-Sentry-Auth": `Sentry sentry_key=${sentryKey}, sentry_version=7`,
       };
       try {
         if (typeof navigator !== "undefined" && navigator.sendBeacon) {

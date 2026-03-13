@@ -209,7 +209,7 @@ export default function TaskDetail({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch {
-      setFeedback({ variant: "error", text: "Failed to download document." });
+      setFeedback({ variant: "error", text: t("feedback.failed_download_doc") });
     }
   }, [fetchDocBlob]);
 
@@ -224,7 +224,7 @@ export default function TaskDetail({
       setPreviewBlobUrl(url);
       setPreviewMimeType(mime);
     } catch {
-      setPreviewError("Failed to load document preview.");
+      setPreviewError(t("feedback.failed_preview_doc"));
     } finally {
       setPreviewLoading(false);
     }
@@ -243,7 +243,7 @@ export default function TaskDetail({
     const entry = docVerifications[docId] || { status: "", remarks: "" };
     const remarks = entry.remarks;
     if ((status === "REJECTED" || status === "QUERY") && !remarks.trim()) {
-      setDocVerifyFeedback({ docId, variant: "error", text: "Please provide a reason for rejection/query." });
+      setDocVerifyFeedback({ docId, variant: "error", text: t("feedback.provide_rejection_reason") });
       return;
     }
     setDocVerifyLoading(docId);
@@ -258,7 +258,7 @@ export default function TaskDetail({
         const err = await res.json();
         throw new Error(err.error || "Verification failed");
       }
-      setDocVerifyFeedback({ docId, variant: "success", text: `Document marked as ${status}` });
+      setDocVerifyFeedback({ docId, variant: "success", text: t("feedback.doc_status_updated", { status }) });
       // PERF-028: Immutable update for optimistic document verification feedback
       if (onApplicationUpdate) {
         onApplicationUpdate((prev) => ({
@@ -284,17 +284,17 @@ export default function TaskDetail({
     if (!task || !action) return;
     if (isOffline) {
       setError(null);
-      setFeedback({ variant: "warning", text: "You are offline. Workflow actions are disabled in read-only mode." });
+      setFeedback({ variant: "warning", text: t("feedback.offline_workflow") });
       return;
     }
     if (action === "QUERY" && !queryMessage.trim()) {
       setError(null);
-      setFeedback({ variant: "warning", text: "Query message is required before submitting a query." });
+      setFeedback({ variant: "warning", text: t("feedback.query_message_required") });
       return;
     }
     if (action === "REJECT" && !remarks.trim()) {
       setError(null);
-      setFeedback({ variant: "warning", text: "Remarks are required when rejecting an application." });
+      setFeedback({ variant: "warning", text: t("feedback.remarks_required_rejection") });
       return;
     }
     if (!confirmed && (action === "APPROVE" || action === "REJECT")) {
@@ -324,7 +324,7 @@ export default function TaskDetail({
         const errData = await res.json();
         throw new Error(errData.error || "Action failed");
       }
-      onActionComplete({ variant: "success", text: `Action ${action} completed successfully.` });
+      onActionComplete({ variant: "success", text: t("feedback.action_completed", { action }) });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
       setFeedback(null);

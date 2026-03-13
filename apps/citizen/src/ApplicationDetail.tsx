@@ -4,6 +4,7 @@ import { useAuth } from "./AuthContext";
 import { Alert, Button, Card, Field, Input, Textarea, Breadcrumb, timeAgo } from "@puda/shared";
 import { getStatusBadgeClass, getStatusLabel, formatDateTime } from "@puda/shared/utils";
 import { Bilingual } from "./Bilingual";
+import { apiBaseUrl } from "./citizen-types";
 import DocumentUploadPanel from "./DocumentUploadPanel";
 import DeclarationFormPanel from "./DeclarationFormPanel";
 import "./application-detail.css";
@@ -210,7 +211,7 @@ export default function ApplicationDetail({
     void (async () => {
       try {
         const res = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL || "http://localhost:3001"}/api/v1/applications/${application.arn}/payment-status`,
+          `${apiBaseUrl}/api/v1/applications/${application.arn}/payment-status`,
           authHeaders()
         );
         const body = await res.json().catch(() => ({}));
@@ -412,7 +413,7 @@ export default function ApplicationDetail({
     try {
       const updatedData = buildUpdatedData();
       const res = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL || "http://localhost:3001"}/api/v1/applications/${application.arn}/query-response`,
+        `${apiBaseUrl}/api/v1/applications/${application.arn}/query-response`,
         {
           ...authHeaders(),
           method: "POST",
@@ -447,7 +448,7 @@ export default function ApplicationDetail({
       currency: "INR",
       maximumFractionDigits: 2
     }).format(amount || 0);
-  const outputDownloadUrl = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:3001"}/api/v1/applications/${application.arn}/output/download`;
+  const outputDownloadUrl = `${apiBaseUrl}/api/v1/applications/${application.arn}/output/download`;
 
   const handleNdcPaymentPost = async (dueCode: string) => {
     if (isOffline) {
@@ -458,7 +459,7 @@ export default function ApplicationDetail({
     setNdcPostingError(null);
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL || "http://localhost:3001"}/api/v1/applications/${application.arn}/pay-due`,
+        `${apiBaseUrl}/api/v1/applications/${application.arn}/pay-due`,
         {
           ...authHeaders(),
           method: "POST",
@@ -490,7 +491,7 @@ export default function ApplicationDetail({
     setDeclarationFeedback(null);
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL || "http://localhost:3001"}/api/v1/applications/${application.arn}/declarations`,
+        `${apiBaseUrl}/api/v1/applications/${application.arn}/declarations`,
         {
           ...authHeaders(),
           method: "POST",
@@ -1011,7 +1012,7 @@ export default function ApplicationDetail({
                 </div>
                 <div className="doc-download-row">
                   <a
-                    href={`${import.meta.env.VITE_API_BASE_URL || "http://localhost:3001"}/api/v1/documents/${doc.doc_id}/download`}
+                    href={`${apiBaseUrl}/api/v1/documents/${doc.doc_id}/download`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="doc-download"

@@ -280,7 +280,7 @@ export default function App() {
         const data = await res.json().catch(() => ({}));
         if (typeof data?.error === "string" && data.error.startsWith("PROFILE_INCOMPLETE")) {
           const missing = data.error.split(":")[1] || "";
-          setError(`Profile incomplete. Missing fields: ${missing}`);
+          setError(t("feedback.profile_incomplete", { fields: missing }));
           setFeedback(null);
           return;
         }
@@ -527,7 +527,7 @@ export default function App() {
       onboardingRedirectDone.current = true;
       setView("profile");
       setShowDashboard(false);
-      showToast("info", "Complete your profile to start applying for services");
+      showToast("info", t("feedback.complete_profile_prompt"));
     }
   }, [user, profileLoading, profileVerification, profileComplete, showToast]);
 
@@ -607,7 +607,7 @@ export default function App() {
     }
 
     if (isOffline) {
-      setNdcPaymentStatusError("Offline mode is active. Payment status cannot be refreshed.");
+      setNdcPaymentStatusError(t("feedback.offline_payment_status"));
       setNdcPaymentStatusLoading(false);
       return;
     }
@@ -1112,13 +1112,13 @@ export default function App() {
   const postNdcPaymentByUpn = useCallback(
     async (dueCode: string) => {
       if (isOffline) {
-        setNdcPaymentPostingError("You are offline. Payment posting is unavailable.");
+        setNdcPaymentPostingError(t("feedback.offline_payment_posting"));
         return;
       }
       const authorityId = formData?.authority_id as string | undefined;
       const upn = formData?.property?.upn as string | undefined;
       if (!authorityId || !upn) {
-        setNdcPaymentPostingError("Select authority and property UPN before posting payment.");
+        setNdcPaymentPostingError(t("feedback.select_authority_upn"));
         return;
       }
       setNdcPaymentPostingDueCode(dueCode);
@@ -1171,7 +1171,7 @@ export default function App() {
   const saveProfileDraft = useCallback(async () => {
     if (!user) return;
     if (isOffline) {
-      setProfileEditorError("You are offline. Personal details can be updated only when online.");
+      setProfileEditorError(t("feedback.offline_profile_edit"));
       return;
     }
     setProfileEditorSaving(true);
@@ -1196,7 +1196,7 @@ export default function App() {
       writeCached(profileCacheKey(user.user_id), body, { schema: CACHE_SCHEMAS.profile });
       markSync();
       setProfileEditorOpen(false);
-      setFeedback({ variant: "success", text: "Personal details updated successfully." });
+      setFeedback({ variant: "success", text: t("feedback.profile_updated") });
     } catch (err) {
       setProfileEditorError(err instanceof Error ? err.message : "Failed to update personal details");
     } finally {
@@ -1573,7 +1573,7 @@ export default function App() {
   const ensureProfileComplete = (): boolean => {
     if (profileLoading) {
       setError(null);
-      setFeedback({ variant: "warning", text: "Profile is still loading. Please wait and try again." });
+      setFeedback({ variant: "warning", text: t("feedback.profile_loading_wait") });
       return false;
     }
     if (!profileComplete) {
@@ -1592,7 +1592,7 @@ export default function App() {
     if (!selectedService || !user) return;
     if (isOffline) {
       setError(null);
-      setFeedback({ variant: "warning", text: "You are offline. Application creation is unavailable in read-only mode." });
+      setFeedback({ variant: "warning", text: t("feedback.offline_create") });
       return;
     }
     if (!ensureProfileComplete()) return;
@@ -1673,7 +1673,7 @@ export default function App() {
           if (typeof data?.error === "string" && data.error.startsWith("PROFILE_INCOMPLETE")) {
             const missing = data.error.split(":")[1] || "";
             setError(null);
-            setFeedback({ variant: "warning", text: `Profile incomplete. Missing fields: ${missing}` });
+            setFeedback({ variant: "warning", text: t("feedback.profile_incomplete", { fields: missing }) });
             return;
           }
           throw new Error(data?.error || `API error ${res.status}`);
@@ -1681,8 +1681,8 @@ export default function App() {
         const app = await res.json();
         setCurrentApplication({ ...app, rowVersion: app.rowVersion });
         setFormDirty(false);
-        showToast("success", "Draft saved successfully.");
-        setFeedback({ variant: "success", text: "Draft saved successfully." });
+        showToast("success", t("feedback.draft_saved"));
+        setFeedback({ variant: "success", text: t("feedback.draft_saved") });
         markSync();
       } else {
         const res = await fetch(`${apiBaseUrl}/api/v1/applications`, {
@@ -1701,8 +1701,8 @@ export default function App() {
           if (typeof data?.error === "string" && data.error.startsWith("PROFILE_INCOMPLETE")) {
             const missing = data.error.split(":")[1] || "";
             setError(null);
-            showToast("warning", `Profile incomplete. Missing fields: ${missing}`);
-            setFeedback({ variant: "warning", text: `Profile incomplete. Missing fields: ${missing}` });
+            showToast("warning", t("feedback.profile_incomplete", { fields: missing }));
+            setFeedback({ variant: "warning", text: t("feedback.profile_incomplete", { fields: missing }) });
             return;
           }
           throw new Error(data?.error || `API error ${res.status}`);
@@ -1710,8 +1710,8 @@ export default function App() {
         const app = await res.json();
         setCurrentApplication({ ...app, rowVersion: app.rowVersion });
         setFormDirty(false);
-        showToast("success", "Draft saved successfully.");
-        setFeedback({ variant: "success", text: "Draft saved successfully." });
+        showToast("success", t("feedback.draft_saved"));
+        setFeedback({ variant: "success", text: t("feedback.draft_saved") });
         markSync();
       }
     } catch (err) {
@@ -1726,7 +1726,7 @@ export default function App() {
     if (!currentApplication || !user) return;
     if (isOffline) {
       setError(null);
-      setFeedback({ variant: "warning", text: "You are offline. Submission is unavailable in read-only mode." });
+      setFeedback({ variant: "warning", text: t("feedback.offline_submit") });
       return;
     }
     if (!ensureProfileComplete()) return;
@@ -1776,7 +1776,7 @@ export default function App() {
   const handleStartApplication = async (service: ServiceSummary) => {
     if (isOffline) {
       setError(null);
-      setFeedback({ variant: "warning", text: "You are offline. Starting a new application is disabled in read-only mode." });
+      setFeedback({ variant: "warning", text: t("feedback.offline_new_app") });
       return;
     }
 
@@ -1827,8 +1827,8 @@ export default function App() {
     if (!currentApplication || !user) return;
     if (isOffline) {
       setError(null);
-      showToast("warning", "You are offline. Document upload is unavailable.");
-      setFeedback({ variant: "warning", text: "You are offline. Document upload is unavailable in read-only mode." });
+      showToast("warning", t("feedback.offline_doc_upload"));
+      setFeedback({ variant: "warning", text: t("feedback.offline_doc_upload_readonly") });
       return;
     }
     setUploading(true);
@@ -1875,7 +1875,7 @@ export default function App() {
   const handleLockerUpload = async (docTypeId: string, file: File) => {
     if (!user) return;
     if (isOffline) {
-      showToast("warning", "You are offline. Document upload is unavailable.");
+      showToast("warning", t("feedback.offline_doc_upload"));
       return;
     }
     setUploading(true);
@@ -1914,7 +1914,7 @@ export default function App() {
   const handleReuseDocument = async (citizenDocId: string, docTypeId: string) => {
     if (!currentApplication || !user) return;
     if (isOffline) {
-      showToast("warning", "You are offline. Document reuse is unavailable.");
+      showToast("warning", t("feedback.offline_doc_reuse"));
       return;
     }
     try {
@@ -2249,7 +2249,7 @@ export default function App() {
           setProfileVerification(data.verification || {});
           setProfileCompleteness(data.completeness || null);
           if (user) writeCached(profileCacheKey(user.user_id), data, { schema: CACHE_SCHEMAS.profile });
-          showToast("success", "Profile completed successfully!");
+          showToast("success", t("feedback.profile_completed"));
           navigateTo("catalog", true);
         }}
         onProfileSkip={() => navigateTo("catalog", true)}

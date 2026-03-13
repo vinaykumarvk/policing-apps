@@ -231,6 +231,25 @@ export default {
   "error.reported_refresh": "इस त्रुटि की सूचना दे दी गई है। पेज रिफ्रेश करने का प्रयास करें।",
   "error.refresh_page": "पेज रिफ्रेश करें",
 
+  // Feedback & Errors
+  "feedback.failed_feature_toggle": "फ़ीचर फ़्लैग अपडेट करने में विफल",
+  "feedback.failed_add_provider": "प्रदाता जोड़ने में विफल",
+  "feedback.failed_save_prompt": "प्रॉम्प्ट सहेजने में विफल",
+  "feedback.config_title": "कॉन्फ़िगरेशन",
+  "feedback.feature_toggles": "फ़ीचर टॉगल",
+  "feedback.failed_download_doc": "दस्तावेज़ डाउनलोड करने में विफल।",
+  "feedback.failed_preview_doc": "दस्तावेज़ पूर्वावलोकन लोड करने में विफल।",
+  "feedback.provide_rejection_reason": "कृपया अस्वीकृति/प्रश्न का कारण बताएं।",
+  "feedback.doc_status_updated": "दस्तावेज़ {{status}} के रूप में चिह्नित",
+  "feedback.offline_workflow": "आप ऑफ़लाइन हैं। रीड-ओनली मोड में वर्कफ़्लो कार्रवाइयां अक्षम हैं।",
+  "feedback.query_message_required": "प्रश्न सबमिट करने से पहले प्रश्न संदेश आवश्यक है।",
+  "feedback.remarks_required_rejection": "आवेदन अस्वीकार करते समय टिप्पणियां आवश्यक हैं।",
+  "feedback.action_completed": "कार्रवाई {{action}} सफलतापूर्वक पूर्ण हुई।",
+  "feedback.offline_complaints": "ऑफ़लाइन मोड सक्रिय है। शिकायत डेटा अनुपलब्ध है।",
+  "feedback.failed_load_complaints": "शिकायतें लोड करने में विफल",
+  "feedback.failed_load_complaint": "शिकायत लोड करने में विफल",
+  "feedback.failed_load_evidence": "साक्ष्य फ़ाइल लोड करने में विफल।",
+
   // NL Assistant
   "assistant.open": "सहायक खोलें",
   "assistant.close": "बंद करें",

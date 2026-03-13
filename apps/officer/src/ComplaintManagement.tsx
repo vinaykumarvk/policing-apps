@@ -117,7 +117,7 @@ export default function ComplaintManagement({
 
   const loadComplaints = useCallback(async () => {
     if (isOffline) {
-      setError("Offline mode is active. Complaint data is unavailable.");
+      setError(t("feedback.offline_complaints"));
       setLoading(false);
       return;
     }
@@ -137,7 +137,7 @@ export default function ComplaintManagement({
       setComplaints(data.complaints || []);
       setTotal(data.total || 0);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load complaints");
+      setError(err instanceof Error ? err.message : t("feedback.failed_load_complaints"));
     } finally {
       setLoading(false);
     }
@@ -163,7 +163,7 @@ export default function ComplaintManagement({
       setSelected(data);
       setSubView("detail");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load complaint");
+      setError(err instanceof Error ? err.message : t("feedback.failed_load_complaint"));
     } finally {
       setDetailLoading(false);
     }
@@ -222,7 +222,7 @@ export default function ComplaintManagement({
       setPreviewUrl(URL.createObjectURL(blob));
       setPreviewFilename(filename || "evidence");
     } catch {
-      setFeedback({ variant: "error", text: "Failed to load evidence file." });
+      setFeedback({ variant: "error", text: t("feedback.failed_load_evidence") });
     }
   };
 

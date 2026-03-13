@@ -764,6 +764,24 @@ const en = {
   "onboarding.saving": "Saving...",
   "onboarding.complete_profile": "Complete Profile",
 
+  // Feedback & Toasts
+  "feedback.profile_incomplete": "Profile incomplete. Missing fields: {{fields}}",
+  "feedback.complete_profile_prompt": "Complete your profile to start applying for services",
+  "feedback.offline_payment_status": "Offline mode is active. Payment status cannot be refreshed.",
+  "feedback.offline_payment_posting": "You are offline. Payment posting is unavailable.",
+  "feedback.select_authority_upn": "Select authority and property UPN before posting payment.",
+  "feedback.offline_profile_edit": "You are offline. Personal details can be updated only when online.",
+  "feedback.profile_updated": "Personal details updated successfully.",
+  "feedback.profile_loading_wait": "Profile is still loading. Please wait and try again.",
+  "feedback.offline_create": "You are offline. Application creation is unavailable in read-only mode.",
+  "feedback.draft_saved": "Draft saved successfully.",
+  "feedback.offline_submit": "You are offline. Submission is unavailable in read-only mode.",
+  "feedback.offline_new_app": "You are offline. Starting a new application is disabled in read-only mode.",
+  "feedback.offline_doc_upload": "You are offline. Document upload is unavailable.",
+  "feedback.offline_doc_upload_readonly": "You are offline. Document upload is unavailable in read-only mode.",
+  "feedback.offline_doc_reuse": "You are offline. Document reuse is unavailable.",
+  "feedback.profile_completed": "Profile completed successfully!",
+
   // NL Assistant
   "assistant.open": "Open Assistant",
   "assistant.close": "Close",

@@ -764,6 +764,24 @@ const pa: Record<string, string> = {
   "onboarding.saving": "ਸੰਭਾਲ ਰਿਹਾ ਹੈ...",
   "onboarding.complete_profile": "ਪ੍ਰੋਫਾਈਲ ਪੂਰੀ ਕਰੋ",
 
+  // Feedback & Toasts
+  "feedback.profile_incomplete": "ਪ੍ਰੋਫ਼ਾਈਲ ਅਧੂਰੀ ਹੈ। ਗੁੰਮ ਫ਼ੀਲਡ: {{fields}}",
+  "feedback.complete_profile_prompt": "ਸੇਵਾਵਾਂ ਲਈ ਅਰਜ਼ੀ ਦੇਣ ਲਈ ਆਪਣੀ ਪ੍ਰੋਫ਼ਾਈਲ ਪੂਰੀ ਕਰੋ",
+  "feedback.offline_payment_status": "ਆਫ਼ਲਾਈਨ ਮੋਡ ਸਰਗਰਮ ਹੈ। ਭੁਗਤਾਨ ਸਥਿਤੀ ਰਿਫ਼ਰੈਸ਼ ਨਹੀਂ ਕੀਤੀ ਜਾ ਸਕਦੀ।",
+  "feedback.offline_payment_posting": "ਤੁਸੀਂ ਆਫ਼ਲਾਈਨ ਹੋ। ਭੁਗਤਾਨ ਪੋਸਟਿੰਗ ਉਪਲਬਧ ਨਹੀਂ ਹੈ।",
+  "feedback.select_authority_upn": "ਭੁਗਤਾਨ ਪੋਸਟਿੰਗ ਤੋਂ ਪਹਿਲਾਂ ਅਥਾਰਟੀ ਅਤੇ ਸੰਪਤੀ UPN ਚੁਣੋ।",
+  "feedback.offline_profile_edit": "ਤੁਸੀਂ ਆਫ਼ਲਾਈਨ ਹੋ। ਨਿੱਜੀ ਵੇਰਵੇ ਸਿਰਫ਼ ਔਨਲਾਈਨ ਹੋਣ 'ਤੇ ਅੱਪਡੇਟ ਕੀਤੇ ਜਾ ਸਕਦੇ ਹਨ।",
+  "feedback.profile_updated": "ਨਿੱਜੀ ਵੇਰਵੇ ਸਫ਼ਲਤਾਪੂਰਵਕ ਅੱਪਡੇਟ ਕੀਤੇ ਗਏ।",
+  "feedback.profile_loading_wait": "ਪ੍ਰੋਫ਼ਾਈਲ ਅਜੇ ਲੋਡ ਹੋ ਰਹੀ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਉਡੀਕ ਕਰੋ ਅਤੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  "feedback.offline_create": "ਤੁਸੀਂ ਆਫ਼ਲਾਈਨ ਹੋ। ਰੀਡ-ਓਨਲੀ ਮੋਡ ਵਿੱਚ ਅਰਜ਼ੀ ਬਣਾਉਣਾ ਉਪਲਬਧ ਨਹੀਂ ਹੈ।",
+  "feedback.draft_saved": "ਡਰਾਫ਼ਟ ਸਫ਼ਲਤਾਪੂਰਵਕ ਸੁਰੱਖਿਅਤ ਕੀਤਾ ਗਿਆ।",
+  "feedback.offline_submit": "ਤੁਸੀਂ ਆਫ਼ਲਾਈਨ ਹੋ। ਰੀਡ-ਓਨਲੀ ਮੋਡ ਵਿੱਚ ਸਬਮਿਸ਼ਨ ਉਪਲਬਧ ਨਹੀਂ ਹੈ।",
+  "feedback.offline_new_app": "ਤੁਸੀਂ ਆਫ਼ਲਾਈਨ ਹੋ। ਰੀਡ-ਓਨਲੀ ਮੋਡ ਵਿੱਚ ਨਵੀਂ ਅਰਜ਼ੀ ਸ਼ੁਰੂ ਕਰਨਾ ਅਯੋਗ ਹੈ।",
+  "feedback.offline_doc_upload": "ਤੁਸੀਂ ਆਫ਼ਲਾਈਨ ਹੋ। ਦਸਤਾਵੇਜ਼ ਅਪਲੋਡ ਉਪਲਬਧ ਨਹੀਂ ਹੈ।",
+  "feedback.offline_doc_upload_readonly": "ਤੁਸੀਂ ਆਫ਼ਲਾਈਨ ਹੋ। ਰੀਡ-ਓਨਲੀ ਮੋਡ ਵਿੱਚ ਦਸਤਾਵੇਜ਼ ਅਪਲੋਡ ਉਪਲਬਧ ਨਹੀਂ ਹੈ।",
+  "feedback.offline_doc_reuse": "ਤੁਸੀਂ ਆਫ਼ਲਾਈਨ ਹੋ। ਦਸਤਾਵੇਜ਼ ਦੁਬਾਰਾ ਵਰਤੋਂ ਉਪਲਬਧ ਨਹੀਂ ਹੈ।",
+  "feedback.profile_completed": "ਪ੍ਰੋਫ਼ਾਈਲ ਸਫ਼ਲਤਾਪੂਰਵਕ ਪੂਰੀ ਹੋ ਗਈ!",
+
   // NL Assistant
   "assistant.open": "ਸਹਾਇਕ ਖੋਲੋ",
   "assistant.close": "ਬੰਦ ਕਰੋ",

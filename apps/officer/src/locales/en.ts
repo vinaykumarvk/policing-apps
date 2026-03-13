@@ -230,6 +230,25 @@ export default {
   "error.reported_refresh": "This error has been reported. Try refreshing the page.",
   "error.refresh_page": "Refresh Page",
 
+  // Feedback & Errors
+  "feedback.failed_feature_toggle": "Failed to update feature flag",
+  "feedback.failed_add_provider": "Failed to add provider",
+  "feedback.failed_save_prompt": "Failed to save prompt",
+  "feedback.config_title": "Configuration",
+  "feedback.feature_toggles": "Feature Toggles",
+  "feedback.failed_download_doc": "Failed to download document.",
+  "feedback.failed_preview_doc": "Failed to load document preview.",
+  "feedback.provide_rejection_reason": "Please provide a reason for rejection/query.",
+  "feedback.doc_status_updated": "Document marked as {{status}}",
+  "feedback.offline_workflow": "You are offline. Workflow actions are disabled in read-only mode.",
+  "feedback.query_message_required": "Query message is required before submitting a query.",
+  "feedback.remarks_required_rejection": "Remarks are required when rejecting an application.",
+  "feedback.action_completed": "Action {{action}} completed successfully.",
+  "feedback.offline_complaints": "Offline mode is active. Complaint data is unavailable.",
+  "feedback.failed_load_complaints": "Failed to load complaints",
+  "feedback.failed_load_complaint": "Failed to load complaint",
+  "feedback.failed_load_evidence": "Failed to load evidence file.",
+
   // NL Assistant
   "assistant.open": "Open Assistant",
   "assistant.close": "Close",

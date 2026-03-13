@@ -38,7 +38,7 @@ interface SystemPrompt {
 }
 
 interface Props {
-  authHeaders: Record<string, string>;
+  authHeaders: () => RequestInit;
 }
 
 export default function AssistantAdmin({ authHeaders }: Props) {
@@ -63,13 +63,13 @@ export default function AssistantAdmin({ authHeaders }: Props) {
   const [editPrompt, setEditPrompt] = useState<{ useCase: string; text: string } | null>(null);
   const [savingPrompt, setSavingPrompt] = useState(false);
 
-  const fetchOpts = { headers: { ...authHeaders, "Content-Type": "application/json" }, credentials: "include" as const };
+  const fetchOpts = { ...authHeaders(), headers: { "Content-Type": "application/json" } };
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const opts = { headers: authHeaders, credentials: "include" as const };
+      const opts = authHeaders();
       const [featRes, provRes, promptRes] = await Promise.all([
         fetch(`${apiBaseUrl}/api/v1/assistant/features`, opts),
         fetch(`${apiBaseUrl}/api/v1/assistant/llm/providers`, opts),
@@ -104,7 +104,7 @@ export default function AssistantAdmin({ authHeaders }: Props) {
       });
       setFeatures((prev) => prev.map((f) => f.flag_key === flagKey ? { ...f, enabled } : f));
     } catch {
-      setError("Failed to update feature flag");
+      setError(t("feedback.failed_feature_toggle"));
     }
   };
 
@@ -143,7 +143,7 @@ export default function AssistantAdmin({ authHeaders }: Props) {
         setError(err.message);
       }
     } catch {
-      setError("Failed to add provider");
+      setError(t("feedback.failed_add_provider"));
     } finally {
       setAddingProvider(false);
     }
@@ -160,7 +160,7 @@ export default function AssistantAdmin({ authHeaders }: Props) {
       setEditPrompt(null);
       loadAll();
     } catch {
-      setError("Failed to save prompt");
+      setError(t("feedback.failed_save_prompt"));
     } finally {
       setSavingPrompt(false);
     }
@@ -170,12 +170,12 @@ export default function AssistantAdmin({ authHeaders }: Props) {
 
   return (
     <div className="assistant-admin">
-      <h2>{t("assistant.title")} Configuration</h2>
+      <h2>{t("assistant.title")} {t("feedback.config_title")}</h2>
       {error && <Alert variant="error">{error}</Alert>}
 
       {/* Feature Toggles */}
       <section className="panel" style={{ marginBottom: "var(--space-4)" }}>
-        <h3>Feature Toggles</h3>
+        <h3>{t("feedback.feature_toggles")}</h3>
         <div style={{ display: "grid", gap: "var(--space-3)" }}>
           {features.filter((f) => f.flag_key === "nl_query" || f.flag_key === "page_agent").map((feature) => (
             <label key={feature.flag_key} className="toggle-row" style={{

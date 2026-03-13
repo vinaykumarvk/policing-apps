@@ -3,9 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "./AuthContext";
 import { Bilingual } from "./Bilingual";
 import { Alert, Button, Card, Field, Input, Modal, DropZone, UploadConfirm, SkeletonBlock } from "@puda/shared";
+import { apiBaseUrl } from "./citizen-types";
 import "./document-locker.css";
-
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 
 interface CitizenDoc {
   citizen_doc_id: string;

@@ -68,6 +68,7 @@ export const pool = new Pool({
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
   statement_timeout: Number(process.env.DB_STATEMENT_TIMEOUT_MS) || 30000,
+  idle_in_transaction_session_timeout: 30000,
   ...resolveSslConfig(),
 });
 

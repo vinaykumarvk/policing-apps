@@ -66,7 +66,10 @@ COPY --from=build /app/packages/workflow-engine/dist/ packages/workflow-engine/d
 # Copy service-packs (JSON/YAML configs needed at runtime)
 COPY service-packs/ service-packs/
 
-# Copy migration scripts (needed for database setup)
+# Copy migration SQL files (needed for database setup)
+COPY apps/api/migrations/ apps/api/migrations/
+
+# Copy helper scripts
 COPY apps/api/scripts/ apps/api/scripts/
 
 # Create uploads directory for local storage fallback

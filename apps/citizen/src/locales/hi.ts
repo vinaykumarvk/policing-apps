@@ -764,6 +764,24 @@ const hi: Record<string, string> = {
   "onboarding.saving": "सहेज रहा है...",
   "onboarding.complete_profile": "प्रोफ़ाइल पूर्ण करें",
 
+  // Feedback & Toasts
+  "feedback.profile_incomplete": "प्रोफ़ाइल अधूरी है। अनुपलब्ध फ़ील्ड: {{fields}}",
+  "feedback.complete_profile_prompt": "सेवाओं के लिए आवेदन शुरू करने हेतु अपनी प्रोफ़ाइल पूरी करें",
+  "feedback.offline_payment_status": "ऑफ़लाइन मोड सक्रिय है। भुगतान स्थिति रिफ़्रेश नहीं की जा सकती।",
+  "feedback.offline_payment_posting": "आप ऑफ़लाइन हैं। भुगतान पोस्टिंग अनुपलब्ध है।",
+  "feedback.select_authority_upn": "भुगतान पोस्टिंग से पहले प्राधिकरण और संपत्ति UPN चुनें।",
+  "feedback.offline_profile_edit": "आप ऑफ़लाइन हैं। व्यक्तिगत विवरण केवल ऑनलाइन होने पर अपडेट किए जा सकते हैं।",
+  "feedback.profile_updated": "व्यक्तिगत विवरण सफलतापूर्वक अपडेट किए गए।",
+  "feedback.profile_loading_wait": "प्रोफ़ाइल अभी लोड हो रही है। कृपया प्रतीक्षा करें और पुनः प्रयास करें।",
+  "feedback.offline_create": "आप ऑफ़लाइन हैं। रीड-ओनली मोड में आवेदन निर्माण अनुपलब्ध है।",
+  "feedback.draft_saved": "ड्राफ़्ट सफलतापूर्वक सहेजा गया।",
+  "feedback.offline_submit": "आप ऑफ़लाइन हैं। रीड-ओनली मोड में सबमिशन अनुपलब्ध है।",
+  "feedback.offline_new_app": "आप ऑफ़लाइन हैं। रीड-ओनली मोड में नया आवेदन शुरू करना अक्षम है।",
+  "feedback.offline_doc_upload": "आप ऑफ़लाइन हैं। दस्तावेज़ अपलोड अनुपलब्ध है।",
+  "feedback.offline_doc_upload_readonly": "आप ऑफ़लाइन हैं। रीड-ओनली मोड में दस्तावेज़ अपलोड अनुपलब्ध है।",
+  "feedback.offline_doc_reuse": "आप ऑफ़लाइन हैं। दस्तावेज़ पुनः उपयोग अनुपलब्ध है।",
+  "feedback.profile_completed": "प्रोफ़ाइल सफलतापूर्वक पूरी हो गई!",
+
   // NL Assistant
   "assistant.open": "सहायक खोलें",
   "assistant.close": "बंद करें",

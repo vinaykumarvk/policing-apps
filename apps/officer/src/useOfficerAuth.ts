@@ -32,12 +32,20 @@ export function useOfficerAuth() {
     return newAuth;
   };
 
-  const logout = () => {
-    fetch(`${apiBaseUrl}/api/v1/auth/logout`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-    }).catch((err) => { console.warn("Logout request failed:", err instanceof Error ? err.message : "unknown"); });
+  const logout = async () => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      await fetch(`${apiBaseUrl}/api/v1/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+    } catch {
+      // Proceed with local cleanup even if server logout fails
+    }
     setAuth(null);
     setPostings([]);
     localStorage.removeItem(STORAGE_USER);

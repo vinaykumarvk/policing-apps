@@ -3,9 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "./AuthContext";
 import { Alert, Button, Card, Field, Input, Select, SkeletonBlock, validatePincode, PUNJAB_DISTRICTS } from "@puda/shared";
 import { Bilingual } from "./Bilingual";
+import { apiBaseUrl } from "./citizen-types";
 import "./report-complaint.css";
-
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 
 type SubView = "list" | "create" | "detail";
 
@@ -358,8 +357,8 @@ export default function ReportComplaint({ onBack, isOffline }: ReportComplaintPr
         const res = await fetch(
           `${apiBaseUrl}/api/v1/complaints/${encodeURIComponent(selectedComplaint.complaint_number)}/evidence`,
           {
-            ...authHeaders(),
             method: "POST",
+            credentials: "include",
             body: fd,
           }
         );
