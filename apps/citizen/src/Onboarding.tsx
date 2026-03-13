@@ -3,9 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "./AuthContext";
 import { Alert, Button, Card, Field, Input, Select, validateEmail, validateMobile, validatePincode, validateName, validateAadhaar, validatePan, PUNJAB_DISTRICTS, INDIAN_STATES } from "@puda/shared";
 import { Bilingual } from "./Bilingual";
+import { apiBaseUrl } from "./citizen-types";
 import "./onboarding.css";
-
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 
 interface VerificationData {
   aadhaar_verified?: boolean;

@@ -8,8 +8,7 @@ import { useTheme } from "./theme";
 import { Bilingual } from "./Bilingual";
 import { SECONDARY_LANGUAGES } from "./i18n";
 import { useSecondaryLanguage } from "./SecondaryLanguageContext";
-
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
+import { apiBaseUrl } from "./citizen-types";
 
 type LoginMethod = "password" | "aadhar";
 

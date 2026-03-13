@@ -249,6 +249,7 @@ export default {
   "feedback.failed_load_complaints": "ਸ਼ਿਕਾਇਤਾਂ ਲੋਡ ਕਰਨ ਵਿੱਚ ਅਸਫ਼ਲ",
   "feedback.failed_load_complaint": "ਸ਼ਿਕਾਇਤ ਲੋਡ ਕਰਨ ਵਿੱਚ ਅਸਫ਼ਲ",
   "feedback.failed_load_evidence": "ਸਬੂਤ ਫ਼ਾਈਲ ਲੋਡ ਕਰਨ ਵਿੱਚ ਅਸਫ਼ਲ।",
+  "feedback.assign_failed": "ਕਾਰਜ ਅਸਾਈਨਮੈਂਟ ਅਸਫ਼ਲ। ਕਿਸੇ ਹੋਰ ਅਧਿਕਾਰੀ ਨੇ ਇਹ ਕਾਰਜ ਲੈ ਲਿਆ ਹੋ ਸਕਦਾ ਹੈ।",
 
   // NL Assistant
   "assistant.open": "ਸਹਾਇਕ ਖੋਲੋ",

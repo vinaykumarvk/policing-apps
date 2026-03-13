@@ -81,6 +81,8 @@ export default function App() {
   const INBOX_CACHE_KEY = "puda_officer_cache_inbox";
   const INBOX_CACHE_SCHEMA = "officer_inbox_v1";
   const CACHE_5_MIN = 5 * 60 * 1000;
+  const isTaskArray = (v: unknown): v is Task[] =>
+    Array.isArray(v) && v.every((i) => typeof i === "object" && i !== null && "task_id" in i && "arn" in i);
 
   const handleLogout = useCallback(() => {
     clearOfficerCachedState();
@@ -100,9 +102,9 @@ export default function App() {
   // Sync theme preference → useTheme
   useEffect(() => {
     if (preferences.theme !== theme) {
-      setTheme(preferences.theme as any);
+      setTheme(preferences.theme);
     }
-  }, [preferences.theme]);
+  }, [preferences.theme, theme, setTheme]);
 
   // Sync contrastMode → data-contrast
   useEffect(() => {
@@ -172,7 +174,7 @@ export default function App() {
   const loadInbox = useCallback(async () => {
     if (!officerUserId) return;
     if (isOffline) {
-      const cached = readCached<Task[]>(INBOX_CACHE_KEY, { schema: INBOX_CACHE_SCHEMA });
+      const cached = readCached<Task[]>(INBOX_CACHE_KEY, { schema: INBOX_CACHE_SCHEMA, validate: isTaskArray });
       if (cached) {
         setTasks(cached.data);
         setLoading(false);
@@ -183,7 +185,7 @@ export default function App() {
       return;
     }
     // Show cached data immediately if available
-    const cached = readCached<Task[]>(INBOX_CACHE_KEY, { schema: INBOX_CACHE_SCHEMA, maxAgeMs: CACHE_5_MIN });
+    const cached = readCached<Task[]>(INBOX_CACHE_KEY, { schema: INBOX_CACHE_SCHEMA, maxAgeMs: CACHE_5_MIN, validate: isTaskArray });
     if (cached) {
       setTasks(cached.data);
       setLoading(false);
@@ -211,7 +213,7 @@ export default function App() {
     }
   }, [officerUserId, authorities, authHeaders, isOffline]);
 
-  const loadApplication = async (arn: string) => {
+  const loadApplication = useCallback(async (arn: string) => {
     if (isOffline) {
       setError(t("offline.app_unavailable"));
       return;
@@ -228,7 +230,7 @@ export default function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     }
-  };
+  }, [isOffline, authHeaders, t]);
 
   const handleTaskClick = async (task: Task) => {
     if (isOffline) {
@@ -242,11 +244,18 @@ export default function App() {
     setSelectedTask(task);
     await loadApplication(task.arn);
     if (task.task_id) {
-      await fetch(`${apiBaseUrl}/api/v1/tasks/${task.task_id}/assign`, {
-        ...authHeaders(),
-        method: "POST",
-        body: JSON.stringify({}),
-      }).catch(() => {});
+      try {
+        const assignRes = await fetch(`${apiBaseUrl}/api/v1/tasks/${task.task_id}/assign`, {
+          ...authHeaders(),
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+        if (!assignRes.ok) {
+          setInboxFeedback({ variant: "warning", text: t("feedback.assign_failed") });
+        }
+      } catch {
+        setInboxFeedback({ variant: "warning", text: t("feedback.assign_failed") });
+      }
     }
     setView("task");
   };

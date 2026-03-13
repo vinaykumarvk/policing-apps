@@ -65,7 +65,7 @@ export function useOfficerAuth() {
           localStorage.removeItem(STORAGE_USER);
         }
       })
-      .catch((err) => { console.warn("Session verify failed:", err instanceof Error ? err.message : "unknown"); });
+      .catch(() => { /* Session verify failed — treated as logged out */ });
   }, []);
 
   // Load postings when auth changes
@@ -74,8 +74,8 @@ export function useOfficerAuth() {
     fetch(`${apiBaseUrl}/api/v1/auth/me/postings?userId=${auth.user.user_id}`, authHeaders())
       .then((res) => (res.ok ? res.json() : { postings: [] }))
       .then((data) => setPostings(data.postings || []))
-      .catch((err) => { console.warn("Postings fetch failed:", err instanceof Error ? err.message : "unknown"); });
-  }, [auth?.user.user_id]);
+      .catch(() => { /* Postings fetch failed — non-critical */ });
+  }, [auth?.user.user_id, authHeaders]);
 
   const roles = postings.flatMap((p) => p.system_role_ids);
   const authorities = [...new Set(postings.map((p) => p.authority_id))];

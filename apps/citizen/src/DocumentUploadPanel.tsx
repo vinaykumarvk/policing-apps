@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Card, Field, Input } from "@puda/shared";
 import { Bilingual } from "./Bilingual";
+import { apiBaseUrl } from "./citizen-types";
 import "./document-upload-panel.css";
 
 interface DocumentType {
@@ -48,8 +49,6 @@ interface DocumentUploadPanelProps {
   applicationStateId?: string;
   onDeclarationStart?: (docTypeId: string) => void;
 }
-
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;

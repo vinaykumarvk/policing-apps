@@ -1039,7 +1039,7 @@ export default function App() {
     if (preferences.theme !== theme) {
       setTheme(preferences.theme);
     }
-  }, [preferences.theme]);
+  }, [preferences.theme, theme, setTheme]);
 
   // Bridge preferences → reduce-motion data attribute
   useEffect(() => {

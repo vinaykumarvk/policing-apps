@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "./AuthContext";
 import { Alert, Button, Card, Field, Input, Select, SkeletonBlock, validatePincode, PUNJAB_DISTRICTS } from "@puda/shared";
+import { formatDate } from "@puda/shared/utils";
 import { Bilingual } from "./Bilingual";
 import { apiBaseUrl } from "./citizen-types";
 import "./report-complaint.css";
@@ -62,14 +63,6 @@ const STATUS_FILTERS = [
   "CLOSED",
   "REJECTED",
 ] as const;
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 function getViolationTypeKey(type: string): string {
   const map: Record<string, string> = {
@@ -337,8 +330,8 @@ export default function ReportComplaint({ onBack, isOffline }: ReportComplaintPr
         setSubView("detail");
         // Refresh list in background
         loadComplaints();
-      } catch (err: any) {
-        setFormError(err.message || t("complaints.filed_error"));
+      } catch (err: unknown) {
+        setFormError(err instanceof Error ? err.message : t("complaints.filed_error"));
       } finally {
         setFiling(false);
       }
@@ -368,8 +361,8 @@ export default function ReportComplaint({ onBack, isOffline }: ReportComplaintPr
         }
         // Reload detail to get updated evidence list
         await loadComplaintDetail(selectedComplaint.complaint_number);
-      } catch (err: any) {
-        setEvidenceError(err.message || t("complaints.evidence_failed"));
+      } catch (err: unknown) {
+        setEvidenceError(err instanceof Error ? err.message : t("complaints.evidence_failed"));
       } finally {
         setEvidenceUploading(false);
       }

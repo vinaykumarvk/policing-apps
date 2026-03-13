@@ -1,5 +1,6 @@
 import { query } from "./db";
 import { logWarn } from "./logger";
+import { isTestRuntime } from "./runtime-safety";
 
 export interface TokenSecurityClaims {
   userId: string;
@@ -26,10 +27,6 @@ export interface RevokeAllUserTokensInput {
   userId: string;
   reason?: string;
   updatedByUserId?: string;
-}
-
-function isTestRuntime(): boolean {
-  return process.env.NODE_ENV === "test" || process.env.VITEST === "true";
 }
 
 function enforceJtiClaim(): boolean {

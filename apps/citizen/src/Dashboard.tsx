@@ -6,10 +6,9 @@ import { getStatusBadgeClass, getStatusLabel, formatDate, getServiceDisplayName 
 import { readCached, writeCached } from "./cache";
 import { incrementCacheTelemetry } from "./cacheTelemetry";
 import { Bilingual } from "./Bilingual";
+import { apiBaseUrl, isRecord } from "./citizen-types";
 import "./dashboard.css";
 import "./onboarding.css";
-
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 
 interface Application {
   arn: string;
@@ -145,10 +144,6 @@ type DashboardCachePayload = {
 
 const DASHBOARD_CACHE_SCHEMA = "citizen-dashboard-v1";
 const DASHBOARD_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
-
-function isRecord(value: unknown): value is Record<string, any> {
-  return typeof value === "object" && value !== null;
-}
 
 function isStatsPayload(value: unknown): value is Stats {
   return (

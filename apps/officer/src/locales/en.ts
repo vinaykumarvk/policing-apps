@@ -248,6 +248,7 @@ export default {
   "feedback.failed_load_complaints": "Failed to load complaints",
   "feedback.failed_load_complaint": "Failed to load complaint",
   "feedback.failed_load_evidence": "Failed to load evidence file.",
+  "feedback.assign_failed": "Task assignment failed. Another officer may have claimed this task.",
 
   // NL Assistant
   "assistant.open": "Open Assistant",

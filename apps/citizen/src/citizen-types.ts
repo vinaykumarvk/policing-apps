@@ -87,7 +87,7 @@ export const CACHE_TTL_MS = {
   resume: 7 * 24 * 60 * 60 * 1000
 } as const;
 
-function isRecord(value: unknown): value is Record<string, any> {
+export function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null;
 }
 

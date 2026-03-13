@@ -13,6 +13,16 @@ export default defineConfig({
       "@puda/nl-assistant": path.resolve(__dirname, "../../packages/nl-assistant/src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["react", "react-dom"],
+          i18n: ["i18next", "react-i18next"],
+        },
+      },
+    },
+  },
   server: {
     port: 5174,
   },
