@@ -12,6 +12,7 @@ import {
 } from "./admin-routes";
 import { createSessionToken, verifyPassword, verifySessionToken, verifyTotp } from "./crypto";
 import { mintPlatformClaims, type IdentityAdminStore } from "./identity";
+import { createLaunchRouter, isLaunchRoute } from "./launch-routes";
 import type { PlatformClaims } from "../../../../packages/authz/src";
 
 const SESSION_COOKIE = "platform_session";
@@ -32,11 +33,15 @@ export interface AuthGatewayOptions {
    * record. Must never be enabled where real data is reachable.
    */
   allowPasswordOnly?: boolean;
+  /** Destination URLs for /domains/<app> launch handoffs, keyed by launch slug. */
+  launchTargets?: Readonly<Record<string, string>>;
 }
 
 export interface AuthGateway {
   /** Handles /api/v1/platform/auth/* and /api/v1/platform/admin/* requests. Returns null for other paths. */
   handleAuthRoute: (request: Request) => Promise<Response | null>;
+  /** Handles /domains/<app> launch handoffs. Returns null for other paths. */
+  handleLaunchRoute: (request: Request) => Promise<Response | null>;
   /** Returns claim headers for a valid session, or null. Never throws. */
   claimsHeadersFor: (request: Request) => Promise<Record<string, string> | null>;
 }
@@ -50,6 +55,11 @@ export function createAuthGateway(options: AuthGatewayOptions): AuthGateway {
   const now = options.now ?? (() => new Date());
   const secure = options.secureCookies ?? true;
   const failures = new Map<string, FailureState>();
+  const launchRouter = createLaunchRouter({
+    targets: options.launchTargets,
+    evidenceSink: options.evidenceSink,
+    now,
+  });
 
   const readSession = (request: Request) => {
     const cookie = parseCookie(request.headers.get("cookie"), SESSION_COOKIE);
@@ -193,6 +203,15 @@ export function createAuthGateway(options: AuthGatewayOptions): AuthGateway {
     );
   };
 
+  const handleLaunchRoute = async (request: Request): Promise<Response | null> => {
+    const url = new URL(request.url);
+    if (!isLaunchRoute(url.pathname)) {
+      return null;
+    }
+    const claims = await mintForSession(request).catch(() => null);
+    return launchRouter.handle(request, claims);
+  };
+
   const claimsHeadersFor = async (request: Request): Promise<Record<string, string> | null> => {
     try {
       const claims = await mintForSession(request);
@@ -208,7 +227,7 @@ export function createAuthGateway(options: AuthGatewayOptions): AuthGateway {
     }
   };
 
-  return { handleAuthRoute, claimsHeadersFor };
+  return { handleAuthRoute, handleLaunchRoute, claimsHeadersFor };
 }
 
 function parseCookie(header: string | null, name: string): string | null {

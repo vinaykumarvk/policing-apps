@@ -21,12 +21,21 @@ if (process.env.DATABASE_URL && process.env.PLATFORM_SESSION_SECRET) {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5 });
   evidenceStore = createPgEvidenceStore(pool);
   const allowPasswordOnly = process.env.PLATFORM_DEMO_ALLOW_PASSWORD_ONLY === "true";
+  let launchTargets: Record<string, string> | undefined;
+  if (process.env.PLATFORM_LAUNCH_TARGETS) {
+    try {
+      launchTargets = JSON.parse(process.env.PLATFORM_LAUNCH_TARGETS) as Record<string, string>;
+    } catch {
+      console.error("platform-api: PLATFORM_LAUNCH_TARGETS is not valid JSON — using defaults");
+    }
+  }
   gateway = createAuthGateway({
     store: createPgIdentityStore(pool),
     sessionSecret: process.env.PLATFORM_SESSION_SECRET,
     evidenceSink: evidenceStore,
     evidenceReader: evidenceStore,
     allowPasswordOnly,
+    launchTargets,
   });
   console.log("platform-api: claims issuer enabled (decision-evidence ledger on)");
   if (allowPasswordOnly) {
@@ -80,6 +89,13 @@ createServer(async (req, res) => {
       );
       if (authResponse) {
         await writeResponse(res, authResponse);
+        return;
+      }
+      const launchResponse = await gateway.handleLaunchRoute(
+        new Request(url, { method, headers }),
+      );
+      if (launchResponse) {
+        await writeResponse(res, launchResponse);
         return;
       }
       const claimHeaders = await gateway.claimsHeadersFor(new Request(url, { method, headers }));

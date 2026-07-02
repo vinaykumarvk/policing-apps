@@ -94,3 +94,43 @@ describe("state-wise tenancy", () => {
     expect(entitlementRequestForTenant(dopams, null)).toBe(dopams.entitlement_request);
   });
 });
+
+describe("launch routes", async () => {
+  const { createLaunchRouter } = await import("../auth/launch-routes");
+
+  const evidenceLog: Array<{ action: string; outcome: string }> = [];
+  const router = createLaunchRouter({
+    targets: { dopams: "https://dopams.example.gov", iqw: "https://iqw.example.gov" },
+    evidenceSink: {
+      append: (evidence) => void evidenceLog.push(evidence as { action: string; outcome: string }),
+    },
+    now: () => NOW,
+  });
+
+  it("redirects entitled users to the destination app and records allow evidence", async () => {
+    const claims = claimsFor("kerala_pilot_operator");
+    const response = await router.handle(new Request("http://web/domains/dopams"), claims);
+    expect(response?.status).toBe(302);
+    expect(response?.headers.get("location")).toBe("https://dopams.example.gov");
+    expect(evidenceLog.at(-1)).toMatchObject({ action: "platform.launch.dopams", outcome: "allow" });
+  });
+
+  it("denies launches outside the user's entitlements with evidence", async () => {
+    const claims = claimsFor("kerala_forensic_analyst");
+    const response = await router.handle(new Request("http://web/domains/dopams"), claims);
+    expect(response?.status).toBe(403);
+    expect(evidenceLog.at(-1)).toMatchObject({ action: "platform.launch.dopams", outcome: "deny" });
+  });
+
+  it("sends unauthenticated launches back to the shell login", async () => {
+    const response = await router.handle(new Request("http://web/domains/dopams"), null);
+    expect(response?.status).toBe(302);
+    expect(response?.headers.get("location")).toBe("/");
+  });
+
+  it("404s unknown launch slugs and ignores non-launch paths", async () => {
+    const unknown = await router.handle(new Request("http://web/domains/nope"), null);
+    expect(unknown?.status).toBe(404);
+    expect(await router.handle(new Request("http://web/other"), null)).toBeNull();
+  });
+});

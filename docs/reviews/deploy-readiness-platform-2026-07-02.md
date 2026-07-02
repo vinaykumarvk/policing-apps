@@ -221,3 +221,24 @@ Per user request for easy testing/demo:
 - Remapped `police-case-history.adssoftek.com` (previously → police-cases-kb, which
   remains reachable at puda-kbase.adssoftek.com) to **platform-web**. DNS CNAME to
   ghs.googlehosted.com was already in place; Google-managed certificate re-provisioned.
+
+---
+
+## Addendum 8: app-launch handoff (/domains/* routes)
+
+- Symptom: launcher tiles (DOPAMS/IQW) navigated to /domains/<app>, hit the SPA
+  fallback, and returned to the dashboard — the cloud web tier had no /domains routes
+  (the local stack's nginx provided them).
+- Fix: launch gateway in platform-api (`auth/launch-routes.ts`) — validates the
+  session, evaluates the tenant-aware entitlement, records `platform.launch.<app>`
+  decision evidence (policy platform.app_launch.v1), and 302-redirects entitled users
+  to the destination app; unauthenticated → back to login; denied → 403 page with
+  reason. platform-web nginx proxies /domains/ to the gateway. Targets configurable
+  via PLATFORM_LAUNCH_TARGETS (defaults: police-dopams / police-complaints /
+  police-forensic / police-smmt / puda-kbase .adssoftek.com).
+- Verified live on police-case-history.adssoftek.com as admin-kerala: dopams→
+  police-dopams, iqw→police-complaints, knowledge→puda-kbase (302s); forensic→403
+  MODULE_DENIED page; all five decisions in the ledger. 71 tests green.
+- Note: destination apps use their own domain-local logins (transition contract —
+  platform auth is additive). Platform-session SSO into domain apps is the natural
+  next phase.
