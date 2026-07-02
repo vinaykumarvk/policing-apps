@@ -2,7 +2,14 @@
 // signed session cookie, and injects freshly minted, server-verified platform
 // claims into requests before they reach the platform app. The platform app
 // itself stays unchanged — it continues to trust only the claims headers.
-import { callerCanManageUsers, handleAdminRoute, isAdminRoute } from "./admin-routes";
+import {
+  adminDecisionEvidence,
+  callerCanManageUsers,
+  handleAdminRoute,
+  isAdminRoute,
+  type AdminEvidenceReader,
+  type AdminEvidenceSink,
+} from "./admin-routes";
 import { createSessionToken, verifyPassword, verifySessionToken, verifyTotp } from "./crypto";
 import { mintPlatformClaims, type IdentityAdminStore } from "./identity";
 import type { PlatformClaims } from "../../../../packages/authz/src";
@@ -17,6 +24,8 @@ export interface AuthGatewayOptions {
   sessionSecret: string;
   now?: () => Date;
   secureCookies?: boolean;
+  evidenceSink?: AdminEvidenceSink;
+  evidenceReader?: AdminEvidenceReader;
 }
 
 export interface AuthGateway {
@@ -68,13 +77,29 @@ export function createAuthGateway(options: AuthGatewayOptions): AuthGateway {
     const url = new URL(request.url);
     if (isAdminRoute(url.pathname)) {
       const claims = await mintForSession(request).catch(() => null);
-      if (!claims) {
-        return json(401, { error: { code: "AUTH_REQUIRED" } });
+      if (!claims || !callerCanManageUsers(claims)) {
+        await options.evidenceSink?.append(
+          adminDecisionEvidence({
+            action: "platform.admin.access",
+            outcome: "deny",
+            reason: claims ? "USER_MANAGE_PERMISSION_REQUIRED" : "AUTH_REQUIRED",
+            path: url.pathname,
+            target: "admin-route",
+            claims: claims ?? undefined,
+            now: now(),
+          }),
+        );
+        return claims
+          ? json(403, { error: { code: "USER_MANAGE_PERMISSION_REQUIRED" } })
+          : json(401, { error: { code: "AUTH_REQUIRED" } });
       }
-      if (!callerCanManageUsers(claims)) {
-        return json(403, { error: { code: "USER_MANAGE_PERMISSION_REQUIRED" } });
-      }
-      return handleAdminRoute(request, { store: options.store, claims });
+      return handleAdminRoute(request, {
+        store: options.store,
+        claims,
+        evidenceSink: options.evidenceSink,
+        evidenceReader: options.evidenceReader,
+        now,
+      });
     }
     if (!url.pathname.startsWith("/api/v1/platform/auth/")) {
       return null;

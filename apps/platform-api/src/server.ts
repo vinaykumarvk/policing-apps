@@ -2,27 +2,36 @@ import { createServer } from "node:http";
 import { Pool } from "pg";
 import { createPlatformApp } from "./app";
 import { createAuthGateway, type AuthGateway } from "./auth/gateway";
+import { createPgEvidenceStore } from "./auth/pg-evidence-store";
 import { createPgIdentityStore } from "./auth/pg-identity-store";
 
-const app = createPlatformApp(
-  process.env.PLATFORM_FIXED_NOW
-    ? { now: () => new Date(process.env.PLATFORM_FIXED_NOW as string) }
-    : {},
-);
 const port = Number(process.env.PORT ?? 8080);
+const fixedNow = process.env.PLATFORM_FIXED_NOW
+  ? { now: () => new Date(process.env.PLATFORM_FIXED_NOW as string) }
+  : {};
 
 // Claims-issuer mode: active when a user store and session secret are
 // configured. Without them the server runs claims-passthrough only (every
 // request is denied downstream unless a trusted proxy injected claims).
 let gateway: AuthGateway | null = null;
+let evidenceStore: ReturnType<typeof createPgEvidenceStore> | null = null;
 if (process.env.DATABASE_URL && process.env.PLATFORM_SESSION_SECRET) {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5 });
+  evidenceStore = createPgEvidenceStore(pool);
   gateway = createAuthGateway({
     store: createPgIdentityStore(pool),
     sessionSecret: process.env.PLATFORM_SESSION_SECRET,
+    evidenceSink: evidenceStore,
+    evidenceReader: evidenceStore,
   });
-  console.log("platform-api: claims issuer enabled");
+  console.log("platform-api: claims issuer enabled (decision-evidence ledger on)");
 }
+
+const app = createPlatformApp({
+  ...fixedNow,
+  // G-SEC-002: persist every platform allow/deny decision to the ledger.
+  ...(evidenceStore ? { evidenceSink: evidenceStore } : {}),
+});
 
 createServer(async (req, res) => {
   try {

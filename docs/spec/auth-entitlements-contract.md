@@ -1,8 +1,15 @@
 # Platform Auth Claims and Entitlements Contract
 
-Version: 1.0  
-Phase: P2 - Platform Auth Claim and Entitlement Contract  
+Version: 1.1  
+Phase: P2 - Platform Auth Claim and Entitlement Contract (amended post-P16: platform IdP claims source)  
 Traceability: R-SEC-001, R-SEC-002
+
+## Amendment History
+
+| Version | Date | Change |
+|---------|------|--------|
+| 1.0 | P2 | Initial contract: claim shape, deny-by-default rules, entitlement dimensions. |
+| 1.1 | 2026-07-02 | Added "Platform IdP Claims Source" section describing the production claims issuer (session login, per-request minting, TOTP MFA) and the decision-evidence ledger implementation status. |
 
 ## Purpose
 
@@ -78,9 +85,28 @@ The seed fixtures cover these synthetic personas:
 
 These personas intentionally separate platform administration from operational data access. For example, the admin persona can manage platform registry metadata but cannot read a DOPAMS case unless a separate domain permission, jurisdiction, purpose, assignment, clearance, and MFA state are present.
 
+## Platform IdP Claims Source (v1.1)
+
+The production claims issuer is the platform API itself (`source: "platform-idp"`), implemented in `apps/platform-api/src/auth/`. It replaces the local-stack synthetic persona injection for all cloud deployments.
+
+**Issuance model:**
+
+- Users authenticate with username + password (scrypt-hashed) + TOTP code (RFC 6238, mandatory). Failed logins lock the username after 5 attempts for 5 minutes.
+- A successful login issues an HttpOnly, HMAC-SHA256-signed session cookie (8-hour expiry). The session carries only the user id and session id — never claims.
+- Claims are minted **fresh on every request** from the Postgres user store (`platform.platform_user`, `platform.platform_user_entitlement`), so revocation (user disable) takes effect on the next request and claims never outlive the 15-minute staleness window.
+- Minted claims always set `mfa: { required: true, verified: true, methods: ["totp"], verified_at: <mint time> }` — TOTP was verified at session creation and the session is the MFA continuity boundary.
+- `source_version` remains `idp-seed-v1` for compatibility with deployed domain-adapter validators. Rotating it requires a coordinated `expectedSourceVersion` update across platform-api and all domain adapters, and a row in the Amendment History.
+- Every minted claim is validated with `validatePlatformClaims` before use; a claim that fails validation is never attached to a request.
+
+**Trust boundary:** the platform-api ingress strips any caller-supplied `X-Platform-Claims` / `X-Platform-Claims-Verified` headers. Claims enter requests exclusively via the server-side session gateway, which is the only component allowed to set `X-Platform-Claims-Verified: true` on this ingress.
+
+**User administration:** create/disable/reset operations are guarded by the `platform` domain permission `user:manage` on the caller's minted claims. Users are created from role templates (`apps/platform-api/src/auth/role-templates.ts`) that pin org, jurisdiction, clearance, assignment, and entitlements; freeform grants are not part of this contract version. TOTP secrets are returned exactly once at creation/reset and stored only for verification.
+
 ## Decision Evidence Boundary
 
-P2 does not implement the immutable decision ledger from P3, but it defines the claim snapshot fields needed for R-SEC-002: schema version, claim version, source version, subject id, modules, domain permissions, org, jurisdiction, clearance, assignment, purpose, MFA verification state, expiry, and validation reason. Later decision evidence must persist the snapshot with policy version, service path, outcome, correlation id, source/projection version, and redaction decision.
+P2 defined the claim snapshot fields needed for R-SEC-002: schema version, claim version, source version, subject id, modules, domain permissions, org, jurisdiction, clearance, assignment, purpose, MFA verification state, expiry, and validation reason.
+
+**Implementation status (v1.1):** the platform API persists every allow/deny decision — registry views, entitlement checks, case/evidence projections, and user-administration actions (policy `platform.user_admin.v1`), including admin-route authorization denials — to `platform.authorization_decision_evidence` (Cloud SQL) via `createPgEvidenceStore`. Each record carries the SHA-256 integrity hash from `@policing-platform/audit-ledger`. Admins with `user:manage` may read recent entries at `GET /api/v1/platform/admin/decision-evidence`. A ledger write failure never blocks the request path but emits a `decision-evidence-write-failed` alert log line for operational alerting.
 
 ## Domain-local Auth
 

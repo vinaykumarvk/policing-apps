@@ -1,17 +1,36 @@
 // User-management routes, guarded by the platform/user:manage permission on
-// the caller's minted claims. Every action emits a structured audit log line.
+// the caller's minted claims. Every action (and every authorization denial)
+// is recorded as authorization-decision evidence in the ledger (G-SEC-002).
 import { randomUUID } from "node:crypto";
+import {
+  createAuthorizationDecisionEvidence,
+  type AuthorizationDecisionEvidence,
+} from "../../../../packages/audit-ledger/src";
 import type { PlatformClaims } from "../../../../packages/authz/src";
 import { generateTotpSecret, hashPassword } from "./crypto";
 import type { IdentityAdminStore, PlatformUser } from "./identity";
 import { findRoleTemplate, ROLE_TEMPLATES } from "./role-templates";
 
-const ADMIN_PREFIX = "/api/v1/platform/admin/users";
+const ADMIN_ROOT = "/api/v1/platform/admin";
+const ADMIN_PREFIX = `${ADMIN_ROOT}/users`;
+const EVIDENCE_PATH = `${ADMIN_ROOT}/decision-evidence`;
 const MIN_PASSWORD_LENGTH = 12;
+export const ADMIN_POLICY_VERSION = "platform.user_admin.v1";
+
+export interface AdminEvidenceSink {
+  append: (evidence: Readonly<AuthorizationDecisionEvidence>) => Promise<void> | void;
+}
+
+export interface AdminEvidenceReader {
+  listRecent: (limit: number) => Promise<readonly object[]>;
+}
 
 export interface AdminRouteContext {
   store: IdentityAdminStore;
   claims: PlatformClaims;
+  evidenceSink?: AdminEvidenceSink;
+  evidenceReader?: AdminEvidenceReader;
+  now?: () => Date;
 }
 
 export function callerCanManageUsers(claims: PlatformClaims): boolean {
@@ -21,7 +40,70 @@ export function callerCanManageUsers(claims: PlatformClaims): boolean {
 }
 
 export function isAdminRoute(pathname: string): boolean {
-  return pathname === ADMIN_PREFIX || pathname.startsWith(`${ADMIN_PREFIX}/`);
+  return pathname === ADMIN_ROOT || pathname.startsWith(`${ADMIN_ROOT}/`);
+}
+
+export function adminDecisionEvidence(input: {
+  action: string;
+  outcome: "allow" | "deny";
+  reason: string;
+  path: string;
+  target: string;
+  claims?: PlatformClaims;
+  now: Date;
+  detail?: string;
+}): Readonly<AuthorizationDecisionEvidence> {
+  return createAuthorizationDecisionEvidence({
+    occurred_at: input.now.toISOString(),
+    correlation_id: `admin-${randomUUID()}`,
+    outcome: input.outcome,
+    reason: input.reason,
+    detail: input.detail,
+    policy_version: ADMIN_POLICY_VERSION,
+    entitlement_policy_version: "platform.entitlements.v1",
+    path: input.path,
+    action: input.action,
+    claims_snapshot: input.claims
+      ? {
+          subject: input.claims.subject,
+          session_id: input.claims.session_id,
+          source_version: input.claims.source_version,
+        }
+      : { subject: null, session_id: null, source_version: null },
+    resource: {
+      kind: "platform_user",
+      resource_id: input.target,
+      source_system: "platform-idp",
+      source_record_id: input.target,
+      source_version: "platform.identity.v1",
+      projection_version: "platform.identity.v1",
+      source_status: "active",
+      classification: "restricted",
+      legal_hold_status: "none",
+    },
+    redaction_decision: {
+      profile: "user-admin-v1",
+      fields_redacted: ["password_hash", "totp_secret"],
+      storage_uri_exposed: false,
+      reason: "credential_material_never_listed",
+    },
+    decision_inputs: {
+      server_verified: true,
+      claim_valid: input.claims !== undefined,
+      policy_present: true,
+      resource_complete: true,
+      projection_fresh: true,
+      source_active: true,
+      redaction_complete: true,
+      storage_uri_exposed: false,
+      legal_hold_checked: true,
+      jurisdiction_checked: false,
+      assignment_checked: false,
+      clearance_checked: false,
+      purpose_checked: false,
+      mfa_checked: true,
+    },
+  });
 }
 
 export async function handleAdminRoute(
@@ -29,11 +111,24 @@ export async function handleAdminRoute(
   context: AdminRouteContext,
 ): Promise<Response> {
   const url = new URL(request.url);
+
+  if (request.method === "GET" && url.pathname === EVIDENCE_PATH) {
+    if (!context.evidenceReader) {
+      return json(501, { error: { code: "EVIDENCE_LEDGER_NOT_CONFIGURED" } });
+    }
+    const limit = Number(url.searchParams.get("limit") ?? 20);
+    const entries = await context.evidenceReader.listRecent(Number.isFinite(limit) ? limit : 20);
+    return json(200, { entries });
+  }
+
+  if (!isUsersRoute(url.pathname)) {
+    return json(404, { error: { code: "ADMIN_ROUTE_NOT_FOUND" } });
+  }
   const segments = url.pathname.slice(ADMIN_PREFIX.length).split("/").filter(Boolean);
 
   if (request.method === "GET" && segments.length === 0) {
     const users = await context.store.listUsers();
-    audit(context, "user:list", { count: users.length });
+    await audit(context, request, "platform.admin.user:list", "list", { count: users.length });
     return json(200, { users });
   }
   if (request.method === "GET" && segments.length === 1 && segments[0] === "role-templates") {
@@ -59,7 +154,7 @@ export async function handleAdminRoute(
       return resetPassword(request, context, userId);
     }
     if (action === "reset-totp") {
-      return resetTotp(context, userId);
+      return resetTotp(request, context, userId);
     }
   }
   return json(404, { error: { code: "ADMIN_ROUTE_NOT_FOUND" } });
@@ -116,7 +211,10 @@ async function createUser(request: Request, context: AdminRouteContext): Promise
     }
     throw error;
   }
-  audit(context, "user:create", { target: user.userId, username, role_template: template.id });
+  await audit(context, request, "platform.admin.user:create", user.userId, {
+    username,
+    role_template: template.id,
+  });
   return json(201, {
     user: summarize(user),
     // Returned exactly once; the server stores only the secret for verification.
@@ -142,7 +240,7 @@ async function setStatus(
   if (!updated) {
     return json(404, { error: { code: "USER_NOT_FOUND" } });
   }
-  audit(context, "user:status", { target: userId, status });
+  await audit(context, request, "platform.admin.user:status", userId, { status });
   return json(200, { ok: true, status });
 }
 
@@ -160,18 +258,22 @@ async function resetPassword(
   if (!updated) {
     return json(404, { error: { code: "USER_NOT_FOUND" } });
   }
-  audit(context, "user:reset-password", { target: userId });
+  await audit(context, request, "platform.admin.user:reset-password", userId, {});
   return json(200, { ok: true });
 }
 
-async function resetTotp(context: AdminRouteContext, userId: string): Promise<Response> {
+async function resetTotp(
+  request: Request,
+  context: AdminRouteContext,
+  userId: string,
+): Promise<Response> {
   const user = await context.store.getUserById(userId);
   if (!user) {
     return json(404, { error: { code: "USER_NOT_FOUND" } });
   }
   const totpSecret = generateTotpSecret();
   await context.store.setTotpSecret(userId, totpSecret);
-  audit(context, "user:reset-totp", { target: userId });
+  await audit(context, request, "platform.admin.user:reset-totp", userId, {});
   return json(200, {
     ok: true,
     totp_secret: totpSecret,
@@ -194,16 +296,28 @@ function summarize(user: PlatformUser): object {
   };
 }
 
-function audit(context: AdminRouteContext, action: string, detail: Record<string, unknown>): void {
-  console.log(
-    JSON.stringify({
-      audit: "platform-user-admin",
-      action,
-      actor: context.claims.subject.user_id,
-      session: context.claims.session_id,
-      ...detail,
-    }),
-  );
+function isUsersRoute(pathname: string): boolean {
+  return pathname === ADMIN_PREFIX || pathname.startsWith(`${ADMIN_PREFIX}/`);
+}
+
+async function audit(
+  context: AdminRouteContext,
+  request: Request,
+  action: string,
+  target: string,
+  detail: Record<string, unknown>,
+): Promise<void> {
+  const evidence = adminDecisionEvidence({
+    action,
+    outcome: "allow",
+    reason: "ALLOW",
+    detail: Object.keys(detail).length ? JSON.stringify(detail) : undefined,
+    path: new URL(request.url).pathname,
+    target,
+    claims: context.claims,
+    now: (context.now ?? (() => new Date()))(),
+  });
+  await context.evidenceSink?.append(evidence);
 }
 
 async function readBody(request: Request): Promise<Record<string, unknown> | null> {

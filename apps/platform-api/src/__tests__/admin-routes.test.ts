@@ -37,6 +37,7 @@ const ADMIN_USER: PlatformUser = {
 let store: IdentityAdminStore;
 let gateway: AuthGateway;
 let adminCookie: string;
+let evidenceLog: object[];
 
 async function loginAs(username: string, password: string): Promise<string> {
   const response = await gateway.handleAuthRoute(
@@ -64,7 +65,15 @@ beforeEach(async () => {
   store = createInMemoryIdentityStore([ADMIN_USER], {
     [ADMIN_USER.userId]: [...ADMIN_TEMPLATE.entitlements],
   });
-  gateway = createAuthGateway({ store, sessionSecret: SECRET, now: () => NOW, secureCookies: false });
+  evidenceLog = [];
+  gateway = createAuthGateway({
+    store,
+    sessionSecret: SECRET,
+    now: () => NOW,
+    secureCookies: false,
+    evidenceSink: { append: (evidence) => void evidenceLog.push(evidence) },
+    evidenceReader: { listRecent: async (limit) => evidenceLog.slice(-limit) },
+  });
   adminCookie = await loginAs("root-admin", "root-admin-password");
 });
 
@@ -260,5 +269,49 @@ describe("user lifecycle", () => {
     const response = await gateway.handleAuthRoute(adminRequest("/api/v1/platform/admin/users"));
     const body = (await response?.json()) as { users: Array<{ username: string }> };
     expect(body.users.map((user) => user.username)).toContain("root-admin");
+  });
+});
+
+describe("decision evidence ledger", () => {
+  it("records allow evidence for admin actions with integrity hash", async () => {
+    await gateway.handleAuthRoute(
+      adminRequest("/api/v1/platform/admin/users", "POST", {
+        username: "evidence.user",
+        display_name: "Evidence User",
+        password: "a-long-password-123",
+        role_template: "pilot_operator",
+      }),
+    );
+    const record = evidenceLog.at(-1) as {
+      action: string;
+      outcome: string;
+      evidence_schema_version: string;
+      integrity: { algorithm: string; payload_hash: string };
+      claims_snapshot: { subject: { user_id: string } };
+    };
+    expect(record.action).toBe("platform.admin.user:create");
+    expect(record.outcome).toBe("allow");
+    expect(record.evidence_schema_version).toBe("platform.authorization_decision_evidence.v1");
+    expect(record.integrity.payload_hash).toMatch(/^[a-f0-9]{64}$/);
+    expect(record.claims_snapshot.subject.user_id).toBe(ADMIN_USER.userId);
+  });
+
+  it("records deny evidence for unauthenticated and unentitled access", async () => {
+    await gateway.handleAuthRoute(
+      adminRequest("/api/v1/platform/admin/users", "GET", undefined, ""),
+    );
+    const denied = evidenceLog.at(-1) as { outcome: string; reason: string };
+    expect(denied.outcome).toBe("deny");
+    expect(denied.reason).toBe("AUTH_REQUIRED");
+  });
+
+  it("serves the evidence read endpoint to admins", async () => {
+    await gateway.handleAuthRoute(adminRequest("/api/v1/platform/admin/users"));
+    const response = await gateway.handleAuthRoute(
+      adminRequest("/api/v1/platform/admin/decision-evidence?limit=5"),
+    );
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as { entries: object[] };
+    expect(body.entries.length).toBeGreaterThan(0);
   });
 });

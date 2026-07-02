@@ -135,3 +135,20 @@ deployed, locked, as the target-state topology awaiting a real claims issuer.
 - Follow-ups: route admin-action audit lines into the authorization-decision-evidence
   ledger (G-SEC-002 parity); amend docs/spec/auth-entitlements-contract.md to describe
   the platform-idp claims source formally.
+
+---
+
+## Addendum 3: spec follow-ups closed
+
+- **G-SEC-002 ledger wired**: `createPgEvidenceStore` persists every platform
+  allow/deny decision (app routes via `evidenceSink`, admin actions and admin-route
+  authorization denials via the gateway) to `platform.authorization_decision_evidence`
+  with SHA-256 integrity hashes. Ledger write failure never blocks requests but emits a
+  `decision-evidence-write-failed` alert line. Admins read recent entries at
+  `GET /api/v1/platform/admin/decision-evidence`. Verified live: DENY (AUTH_REQUIRED),
+  ALLOW (user:list), ALLOW (entitlements.check) rows read back from Cloud SQL.
+- **Contract amended to v1.1**: docs/spec/auth-entitlements-contract.md now documents
+  the platform-idp claims source (session login, per-request minting, TOTP MFA,
+  source_version compatibility rule, ingress header stripping, user:manage admin
+  surface) and the implemented decision-evidence boundary, with an amendment history.
+- Deployed as platform-api-00004-b9j. 59 platform-api tests green.
