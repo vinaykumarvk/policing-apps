@@ -82,6 +82,58 @@ export async function fetchPlatformShellData(options: PlatformApiClientOptions =
   return { me, registry };
 }
 
+export interface PlatformSessionUser {
+  username: string;
+  display_name: string;
+  persona: string;
+}
+
+export interface PlatformSessionResponse {
+  authenticated: boolean;
+  user?: PlatformSessionUser;
+}
+
+export async function fetchPlatformSession(
+  options: PlatformApiClientOptions = {},
+): Promise<PlatformSessionResponse> {
+  const baseUrl = normalizeBaseUrl(options.baseUrl ?? platformApiBaseUrl());
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  return getJson<PlatformSessionResponse>(fetchImpl, `${baseUrl}/api/v1/platform/auth/session`, {
+    accept: "application/json",
+  });
+}
+
+export async function platformLogin(
+  credentials: { username: string; password: string; totp: string },
+  options: PlatformApiClientOptions = {},
+): Promise<PlatformSessionUser> {
+  const baseUrl = normalizeBaseUrl(options.baseUrl ?? platformApiBaseUrl());
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const response = await fetchImpl(`${baseUrl}/api/v1/platform/auth/login`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify(credentials),
+  });
+  const body = (await response.json()) as {
+    user?: PlatformSessionUser;
+    error?: { code?: string };
+  };
+  if (!response.ok || !body.user) {
+    throw new Error(body.error?.code ?? `PLATFORM_LOGIN_${response.status}`);
+  }
+  return body.user;
+}
+
+export async function platformLogout(options: PlatformApiClientOptions = {}): Promise<void> {
+  const baseUrl = normalizeBaseUrl(options.baseUrl ?? platformApiBaseUrl());
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  await fetchImpl(`${baseUrl}/api/v1/platform/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+}
+
 function platformApiBaseUrl(): string {
   return import.meta.env.VITE_PLATFORM_API_BASE_URL ?? "";
 }

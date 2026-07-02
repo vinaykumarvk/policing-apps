@@ -1,8 +1,20 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppLauncher } from "./components/AppLauncher";
 import { DecisionAuditPanel } from "./components/DecisionAuditPanel";
+import { LoginScreen } from "./components/LoginScreen";
 import { RouteTable, SHELL_ROUTES } from "./routes";
-import { fetchPlatformShellData, type PlatformShellData } from "./platform-api";
+import {
+  fetchPlatformSession,
+  fetchPlatformShellData,
+  platformLogout,
+  type PlatformSessionUser,
+  type PlatformShellData,
+} from "./platform-api";
+
+type SessionState =
+  | { status: "checking" }
+  | { status: "signed-out" }
+  | { status: "signed-in"; user: PlatformSessionUser };
 
 type LoadState =
   | { status: "loading" }
@@ -10,10 +22,38 @@ type LoadState =
   | { status: "failed"; reason: string };
 
 export default function App(): JSX.Element {
+  const [session, setSession] = useState<SessionState>({ status: "checking" });
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
 
   useEffect(() => {
     let active = true;
+    fetchPlatformSession()
+      .then((response) => {
+        if (!active) {
+          return;
+        }
+        setSession(
+          response.authenticated && response.user
+            ? { status: "signed-in", user: response.user }
+            : { status: "signed-out" },
+        );
+      })
+      .catch(() => {
+        if (active) {
+          setSession({ status: "signed-out" });
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (session.status !== "signed-in") {
+      return;
+    }
+    let active = true;
+    setLoadState({ status: "loading" });
     fetchPlatformShellData()
       .then((data) => {
         if (active) {
@@ -28,10 +68,20 @@ export default function App(): JSX.Element {
           });
         }
       });
-
     return () => {
       active = false;
     };
+  }, [session.status]);
+
+  const handleSignedIn = useCallback((user: PlatformSessionUser) => {
+    setSession({ status: "signed-in", user });
+  }, []);
+
+  const handleSignOut = useCallback(() => {
+    void platformLogout().finally(() => {
+      setSession({ status: "signed-out" });
+      setLoadState({ status: "loading" });
+    });
   }, []);
 
   return (
@@ -47,12 +97,23 @@ export default function App(): JSX.Element {
               {route.label}
             </a>
           ))}
+          {session.status === "signed-in" ? (
+            <button type="button" className="sign-out" onClick={handleSignOut}>
+              Sign out
+            </button>
+          ) : null}
         </nav>
       </header>
 
-      {loadState.status === "loading" ? <LoadingState /> : null}
-      {loadState.status === "failed" ? <FailureState reason={loadState.reason} /> : null}
-      {loadState.status === "ready" ? <ShellDashboard data={loadState.data} /> : null}
+      {session.status === "checking" ? <StatusPanel title="Checking session" /> : null}
+      {session.status === "signed-out" ? <LoginScreen onSignedIn={handleSignedIn} /> : null}
+      {session.status === "signed-in" ? (
+        <>
+          {loadState.status === "loading" ? <StatusPanel title="Loading registry data" /> : null}
+          {loadState.status === "failed" ? <FailureState reason={loadState.reason} /> : null}
+          {loadState.status === "ready" ? <ShellDashboard data={loadState.data} /> : null}
+        </>
+      ) : null}
     </div>
   );
 }
@@ -88,12 +149,12 @@ function ShellDashboard({ data }: { data: PlatformShellData }): JSX.Element {
   );
 }
 
-function LoadingState(): JSX.Element {
+function StatusPanel({ title }: { title: string }): JSX.Element {
   return (
     <main className="status-page" aria-live="polite">
       <div className="status-panel">
         <p className="eyebrow">Platform API</p>
-        <h2>Loading registry data</h2>
+        <h2>{title}</h2>
       </div>
     </main>
   );

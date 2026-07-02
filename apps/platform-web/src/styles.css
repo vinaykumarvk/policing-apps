@@ -417,6 +417,73 @@ a {
   border-color: #fca5a5;
 }
 
+.login-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.login-panel h2 {
+  margin: 0 0 12px;
+}
+
+.login-panel label {
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+.login-panel input {
+  border: 1px solid #d7dee8;
+  border-radius: 6px;
+  font: inherit;
+  padding: 10px 12px;
+}
+
+.login-panel input:focus-visible {
+  border-color: #2563eb;
+  outline: 2px solid #2563eb33;
+}
+
+.login-panel button {
+  background: #111827;
+  border: 0;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  margin-top: 16px;
+  min-height: 44px;
+  padding: 10px 16px;
+}
+
+.login-panel button:disabled {
+  opacity: 0.6;
+}
+
+.login-error {
+  color: #b91c1c;
+  font-size: 14px;
+  margin: 4px 0 0;
+}
+
+.platform-header .sign-out {
+  background: transparent;
+  border: 1px solid #4b5563;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  min-height: 36px;
+  padding: 6px 14px;
+}
+
+.platform-header .sign-out:hover,
+.platform-header .sign-out:active {
+  background: #1f2937;
+}
+
 @media (max-width: 900px) {
   .platform-header,
   .hero-content,
