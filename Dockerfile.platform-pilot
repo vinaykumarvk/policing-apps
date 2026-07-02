@@ -1,0 +1,63 @@
+# ==============================================================================
+# Policing Platform PILOT — SPA + platform API in one container with synthetic
+# pilot-persona claims injected in-process (same profile as the local stack).
+# MUST be deployed with --no-allow-unauthenticated: the personas are synthetic
+# credentials for IAM-gated pilot access, not production identity.
+# ==============================================================================
+
+# --- Stage 1: Install build dependencies ---
+FROM node:22-alpine AS deps
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY apps/platform-api/package.json apps/platform-api/package.json
+COPY apps/platform-web/package.json apps/platform-web/package.json
+
+RUN npm ci --workspace=apps/platform-api --workspace=apps/platform-web --include-workspace-root
+
+# --- Stage 2: Build API (tsc) and SPA (vite) ---
+FROM deps AS build
+
+WORKDIR /app
+
+COPY tsconfig.base.json ./
+COPY apps/platform-api/tsconfig.json apps/platform-api/
+COPY apps/platform-api/src/ apps/platform-api/src/
+COPY apps/platform-web/tsconfig.json apps/platform-web/
+COPY apps/platform-web/vite.config.ts apps/platform-web/
+COPY apps/platform-web/index.html apps/platform-web/
+COPY apps/platform-web/src/ apps/platform-web/src/
+COPY packages/authz/src/ packages/authz/src/
+COPY packages/audit-ledger/src/ packages/audit-ledger/src/
+COPY packages/case-core/src/ packages/case-core/src/
+COPY packages/evidence-core/src/ packages/evidence-core/src/
+COPY fixtures/platform/ fixtures/platform/
+
+ARG VITE_PLATFORM_API_BASE_URL=""
+ENV VITE_PLATFORM_API_BASE_URL=${VITE_PLATFORM_API_BASE_URL}
+
+RUN npm --workspace apps/platform-api run build && npm --workspace apps/platform-web run build
+
+# --- Stage 3: Production image (stdlib only) ---
+FROM node:22-alpine AS production
+
+WORKDIR /app
+
+RUN addgroup -g 1001 -S nodejs && adduser -S -u 1001 -G nodejs nodejs
+
+COPY --from=build --chown=nodejs:nodejs /app/apps/platform-api/dist/ /app/dist/
+COPY --from=build --chown=nodejs:nodejs /app/apps/platform-web/dist/ /app/web/
+
+USER nodejs
+
+ENV NODE_ENV=production
+ENV PORT=8080
+ENV STATIC_DIR=/app/web
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:${PORT:-8080}/api/v1/platform/health || exit 1
+
+CMD ["node", "dist/apps/platform-api/src/pilot-server.js"]

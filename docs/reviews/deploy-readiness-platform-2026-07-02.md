@@ -90,3 +90,27 @@ platform-web deployed with `PLATFORM_API_HOST=platform-api-809677427844.asia-sou
    steps will keep failing until granted; direct `gcloud run deploy` works.
 4. domains/knowledge/api and domains/iqw-api are not deployed as cloud services (pilot scope:
    the platform registry lists them; their cloud exposure is gated on the knowledge/IQW launch plans).
+
+---
+
+## Addendum: platform-pilot service (same day)
+
+The public platform-web shell correctly showed "Registry unavailable / PLATFORM_API_401" —
+no claims issuer exists in the cloud, so the deny-by-default posture blanks the launcher.
+Per user decision, a **private pilot mode** was added:
+
+- `apps/platform-api/src/pilot-server.ts` — single process serving the SPA and the platform
+  API in-process, always overwriting `X-Platform-Claims` / `X-Platform-Claims-Verified`
+  with the synthetic pilot personas from `fixtures/platform/pilot-claims.json` (extracted
+  from the local stack's nginx conf; persona selected via `X-Platform-Smoke-Persona`).
+- `Dockerfile.platform-pilot` — builds API + SPA into one stdlib-only image.
+- Deployed as `platform-pilot` with `--no-allow-unauthenticated` and
+  `PLATFORM_FIXED_NOW=2026-07-01T18:45:00Z` (keeps the synthetic claims inside their
+  validity window; decision-evidence timestamps are frozen accordingly).
+
+Verification: anonymous request → HTTP 403 at Google's front door; identity-token request →
+registry JSON, SPA 200, persona switching works (`/me` reflects forensic persona).
+
+Access: `gcloud run services proxy platform-pilot --region asia-southeast1 --project policing-apps --port 8080`
+then open http://localhost:8080. The public platform-web/platform-api services remain
+deployed, locked, as the target-state topology awaiting a real claims issuer.
