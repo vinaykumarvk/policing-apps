@@ -90,8 +90,8 @@ export default function App(): JSX.Element {
     <div className="app-shell">
       <header className="platform-header">
         <div>
-          <p className="eyebrow">Punjab Police</p>
-          <h1>Policing Platform</h1>
+          <p className="eyebrow">Government of Kerala · Kerala Police</p>
+          <h1>Integrated Policing Platform</h1>
         </div>
         <nav aria-label="Platform shell">
           {SHELL_ROUTES.map((route) => (
