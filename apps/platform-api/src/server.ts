@@ -36,6 +36,7 @@ if (process.env.DATABASE_URL && process.env.PLATFORM_SESSION_SECRET) {
     evidenceReader: evidenceStore,
     allowPasswordOnly,
     launchTargets,
+    ssoSecret: process.env.PLATFORM_SSO_SECRET,
   });
   console.log("platform-api: claims issuer enabled (decision-evidence ledger on)");
   if (allowPasswordOnly) {

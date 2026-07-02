@@ -134,3 +134,56 @@ describe("launch routes", async () => {
     expect(await router.handle(new Request("http://web/other"), null)).toBeNull();
   });
 });
+
+describe("sso launch tokens", async () => {
+  const { createLaunchRouter, createSsoLaunchToken } = await import("../auth/launch-routes");
+  const { createHmac } = await import("node:crypto");
+  const SSO_SECRET = "sso-test-secret";
+
+  it("appends a valid audience-bound token to dopams and iqw launches", async () => {
+    const router = createLaunchRouter({
+      targets: { dopams: "https://dopams.example.gov", iqw: "https://iqw.example.gov" },
+      ssoSecret: SSO_SECRET,
+      now: () => NOW,
+    });
+    const claims = claimsFor("kerala_pilot_operator");
+
+    const dopams = await router.handle(new Request("http://web/domains/dopams"), claims);
+    const dopamsUrl = new URL(dopams!.headers.get("location")!);
+    const dopamsToken = dopamsUrl.searchParams.get("sso")!;
+    expect(dopamsUrl.origin).toBe("https://dopams.example.gov");
+
+    const iqw = await router.handle(new Request("http://web/domains/iqw"), claims);
+    const iqwUrl = new URL(iqw!.headers.get("location")!);
+    expect(iqwUrl.pathname).toBe("/sso");
+    const iqwToken = iqwUrl.searchParams.get("token")!;
+
+    for (const [token, audience] of [[dopamsToken, "dopams"], [iqwToken, "iqw"]] as const) {
+      const [payload, signature] = [token.slice(0, token.lastIndexOf(".")), token.slice(token.lastIndexOf(".") + 1)];
+      expect(createHmac("sha256", SSO_SECRET).update(payload).digest("base64url")).toBe(signature);
+      const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+      expect(decoded.a).toBe(audience);
+      expect(decoded.t).toBe("kerala-police");
+      expect(decoded.e).toBeGreaterThan(NOW.getTime());
+    }
+  });
+
+  it("omits tokens when no sso secret is configured", async () => {
+    const router = createLaunchRouter({
+      targets: { dopams: "https://dopams.example.gov" },
+      now: () => NOW,
+    });
+    const response = await router.handle(
+      new Request("http://web/domains/dopams"),
+      claimsFor("kerala_pilot_operator"),
+    );
+    expect(response?.headers.get("location")).toBe("https://dopams.example.gov");
+  });
+
+  it("createSsoLaunchToken embeds the platform subject", () => {
+    const token = createSsoLaunchToken(claimsFor("telangana_pilot_operator"), "dopams", SSO_SECRET, NOW.getTime());
+    const decoded = JSON.parse(Buffer.from(token.split(".")[0], "base64url").toString("utf8"));
+    expect(decoded.t).toBe("telangana-police");
+    expect(decoded.p).toBe("platform_pilot_operator");
+  });
+});

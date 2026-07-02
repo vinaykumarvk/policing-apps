@@ -21,6 +21,15 @@ const auth = createAuthMiddleware({
   cookieName: "dopams_auth",
   defaultDevSecret: DEV_JWT_SECRET,
   queryFn: query,
+  publicRoutes: [
+    "/health",
+    "/ready",
+    "/api/v1/auth/login",
+    "/api/v1/auth/ldap/login",
+    "/api/v1/auth/logout",
+    // Platform launch-token exchange (token is verified inside the handler)
+    "/api/v1/auth/platform-sso",
+  ],
 });
 
 export const verifyToken = auth.verifyToken;

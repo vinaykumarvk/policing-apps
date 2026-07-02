@@ -35,6 +35,8 @@ export interface AuthGatewayOptions {
   allowPasswordOnly?: boolean;
   /** Destination URLs for /domains/<app> launch handoffs, keyed by launch slug. */
   launchTargets?: Readonly<Record<string, string>>;
+  /** Shared secret for SSO launch tokens handed to destination apps. */
+  ssoSecret?: string;
 }
 
 export interface AuthGateway {
@@ -58,6 +60,7 @@ export function createAuthGateway(options: AuthGatewayOptions): AuthGateway {
   const launchRouter = createLaunchRouter({
     targets: options.launchTargets,
     evidenceSink: options.evidenceSink,
+    ssoSecret: options.ssoSecret,
     now,
   });
 

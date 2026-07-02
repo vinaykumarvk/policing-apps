@@ -3,7 +3,7 @@
 // browser to the destination application. This is the cloud equivalent of the
 // local stack's nginx /domains/* routes. Domain-local auth remains authoritative
 // inside each destination app (transition contract, auth-entitlements v1.1).
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import {
   createAuthorizationDecisionEvidence,
   type AuthorizationDecisionEvidence,
@@ -26,11 +26,51 @@ export const DEFAULT_LAUNCH_TARGETS: Readonly<Record<string, string>> = {
   knowledge: "https://puda-kbase.adssoftek.com",
 };
 
+/** How each destination app receives its SSO launch token. */
+const SSO_REDIRECT_BUILDERS: Readonly<Record<string, (target: string, token: string) => string>> = {
+  // dopams-ui is a SPA: it exchanges ?sso= for a local JWT via its API.
+  dopams: (target, token) => `${target}/?sso=${encodeURIComponent(token)}`,
+  // IQW establishes its server-side session directly on /sso and redirects.
+  iqw: (target, token) => `${target}/sso?token=${encodeURIComponent(token)}`,
+};
+
+export const SSO_TOKEN_TTL_SECONDS = 60;
+
+export interface SsoTokenPayload {
+  u: string; // username
+  d: string; // display name
+  p: string; // persona
+  t: string; // tenant id
+  a: string; // audience (destination app slug)
+  e: number; // expiry epoch ms
+}
+
+export function createSsoLaunchToken(
+  claims: PlatformClaims,
+  audience: string,
+  secret: string,
+  nowMs: number,
+): string {
+  const payload: SsoTokenPayload = {
+    u: claims.subject.user_id,
+    d: claims.subject.display_name,
+    p: claims.subject.persona,
+    t: claims.subject.tenant_id,
+    a: audience,
+    e: nowMs + SSO_TOKEN_TTL_SECONDS * 1000,
+  };
+  const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = createHmac("sha256", secret).update(encoded).digest("base64url");
+  return `${encoded}.${signature}`;
+}
+
 export interface LaunchRouterOptions {
   apps?: readonly PlatformAppDefinition[];
   targets?: Readonly<Record<string, string>>;
   evidenceSink?: AdminEvidenceSink;
   now?: () => Date;
+  /** Shared secret for SSO launch tokens. Without it, launches redirect plainly. */
+  ssoSecret?: string;
 }
 
 export function isLaunchRoute(pathname: string): boolean {
@@ -97,7 +137,12 @@ export function createLaunchRouter(options: LaunchRouterOptions = {}): LaunchRou
         "This application passed its launch gate but has no destination configured in this environment.",
       );
     }
-    return new Response(null, { status: 302, headers: { location: target } });
+    const ssoBuilder = SSO_REDIRECT_BUILDERS[slug];
+    const location =
+      options.ssoSecret && ssoBuilder
+        ? ssoBuilder(target, createSsoLaunchToken(claims, slug, options.ssoSecret, now().getTime()))
+        : target;
+    return new Response(null, { status: 302, headers: { location } });
   };
 
   return { handle };
