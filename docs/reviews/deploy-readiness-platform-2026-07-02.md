@@ -193,3 +193,23 @@ Per user request for easy testing/demo:
 - **Malayalam OCR samples**: fixtures/complaints/malayalam/ — three fictitious typed
   complaints (PDF + PNG + ground truth), generated via scripts/generate_malayalam_complaints.py,
   for the IQW/Document AI OCR pipeline.
+
+---
+
+## Addendum 6: Malayalam OCR verification against IQW (police-complaints)
+
+- Uploaded all three fixtures/complaints/malayalam PDFs (plus one PNG) to the live
+  IQW service `POST /api/parse` (police-complaints, Cloud Run).
+- **Two defects found and fixed:**
+  1. Cross-project IAM: police-complaints' compute SA lacked
+     `documentai.processors.processOnline` on the Document AI processor in project
+     `wealth-report` — granted `roles/documentai.apiUser` (owner account
+     vinaykumarvk@gmail.com).
+  2. compliant-parser's script-heuristic language detector had no Malayalam range —
+     complaints were labelled "English". Fixed (commit 076f785 in compliant-parser:
+     ml added to detection, language names, OCR cleaning, script ranges + test;
+     46 tests pass). Deployed as police-complaints-00052-9gx.
+- **Verified results (all HTTP 200):** language ml/Malayalam + translated; OCR text
+  similarity vs ground truth 95.1% / 90.2% / 94.0% (PNG path 98.3%); all key facts
+  (names, phone numbers, vehicle KL-07-AX-1234, locations) extracted; document_format
+  POLICE_COMPLAINT; English complaint briefs and who/what/how field extraction correct.
