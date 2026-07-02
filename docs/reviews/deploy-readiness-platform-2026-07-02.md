@@ -242,3 +242,20 @@ Per user request for easy testing/demo:
 - Note: destination apps use their own domain-local logins (transition contract —
   platform auth is additive). Platform-session SSO into domain apps is the natural
   next phase.
+
+---
+
+## Addendum 9: single sign-on into DOPAMS and IQW
+
+- Launch redirects now carry a 60-second HMAC launch token (audience-bound,
+  `platform-sso-secret` shared via Secret Manager). DOPAMS exchanges `?sso=` at
+  POST /api/v1/auth/platform-sso (maps platform subject → local user_account,
+  fallback PLATFORM_SSO_FALLBACK_USER=admin) and the UI stores the returned JWT;
+  IQW establishes its server session at GET /sso and redirects home.
+- Deployed: platform-api, dopams-api, dopams-ui, police-complaints (parser commit
+  3493b55). Verified live: platform login → launch → IQW session authenticated and
+  DOPAMS exchange returns admin/ADMINISTRATOR JWT — no second login. Tampered
+  tokens rejected 401 on both apps. 74 + 4 tests green.
+- Not yet SSO-enabled: forensic, social-media, knowledge (same pattern applies;
+  their UIs keep local logins for now). Subject-level user mapping in DOPAMS is
+  demo-grade (fallback to admin) — per-user provisioning is the production path.
