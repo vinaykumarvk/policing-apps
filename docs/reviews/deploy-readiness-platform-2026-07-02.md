@@ -1,0 +1,92 @@
+# Deployment Report — Policing Platform Integration
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-07-02 |
+| **Commits** | `7bcdb79` (integration), `1a7f7bf` (platform deploy artifacts), `fcb091b` (Dockerfile authz fix) |
+| **Mode** | cloud-only (Docker daemon unavailable locally) |
+| **Scope** | Full integration — 8 services across 2 GCP projects |
+
+---
+
+## 1. Preflight Summary
+
+| Service | Type | Dockerfile | GCP Project | Deploy Kind |
+|---------|------|------------|-------------|-------------|
+| apps/platform-api | Control-plane API (fetch/node:http) | Dockerfile.platform-api (new) | policing-apps | **First deploy** |
+| apps/platform-web | Platform shell SPA (React/Vite + nginx) | Dockerfile.platform-web (new) | policing-apps | **First deploy** |
+| apps/dopams-api | API (Fastify) | Dockerfile.dopams-api | policing-apps | Redeploy |
+| apps/forensic-api | API (Fastify) | Dockerfile.forensic-api | policing-apps | Redeploy |
+| apps/social-media-api | API (Fastify) | Dockerfile.social-media-api | policing-apps | Redeploy |
+| apps/dopams-ui | SPA (React/Vite) | Dockerfile.dopams-ui | policing-apps | Redeploy |
+| apps/citizen | SPA (React/Vite + nginx proxy) | Dockerfile.citizen | puda-489215 | Redeploy |
+| apps/officer | SPA (React/Vite + nginx proxy) | Dockerfile.officer | puda-489215 | Redeploy |
+
+All services in region `asia-southeast1`.
+
+## 2. New Deploy Artifacts (commit `1a7f7bf`)
+
+- `apps/platform-api/src/server.ts` — production HTTP entry bridging node:http to the
+  fetch-based platform app. Reads `PORT`, binds `0.0.0.0`. Verified locally before deploy
+  (`/health` ok, unauthenticated `/api/v1/platform/apps` → 401).
+- `Dockerfile.platform-api` — multi-stage; runtime image is node:22-alpine + compiled dist
+  only (the platform packages have **zero npm runtime dependencies**). Non-root user 1001.
+- `Dockerfile.platform-web` — Vite build + `nginxinc/nginx-unprivileged`.
+- `nginx.platform.conf` — SPA routing + same-origin reverse proxy of `/api/v1/platform/`
+  to platform-api via runtime env `PLATFORM_API_HOST`. **Deliberately does not replicate
+  the local compose stack's synthetic pilot-claim injection** — cloud requests carry no
+  claims and are denied by default (G-SEC-001 preserved on the public URL).
+
+## 3. Issues Found and Fixed During Deploy
+
+| # | Issue | Fix | Evidence |
+|---|-------|-----|----------|
+| 1 | dopams/forensic/social-media API images failed Cloud Build: `TS2307 Cannot find module '@policing-platform/authz'` — Dockerfiles predate the integration | Added packages/authz to deps install, build stage, and production dist copy in all three Dockerfiles (commit `fcb091b`) | Build IDs `beff0887`, `b3b524ac`, `b538ce83` (FAILURE) → `7f4d3a79`, `9a02b4e8`, `63ce7797` (SUCCESS) |
+| 2 | puda-citizen/officer cloudbuild deploy step failed: Cloud Build SA lacks `run.services.get` (known T11, same as 2026-03-15) | Images built+pushed successfully (steps 0–1); deployed directly via `gcloud run deploy` | Build logs, revisions `puda-citizen-00016-dbm`, `puda-officer-00019-mqr` |
+
+## 4. Deployments
+
+| Service | Rollback Target | New Revision | URL |
+|---------|-----------------|--------------|-----|
+| platform-api | — (first deploy) | platform-api-00001-vzp | https://platform-api-809677427844.asia-southeast1.run.app |
+| platform-web | — (first deploy) | platform-web-00001-czs | https://platform-web-809677427844.asia-southeast1.run.app |
+| dopams-api | dopams-api-00037-jrn | dopams-api-00038-cvv | https://dopams-api-809677427844.asia-southeast1.run.app |
+| forensic-api | forensic-api-00016-2zk | forensic-api-00017-wjw | https://forensic-api-809677427844.asia-southeast1.run.app |
+| social-media-api | social-media-api-00021-hh6 | social-media-api-00022-49f | https://social-media-api-809677427844.asia-southeast1.run.app |
+| dopams-ui | dopams-ui-00012-7vq | dopams-ui-00013-pgq | https://dopams-ui-809677427844.asia-southeast1.run.app |
+| puda-citizen | puda-citizen-00015-qtk | puda-citizen-00016-dbm | https://puda-citizen-40220923312.asia-southeast1.run.app |
+| puda-officer | puda-officer-00018-btg | puda-officer-00019-mqr | https://puda-officer-40220923312.asia-southeast1.run.app |
+
+Existing env vars, secrets, and Cloud SQL wiring preserved on all redeploys (image-only updates).
+platform-web deployed with `PLATFORM_API_HOST=platform-api-809677427844.asia-southeast1.run.app`.
+
+## 5. Cloud Sanity Results
+
+| Check | Result |
+|-------|--------|
+| platform-api `/health` | `{"status":"ok"}` — PLATFORM_API_READY + APP_REGISTRY_SAFE |
+| platform-api `/api/v1/platform/apps` without claims | HTTP 401 (deny-by-default) |
+| platform-web root + SPA fallback | HTTP 200 |
+| platform-web → platform-api proxy (`/api/v1/platform/health`) | ok end-to-end; unauthed apps call → 401 through proxy |
+| dopams-api, forensic-api, social-media-api `/health` | `{"status":"ok"}` × 3 |
+| **Platform-auth enforcement (G-SEC-001)** — `x-platform-launch: true` without claims | HTTP 403 `PLATFORM_AUTH_DENIED / PLATFORM_CLAIMS_REQUIRED` with correlation ID on all three APIs |
+| puda-citizen, puda-officer, dopams-ui root | HTTP 200 × 3 |
+| citizen nginx `/health` proxy | `{"status":"ok"}` |
+| Cloud error logs (all 8 services since deploy) | 0 errors |
+
+## 6. Verdict
+
+**DEPLOYED** — 8/8 services live, all sanity checks pass, error logs clean.
+
+### Remaining risks / notes
+
+1. **Pilot cutover approval remains `pending_human_approval`** (`docs/spec/pilot-cutover-approval.json`) —
+   these deployments are pilot infrastructure, not the governed production cutover. The nine
+   approver roles must still sign off per `docs/spec/cutover-governance-runbook.md`.
+2. **No platform IdP in cloud yet** — platform-api and the domain adapters deny everything
+   without `x-platform-claims`. Cloud pilot flows need a claims issuer (the local stack's
+   nginx-injected synthetic claims are intentionally absent in cloud).
+3. Cloud Build SA in `puda-489215` still lacks `run.services.get` (T11) — in-config deploy
+   steps will keep failing until granted; direct `gcloud run deploy` works.
+4. domains/knowledge/api and domains/iqw-api are not deployed as cloud services (pilot scope:
+   the platform registry lists them; their cloud exposure is gated on the knowledge/IQW launch plans).
