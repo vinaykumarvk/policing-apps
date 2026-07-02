@@ -134,6 +134,86 @@ export async function platformLogout(options: PlatformApiClientOptions = {}): Pr
   });
 }
 
+export interface PlatformUserSummary {
+  userId: string;
+  username: string;
+  displayName: string;
+  persona: string;
+  orgId: string;
+  status: "active" | "disabled";
+}
+
+export interface RoleTemplateSummary {
+  id: string;
+  label: string;
+}
+
+export interface CreatedUserSecrets {
+  user: PlatformUserSummary;
+  totp_secret: string;
+  otpauth_uri: string;
+}
+
+async function adminJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const baseUrl = normalizeBaseUrl(platformApiBaseUrl());
+  const response = await fetch(`${baseUrl}${path}`, {
+    credentials: "include",
+    headers: { accept: "application/json", ...(init?.body ? { "content-type": "application/json" } : {}) },
+    ...init,
+  });
+  const body = (await response.json()) as T & { error?: { code?: string } };
+  if (!response.ok) {
+    throw new Error(body.error?.code ?? `PLATFORM_ADMIN_${response.status}`);
+  }
+  return body;
+}
+
+export function listPlatformUsers(): Promise<{ users: PlatformUserSummary[] }> {
+  return adminJson("/api/v1/platform/admin/users");
+}
+
+export function listRoleTemplates(): Promise<{ templates: RoleTemplateSummary[] }> {
+  return adminJson("/api/v1/platform/admin/users/role-templates");
+}
+
+export function createPlatformUser(input: {
+  username: string;
+  display_name: string;
+  password: string;
+  role_template: string;
+}): Promise<CreatedUserSecrets> {
+  return adminJson("/api/v1/platform/admin/users", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function setPlatformUserStatus(userId: string, status: "active" | "disabled"): Promise<{ ok: boolean }> {
+  return adminJson(`/api/v1/platform/admin/users/${userId}/status`, {
+    method: "POST",
+    body: JSON.stringify({ status }),
+  });
+}
+
+export function resetPlatformUserTotp(
+  userId: string,
+): Promise<{ ok: boolean; totp_secret: string; otpauth_uri: string }> {
+  return adminJson(`/api/v1/platform/admin/users/${userId}/reset-totp`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export function resetPlatformUserPassword(userId: string, password: string): Promise<{ ok: boolean }> {
+  return adminJson(`/api/v1/platform/admin/users/${userId}/reset-password`, {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+}
+
+export function canManageUsers(me: PlatformMeResponse): boolean {
+  return me.domain_permissions.some(
+    (entry) => entry.domain === "platform" && entry.permissions.includes("user:manage"),
+  );
+}
+
 function platformApiBaseUrl(): string {
   return import.meta.env.VITE_PLATFORM_API_BASE_URL ?? "";
 }

@@ -484,6 +484,128 @@ a {
   background: #1f2937;
 }
 
+.users-panel {
+  background: #fff;
+  border: 1px solid #d7dee8;
+  border-radius: 8px;
+  margin: 24px auto;
+  padding: 24px;
+}
+
+.create-user-form {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  margin: 16px 0 20px;
+}
+
+.create-user-form input,
+.create-user-form select {
+  border: 1px solid #d7dee8;
+  border-radius: 6px;
+  font: inherit;
+  min-height: 40px;
+  padding: 8px 10px;
+}
+
+.create-user-form button {
+  background: #111827;
+  border: 0;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  min-height: 40px;
+}
+
+.create-user-form button:disabled {
+  opacity: 0.6;
+}
+
+.users-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.users-table th,
+.users-table td {
+  border-bottom: 1px solid #e5eaf1;
+  font-size: 14px;
+  padding: 10px 8px;
+  text-align: left;
+}
+
+.users-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.users-actions button {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  min-height: 32px;
+  padding: 4px 10px;
+}
+
+.users-actions button:hover,
+.users-actions button:active {
+  background: #f1f5f9;
+}
+
+.status-chip {
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 10px;
+}
+
+.status-chip--active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-chip--disabled {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.secret-reveal {
+  background: #fffbeb;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 16px;
+}
+
+.secret-reveal code {
+  background: #fff;
+  border: 1px solid #e5eaf1;
+  border-radius: 6px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  padding: 8px 10px;
+}
+
+.secret-reveal button {
+  background: #111827;
+  border: 0;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  justify-self: start;
+  min-height: 36px;
+  padding: 6px 14px;
+}
+
 @media (max-width: 900px) {
   .platform-header,
   .hero-content,

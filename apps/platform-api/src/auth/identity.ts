@@ -45,6 +45,23 @@ export interface IdentityStore {
   getEntitlements: (userId: string) => Promise<readonly UserEntitlement[]>;
 }
 
+export interface PlatformUserSummary {
+  userId: string;
+  username: string;
+  displayName: string;
+  persona: string;
+  orgId: string;
+  status: "active" | "disabled";
+}
+
+export interface IdentityAdminStore extends IdentityStore {
+  listUsers: () => Promise<readonly PlatformUserSummary[]>;
+  createUser: (user: PlatformUser, entitlements: readonly UserEntitlement[]) => Promise<void>;
+  setUserStatus: (userId: string, status: "active" | "disabled") => Promise<boolean>;
+  setPasswordHash: (userId: string, passwordHash: string) => Promise<boolean>;
+  setTotpSecret: (userId: string, totpSecret: string) => Promise<boolean>;
+}
+
 export interface MintClaimsInput {
   user: PlatformUser;
   entitlements: readonly UserEntitlement[];
@@ -108,11 +125,56 @@ export function mintPlatformClaims(input: MintClaimsInput): PlatformClaims {
 export function createInMemoryIdentityStore(
   users: readonly PlatformUser[],
   entitlements: Readonly<Record<string, readonly UserEntitlement[]>>,
-): IdentityStore {
+): IdentityAdminStore {
+  const userList: PlatformUser[] = users.map((user) => ({ ...user }));
+  const entitlementMap = new Map<string, readonly UserEntitlement[]>(Object.entries(entitlements));
+
+  const find = (userId: string) => userList.find((user) => user.userId === userId);
+
   return {
     getUserByUsername: async (username) =>
-      users.find((user) => user.username === username) ?? null,
-    getUserById: async (userId) => users.find((user) => user.userId === userId) ?? null,
-    getEntitlements: async (userId) => entitlements[userId] ?? [],
+      userList.find((user) => user.username === username) ?? null,
+    getUserById: async (userId) => find(userId) ?? null,
+    getEntitlements: async (userId) => entitlementMap.get(userId) ?? [],
+    listUsers: async () =>
+      userList.map((user) => ({
+        userId: user.userId,
+        username: user.username,
+        displayName: user.displayName,
+        persona: user.persona,
+        orgId: user.orgId,
+        status: user.status,
+      })),
+    createUser: async (user, userEntitlements) => {
+      if (userList.some((existing) => existing.username === user.username)) {
+        throw new Error("USERNAME_TAKEN");
+      }
+      userList.push({ ...user });
+      entitlementMap.set(user.userId, [...userEntitlements]);
+    },
+    setUserStatus: async (userId, status) => {
+      const user = find(userId);
+      if (!user) {
+        return false;
+      }
+      user.status = status;
+      return true;
+    },
+    setPasswordHash: async (userId, passwordHash) => {
+      const user = find(userId);
+      if (!user) {
+        return false;
+      }
+      user.passwordHash = passwordHash;
+      return true;
+    },
+    setTotpSecret: async (userId, totpSecret) => {
+      const user = find(userId);
+      if (!user) {
+        return false;
+      }
+      user.totpSecret = totpSecret;
+      return true;
+    },
   };
 }

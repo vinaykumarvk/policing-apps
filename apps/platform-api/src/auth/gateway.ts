@@ -2,8 +2,10 @@
 // signed session cookie, and injects freshly minted, server-verified platform
 // claims into requests before they reach the platform app. The platform app
 // itself stays unchanged — it continues to trust only the claims headers.
+import { callerCanManageUsers, handleAdminRoute, isAdminRoute } from "./admin-routes";
 import { createSessionToken, verifyPassword, verifySessionToken, verifyTotp } from "./crypto";
-import { mintPlatformClaims, type IdentityStore } from "./identity";
+import { mintPlatformClaims, type IdentityAdminStore } from "./identity";
+import type { PlatformClaims } from "../../../../packages/authz/src";
 
 const SESSION_COOKIE = "platform_session";
 const SESSION_TTL_SECONDS = 8 * 60 * 60;
@@ -11,14 +13,14 @@ const LOGIN_MAX_FAILURES = 5;
 const LOGIN_LOCKOUT_MS = 5 * 60 * 1000;
 
 export interface AuthGatewayOptions {
-  store: IdentityStore;
+  store: IdentityAdminStore;
   sessionSecret: string;
   now?: () => Date;
   secureCookies?: boolean;
 }
 
 export interface AuthGateway {
-  /** Handles /api/v1/platform/auth/* requests. Returns null for other paths. */
+  /** Handles /api/v1/platform/auth/* and /api/v1/platform/admin/* requests. Returns null for other paths. */
   handleAuthRoute: (request: Request) => Promise<Response | null>;
   /** Returns claim headers for a valid session, or null. Never throws. */
   claimsHeadersFor: (request: Request) => Promise<Record<string, string> | null>;
@@ -42,8 +44,38 @@ export function createAuthGateway(options: AuthGatewayOptions): AuthGateway {
     return verifySessionToken(cookie, options.sessionSecret, now().getTime());
   };
 
+  const mintForSession = async (request: Request): Promise<PlatformClaims | null> => {
+    const session = readSession(request);
+    if (!session) {
+      return null;
+    }
+    const user = await options.store.getUserById(session.userId);
+    if (!user || user.status !== "active") {
+      return null;
+    }
+    const entitlements = await options.store.getEntitlements(user.userId);
+    const current = now();
+    return mintPlatformClaims({
+      user,
+      entitlements,
+      sessionId: session.sessionId,
+      mfaVerifiedAt: current.toISOString(),
+      now: current,
+    });
+  };
+
   const handleAuthRoute = async (request: Request): Promise<Response | null> => {
     const url = new URL(request.url);
+    if (isAdminRoute(url.pathname)) {
+      const claims = await mintForSession(request).catch(() => null);
+      if (!claims) {
+        return json(401, { error: { code: "AUTH_REQUIRED" } });
+      }
+      if (!callerCanManageUsers(claims)) {
+        return json(403, { error: { code: "USER_MANAGE_PERMISSION_REQUIRED" } });
+      }
+      return handleAdminRoute(request, { store: options.store, claims });
+    }
     if (!url.pathname.startsWith("/api/v1/platform/auth/")) {
       return null;
     }
@@ -121,23 +153,10 @@ export function createAuthGateway(options: AuthGatewayOptions): AuthGateway {
 
   const claimsHeadersFor = async (request: Request): Promise<Record<string, string> | null> => {
     try {
-      const session = readSession(request);
-      if (!session) {
+      const claims = await mintForSession(request);
+      if (!claims) {
         return null;
       }
-      const user = await options.store.getUserById(session.userId);
-      if (!user || user.status !== "active") {
-        return null;
-      }
-      const entitlements = await options.store.getEntitlements(user.userId);
-      const current = now();
-      const claims = mintPlatformClaims({
-        user,
-        entitlements,
-        sessionId: session.sessionId,
-        mfaVerifiedAt: current.toISOString(),
-        now: current,
-      });
       return {
         "x-platform-claims": JSON.stringify(claims),
         "x-platform-claims-verified": "true",

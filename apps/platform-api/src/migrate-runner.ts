@@ -70,6 +70,7 @@ async function bootstrapAdmin(pool: Pool): Promise<void> {
   }
   const existing = await pool.query("SELECT 1 FROM platform.platform_user LIMIT 1");
   if (existing.rowCount) {
+    await ensureAdminUserManage(pool);
     return;
   }
 
@@ -116,7 +117,7 @@ async function bootstrapAdmin(pool: Pool): Promise<void> {
       ],
     );
     const entitlements: Array<[string, string, string[]]> = [
-      ["platform_admin", "platform", ["registry:read", "health:read"]],
+      ["platform_admin", "platform", ["registry:read", "health:read", "user:manage"]],
       ["dopams", "dopams", ["case:read", "evidence:metadata-read"]],
       ["iqw", "iqw", ["complaint:read", "task:queue-read"]],
       ["forensic", "forensic", ["evidence:metadata-read"]],
@@ -137,6 +138,25 @@ async function bootstrapAdmin(pool: Pool): Promise<void> {
     throw error;
   } finally {
     client.release();
+  }
+}
+
+async function ensureAdminUserManage(pool: Pool): Promise<void> {
+  // Idempotent upgrade path: the bootstrap admin on databases seeded before
+  // user management existed gains the user:manage permission.
+  const username = process.env.PLATFORM_ADMIN_USERNAME ?? "platform-admin";
+  const result = await pool.query(
+    `UPDATE platform.platform_user_entitlement e
+        SET permissions = array_append(e.permissions, 'user:manage')
+       FROM platform.platform_user u
+      WHERE u.user_id = e.user_id
+        AND u.username = $1
+        AND e.domain = 'platform'
+        AND NOT ('user:manage' = ANY (e.permissions))`,
+    [username],
+  );
+  if (result.rowCount) {
+    console.log("migrate-runner: granted user:manage to bootstrap admin");
   }
 }
 

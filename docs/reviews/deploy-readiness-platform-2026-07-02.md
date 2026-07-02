@@ -114,3 +114,24 @@ registry JSON, SPA 200, persona switching works (`/me` reflects forensic persona
 Access: `gcloud run services proxy platform-pilot --region asia-southeast1 --project policing-apps --port 8080`
 then open http://localhost:8080. The public platform-web/platform-api services remain
 deployed, locked, as the target-state topology awaiting a real claims issuer.
+
+---
+
+## Addendum 2: claims issuer + user management; platform-pilot retired
+
+- **Real login shipped** (commit `6bdac84`): Postgres user store on `policing-db-v2`
+  (database `policing_platform`), scrypt passwords, mandatory TOTP MFA, HMAC session
+  cookie, claims minted per request. Public shell now shows a sign-in screen.
+- **User management shipped**: admin routes guarded by `platform/user:manage`
+  (create from role template, list, enable/disable, reset password/TOTP; TOTP secrets
+  returned exactly once; structured audit log lines per action). Five role templates:
+  platform_administrator (platform-ops), pilot_operator, forensic_analyst,
+  intelligence_analyst, investigating_officer. Users panel in the shell for admins.
+- **platform-pilot deleted** (service + repo artifacts) — superseded by real login.
+- Cloud verification: bootstrap admin idempotently granted user:manage; created
+  forensic_analyst user; that user sees exactly one ALLOW (forensic) and MODULE_DENIED
+  elsewhere; admin routes 403 for non-admins; disabled users cannot log in. Test user
+  `asha.verma` left disabled in the user table. 0 errors in logs.
+- Follow-ups: route admin-action audit lines into the authorization-decision-evidence
+  ledger (G-SEC-002 parity); amend docs/spec/auth-entitlements-contract.md to describe
+  the platform-idp claims source formally.

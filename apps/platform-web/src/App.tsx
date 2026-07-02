@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { AppLauncher } from "./components/AppLauncher";
 import { DecisionAuditPanel } from "./components/DecisionAuditPanel";
 import { LoginScreen } from "./components/LoginScreen";
+import { UsersPanel } from "./components/UsersPanel";
 import { RouteTable, SHELL_ROUTES } from "./routes";
 import {
+  canManageUsers,
   fetchPlatformSession,
   fetchPlatformShellData,
   platformLogout,
@@ -139,6 +141,7 @@ function ShellDashboard({ data }: { data: PlatformShellData }): JSX.Element {
       </section>
 
       <AppLauncher apps={data.registry.apps} registryVersion={data.registry.registry_version} />
+      {canManageUsers(data.me) ? <UsersPanel /> : null}
       <RouteTable apps={data.registry.apps} />
       <DecisionAuditPanel
         apps={data.registry.apps}
