@@ -18,6 +18,7 @@ export async function registerQueueRoutingRoutes(app: FastifyInstance): Promise<
       },
     },
   }, async (request, reply) => {
+    if (!requireAdmin(request, reply)) return;
     try {
       const result = await query(
         `SELECT rule_id, rule_name, category, min_risk_score, max_risk_score, target_queue,

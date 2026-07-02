@@ -185,7 +185,7 @@ export async function registerPrivacyRoutes(app: FastifyInstance): Promise<void>
     try {
       const { entityId } = request.params as { entityId: string };
       const result = await query(
-        `SELECT * FROM pii_redaction_log WHERE entity_id = $1 ORDER BY created_at DESC`,
+        `SELECT * FROM pii_redaction_log WHERE entity_id = $1 ORDER BY created_at DESC LIMIT 200`,
         [entityId],
       );
       return { redactions: result.rows };

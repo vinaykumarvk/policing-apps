@@ -1,0 +1,1262 @@
+{
+  "project": "policing-platform-integration",
+  "status": "planning_complete",
+  "selected_path": "full",
+  "strategy": "platform-shell-over-bounded-services",
+  "generated_at": "2026-07-02T00:06:17+05:30",
+  "phase_execution": {
+    "P0": {
+      "status": "complete",
+      "completed_at": "2026-07-02T01:10:00+05:30",
+      "evidence": [
+        "docs/spec/source-inventory.md",
+        "docs/spec/secret-hygiene-report.md",
+        "docs/spec/import-map.yaml",
+        "scripts/check-import-allowlist.mjs",
+        "scripts/check-no-known-secret-paths.mjs"
+      ],
+      "checks": [
+        "bash docs/spec/pipeline/checks/p0.sh"
+      ],
+      "tokens": {
+        "budget": null,
+        "actual": 336663,
+        "overage_ratio": null,
+        "trigger_fired": false,
+        "estimate_method": "goal-token-usage"
+      }
+    },
+    "P1": {
+      "status": "complete",
+      "completed_at": "2026-07-02T00:48:40+05:30",
+      "evidence": [
+        "docs/spec/repo-layout.md",
+        "package.json",
+        "package-lock.json",
+        "scripts/check-repo-layout.mjs",
+        "scripts/run-workspace-script-if-present.mjs",
+        "docs/spec/import-map.yaml"
+      ],
+      "checks": [
+        "npm run check:repo-layout",
+        "npm run build:packages",
+        "npm run typecheck",
+        "bash docs/spec/pipeline/checks/p1.sh"
+      ],
+      "tokens": {
+        "budget": null,
+        "actual": 122480,
+        "overage_ratio": null,
+        "trigger_fired": false,
+        "estimate_method": "goal-token-usage"
+      }
+    },
+    "P2": {
+      "status": "complete",
+      "completed_at": "2026-07-02T00:59:29+05:30",
+      "evidence": [
+        "docs/spec/auth-entitlements-contract.md",
+        "docs/spec/auth-claim-fixtures.json",
+        "packages/authz/src/claims.ts",
+        "packages/authz/src/entitlements.ts",
+        "packages/authz/src/__tests__/claims.test.ts",
+        "packages/authz/src/__tests__/entitlements.test.ts",
+        "tests/python/test_platform_claims.py"
+      ],
+      "checks": [
+        "npm --workspace packages/authz run test",
+        "npm --workspace packages/authz run typecheck",
+        "python3 -m pytest tests/python/test_platform_claims.py",
+        "bash docs/spec/pipeline/checks/p2.sh"
+      ],
+      "traceability": [
+        {
+          "requirement_id": "R-SEC-001",
+          "evidence": [
+            "packages/authz/src/entitlements.ts",
+            "packages/authz/src/__tests__/entitlements.test.ts",
+            "tests/python/test_platform_claims.py"
+          ]
+        },
+        {
+          "requirement_id": "R-SEC-002",
+          "evidence": [
+            "docs/spec/auth-entitlements-contract.md",
+            "packages/authz/src/claims.ts",
+            "packages/authz/src/__tests__/claims.test.ts"
+          ]
+        }
+      ],
+      "tokens": {
+        "budget": null,
+        "actual": 202856,
+        "overage_ratio": null,
+        "trigger_fired": false,
+        "estimate_method": "goal-token-usage"
+      }
+    },
+    "P3": {
+      "status": "complete",
+      "completed_at": "2026-07-02T01:10:23+05:30",
+      "evidence": [
+        "docs/spec/access-control-threat-model.md",
+        "docs/spec/data-classification-policy.md",
+        "docs/spec/authorization-decision-evidence.md",
+        "packages/authz/src/abac.ts",
+        "packages/audit-ledger/src/decision-evidence.ts",
+        "packages/authz/src/__tests__/abac.negative.test.ts",
+        "packages/audit-ledger/src/__tests__/decision-evidence.test.ts"
+      ],
+      "checks": [
+        "npm --workspace packages/authz run test",
+        "npm --workspace packages/authz run typecheck",
+        "npm --workspace packages/audit-ledger run test",
+        "npm --workspace packages/audit-ledger run typecheck",
+        "bash docs/spec/pipeline/checks/p3.sh"
+      ],
+      "traceability": [
+        {
+          "requirement_id": "R-SEC-001",
+          "evidence": [
+            "docs/spec/access-control-threat-model.md",
+            "packages/authz/src/abac.ts",
+            "packages/authz/src/__tests__/abac.negative.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "R-SEC-002",
+          "evidence": [
+            "docs/spec/authorization-decision-evidence.md",
+            "packages/audit-ledger/src/decision-evidence.ts",
+            "packages/audit-ledger/src/__tests__/decision-evidence.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "R-DATA-001",
+          "evidence": [
+            "docs/spec/data-classification-policy.md",
+            "packages/authz/src/abac.ts",
+            "packages/authz/src/__tests__/abac.negative.test.ts"
+          ]
+        }
+      ],
+      "tokens": {
+        "budget": null,
+        "actual": 166156,
+        "overage_ratio": null,
+        "trigger_fired": false,
+        "estimate_method": "goal-token-usage"
+      }
+    },
+    "P4": {
+      "status": "complete",
+      "completed_at": "2026-07-02T01:24:00+05:30",
+      "evidence": [
+        "docs/spec/pilot-fixtures.md",
+        "fixtures/platform/users.json",
+        "fixtures/platform/cases.json",
+        "fixtures/platform/evidence.json",
+        "fixtures/platform/denials.json",
+        "packages/authz/src/__tests__/pilot-personas.test.ts",
+        "apps/platform-api/package.json",
+        "apps/platform-api/src/__tests__/fixtures.test.ts"
+      ],
+      "checks": [
+        "npm --workspace packages/authz run test",
+        "npm --workspace apps/platform-api run test",
+        "npm --workspace apps/platform-api run typecheck",
+        "npm --workspace apps/platform-api run build",
+        "bash docs/spec/pipeline/checks/p4.sh"
+      ],
+      "traceability": [
+        {
+          "requirement_id": "R-SEC-001",
+          "evidence": [
+            "fixtures/platform/denials.json",
+            "packages/authz/src/__tests__/pilot-personas.test.ts",
+            "apps/platform-api/src/__tests__/fixtures.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "R-SEC-002",
+          "evidence": [
+            "fixtures/platform/denials.json",
+            "apps/platform-api/src/__tests__/fixtures.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "R-DATA-001",
+          "evidence": [
+            "docs/spec/pilot-fixtures.md",
+            "fixtures/platform/cases.json",
+            "fixtures/platform/evidence.json"
+          ]
+        }
+      ],
+      "tokens": {
+        "budget": null,
+        "actual": 152626,
+        "overage_ratio": null,
+        "trigger_fired": false,
+        "estimate_method": "goal-token-usage"
+      }
+    },
+    "P5": {
+      "status": "complete",
+      "completed_at": "2026-07-02T02:00:28+05:30",
+      "evidence": [
+        "packages/authz/package.json",
+        "packages/audit-ledger/package.json",
+        "packages/case-core/package.json",
+        "packages/case-core/src/platform-case.ts",
+        "packages/case-core/src/__tests__/platform-case.test.ts",
+        "packages/evidence-core/package.json",
+        "packages/evidence-core/src/platform-evidence.ts",
+        "packages/evidence-core/src/__tests__/platform-evidence.test.ts"
+      ],
+      "checks": [
+        "npm --workspace packages/authz run test",
+        "npm --workspace packages/audit-ledger run test",
+        "npm --workspace packages/case-core run test",
+        "npm --workspace packages/evidence-core run test",
+        "npm --workspace packages/authz run typecheck",
+        "npm --workspace packages/audit-ledger run typecheck",
+        "npm --workspace packages/case-core run typecheck",
+        "npm --workspace packages/evidence-core run typecheck",
+        "bash docs/spec/pipeline/checks/p5.sh"
+      ],
+      "traceability": [
+        {
+          "requirement_id": "P5-platform-service-packages",
+          "evidence": [
+            "packages/authz/package.json",
+            "packages/audit-ledger/package.json",
+            "packages/case-core/package.json",
+            "packages/evidence-core/package.json",
+            "package-lock.json"
+          ]
+        },
+        {
+          "requirement_id": "R-SEC-001",
+          "evidence": [
+            "packages/authz/src/entitlements.ts",
+            "packages/authz/src/abac.ts",
+            "packages/case-core/src/platform-case.ts",
+            "packages/evidence-core/src/platform-evidence.ts"
+          ]
+        },
+        {
+          "requirement_id": "R-SEC-002",
+          "evidence": [
+            "packages/audit-ledger/src/decision-evidence.ts",
+            "packages/audit-ledger/src/__tests__/decision-evidence.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "R-DATA-001",
+          "evidence": [
+            "packages/case-core/src/platform-case.ts",
+            "packages/case-core/src/__tests__/platform-case.test.ts",
+            "packages/evidence-core/src/platform-evidence.ts",
+            "packages/evidence-core/src/__tests__/platform-evidence.test.ts"
+          ]
+        }
+      ],
+      "tokens": {
+        "budget": null,
+        "actual": 232640,
+        "overage_ratio": null,
+        "trigger_fired": false,
+        "estimate_method": "goal-token-usage"
+      }
+    },
+    "P6": {
+      "status": "complete",
+      "completed_at": "2026-07-02T02:10:00+05:30",
+      "evidence": [
+        "apps/platform-api/package.json",
+        "apps/platform-api/src/app.ts",
+        "apps/platform-api/src/routes/platform.routes.ts",
+        "apps/platform-api/src/app-registry.ts",
+        "apps/platform-api/src/migrations/001_platform_foundation.sql",
+        "apps/platform-api/src/__tests__/app-registry.test.ts",
+        "apps/platform-api/src/__tests__/entitlements.test.ts",
+        "apps/platform-api/src/__tests__/decision-evidence.test.ts",
+        "apps/platform-api/src/__tests__/health-readiness.test.ts"
+      ],
+      "checks": [
+        "npm --workspace apps/platform-api run test",
+        "npm --workspace apps/platform-api run typecheck",
+        "npm --workspace apps/platform-api run build",
+        "npm --workspace packages/authz run test",
+        "npm --workspace packages/audit-ledger run test",
+        "bash docs/spec/pipeline/checks/p6.sh"
+      ],
+      "traceability": [
+        {
+          "requirement_id": "P6-platform-api-and-app-registry",
+          "evidence": [
+            "apps/platform-api/src/app.ts",
+            "apps/platform-api/src/routes/platform.routes.ts",
+            "apps/platform-api/src/app-registry.ts",
+            "apps/platform-api/src/migrations/001_platform_foundation.sql"
+          ]
+        },
+        {
+          "requirement_id": "R-SEC-001",
+          "evidence": [
+            "apps/platform-api/src/app-registry.ts",
+            "apps/platform-api/src/routes/platform.routes.ts",
+            "apps/platform-api/src/__tests__/app-registry.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "R-SEC-002",
+          "evidence": [
+            "apps/platform-api/src/routes/platform.routes.ts",
+            "apps/platform-api/src/__tests__/entitlements.test.ts",
+            "apps/platform-api/src/__tests__/decision-evidence.test.ts",
+            "apps/platform-api/src/migrations/001_platform_foundation.sql"
+          ]
+        }
+      ],
+      "tokens": {
+        "budget": null,
+        "actual": 245350,
+        "overage_ratio": null,
+        "trigger_fired": false,
+        "estimate_method": "goal-token-usage"
+      }
+    },
+    "P7": {
+      "status": "complete",
+      "completed_at": "2026-07-02T02:18:16+05:30",
+      "evidence": [
+        "apps/platform-web/package.json",
+        "apps/platform-web/src/App.tsx",
+        "apps/platform-web/src/routes.tsx",
+        "apps/platform-web/src/components/AppLauncher.tsx",
+        "apps/platform-web/src/components/DecisionAuditPanel.tsx",
+        "apps/platform-web/src/__tests__/app-launcher.test.tsx",
+        "e2e/tests/platform-app-registry.spec.ts"
+      ],
+      "checks": [
+        "npm --workspace apps/platform-web run test",
+        "npm --workspace apps/platform-web run typecheck",
+        "bash docs/spec/pipeline/checks/p7.sh",
+        "npx playwright test --config=e2e/playwright.config.ts --project=platform-chromium e2e/tests/platform-app-registry.spec.ts (blocked: local Playwright Chromium binary missing)"
+      ],
+      "traceability": [
+        {
+          "requirement_id": "P7-platform-web-shell",
+          "evidence": [
+            "apps/platform-web/src/App.tsx",
+            "apps/platform-web/src/routes.tsx",
+            "apps/platform-web/src/components/AppLauncher.tsx",
+            "apps/platform-web/src/components/DecisionAuditPanel.tsx",
+            "apps/platform-web/src/__tests__/app-launcher.test.tsx",
+            "e2e/tests/platform-app-registry.spec.ts"
+          ]
+        },
+        {
+          "requirement_id": "R-SEC-001",
+          "evidence": [
+            "apps/platform-web/src/components/AppLauncher.tsx",
+            "apps/platform-web/src/routes.tsx",
+            "apps/platform-web/src/__tests__/app-launcher.test.tsx",
+            "e2e/tests/platform-app-registry.spec.ts"
+          ]
+        },
+        {
+          "requirement_id": "R-SEC-002",
+          "evidence": [
+            "apps/platform-web/src/components/DecisionAuditPanel.tsx",
+            "apps/platform-web/src/__tests__/app-launcher.test.tsx"
+          ]
+        }
+      ],
+      "tokens": {
+        "budget": null,
+        "actual": 203737,
+        "overage_ratio": null,
+        "trigger_fired": false,
+        "estimate_method": "goal-token-usage"
+      }
+    },
+    "P8": {
+      "status": "complete",
+      "completed_at": "2026-07-02T10:01:43+05:30",
+      "evidence": [
+        "apps/dopams-api/src/middleware/platform-auth.ts",
+        "apps/dopams-api/src/__tests__/platform-auth.test.ts",
+        "docs/spec/iqw-platform-auth-adapter.md",
+        "domains/iqw-api/src/middleware/platform_auth.py",
+        "tests/python/test_iqw_platform_auth.py",
+        "apps/platform-api/src/app-registry.ts",
+        "apps/platform-api/src/__tests__/app-registry.test.ts"
+      ],
+      "checks": [
+        "npm --workspace apps/dopams-api run test",
+        "npm --workspace apps/dopams-api run typecheck",
+        "python3 -m pytest tests/python/test_iqw_platform_auth.py -q",
+        "npm --workspace apps/platform-api run test -- src/__tests__/app-registry.test.ts",
+        "npm --workspace apps/platform-api run typecheck",
+        "npm --workspace packages/api-core run build",
+        "npm --workspace packages/api-core run typecheck",
+        "bash docs/spec/pipeline/checks/p8.sh"
+      ],
+      "traceability": [
+        {
+          "requirement_id": "P8-pilot-domain-auth-adapters",
+          "evidence": [
+            "apps/dopams-api/src/middleware/platform-auth.ts",
+            "apps/dopams-api/src/__tests__/platform-auth.test.ts",
+            "domains/iqw-api/src/middleware/platform_auth.py",
+            "tests/python/test_iqw_platform_auth.py",
+            "docs/spec/iqw-platform-auth-adapter.md"
+          ]
+        },
+        {
+          "requirement_id": "R-SEC-001",
+          "evidence": [
+            "apps/dopams-api/src/middleware/platform-auth.ts",
+            "domains/iqw-api/src/middleware/platform_auth.py",
+            "apps/dopams-api/src/__tests__/platform-auth.test.ts",
+            "tests/python/test_iqw_platform_auth.py",
+            "apps/platform-api/src/app-registry.ts",
+            "apps/platform-api/src/__tests__/app-registry.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "R-SEC-002",
+          "evidence": [
+            "apps/dopams-api/src/middleware/platform-auth.ts",
+            "domains/iqw-api/src/middleware/platform_auth.py",
+            "docs/spec/iqw-platform-auth-adapter.md",
+            "apps/dopams-api/src/__tests__/platform-auth.test.ts",
+            "tests/python/test_iqw_platform_auth.py"
+          ]
+        }
+      ],
+      "tokens": {
+        "budget": null,
+        "actual": 202031,
+        "overage_ratio": null,
+        "trigger_fired": false,
+        "estimate_method": "goal-token-usage"
+      }
+    },
+    "P9": {
+      "status": "complete",
+      "completed_at": "2026-07-02T10:16:37+05:30",
+      "evidence": [
+        "apps/platform-api/src/migrations/002_platform_case_projection.sql",
+        "apps/platform-api/src/migrations/003_platform_evidence_projection.sql",
+        "apps/platform-api/src/services/case-projection.ts",
+        "apps/platform-api/src/services/evidence-projection.ts",
+        "apps/platform-api/src/routes/case360.routes.ts",
+        "apps/platform-api/src/__tests__/case-projection.test.ts",
+        "apps/platform-api/src/__tests__/evidence-projection.test.ts",
+        "apps/platform-api/src/__tests__/case360.authz.test.ts"
+      ],
+      "checks": [
+        "npm --workspace apps/platform-api run typecheck",
+        "npm --workspace apps/platform-api run test",
+        "bash docs/spec/pipeline/checks/p9.sh"
+      ],
+      "traceability": [
+        {
+          "requirement_id": "P9-pilot-case-and-evidence-projections",
+          "evidence": [
+            "apps/platform-api/src/migrations/002_platform_case_projection.sql",
+            "apps/platform-api/src/migrations/003_platform_evidence_projection.sql",
+            "apps/platform-api/src/services/case-projection.ts",
+            "apps/platform-api/src/services/evidence-projection.ts",
+            "apps/platform-api/src/routes/case360.routes.ts"
+          ]
+        },
+        {
+          "requirement_id": "R-SEC-002",
+          "evidence": [
+            "apps/platform-api/src/routes/case360.routes.ts",
+            "apps/platform-api/src/__tests__/case360.authz.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "R-DATA-001",
+          "evidence": [
+            "apps/platform-api/src/services/case-projection.ts",
+            "apps/platform-api/src/services/evidence-projection.ts",
+            "apps/platform-api/src/__tests__/case-projection.test.ts",
+            "apps/platform-api/src/__tests__/evidence-projection.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "G-SEC-003",
+          "evidence": [
+            "apps/platform-api/src/services/evidence-projection.ts",
+            "apps/platform-api/src/__tests__/evidence-projection.test.ts",
+            "apps/platform-api/src/__tests__/case360.authz.test.ts"
+          ]
+        }
+      ],
+      "tokens": {
+        "budget": null,
+        "actual": 287708,
+        "overage_ratio": null,
+        "trigger_fired": false,
+        "estimate_method": "goal-token-usage"
+      }
+    },
+    "P10": {
+      "status": "complete",
+      "completed_at": "2026-07-02T10:45:05+05:30",
+      "evidence": [
+        "docs/spec/knowledge-runtime-decision.md",
+        "docs/spec/knowledge-ingestion-event.schema.json",
+        "docs/spec/knowledge-retrieval-security.md",
+        "apps/platform-api/src/__tests__/knowledge-scope-contract.test.ts",
+        "/Users/n15318/RAG-app/apps/api/src/retrieval/platform-scope-contract.ts",
+        "/Users/n15318/RAG-app/apps/api/src/__tests__/retrieval/platform-scope-contract.test.ts"
+      ],
+      "checks": [
+        "npm --workspace apps/platform-api run test -- knowledge-scope-contract",
+        "npm --workspace apps/api run test -- platform-scope-contract (RAG-app)",
+        "bash docs/spec/pipeline/checks/p10.sh",
+        "npm --workspace apps/platform-api run typecheck",
+        "npm --workspace apps/api run typecheck (RAG-app)"
+      ],
+      "traceability": [
+        {
+          "requirement_id": "G-SEC-004",
+          "evidence": [
+            "docs/spec/knowledge-retrieval-security.md",
+            "apps/platform-api/src/__tests__/knowledge-scope-contract.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "R-KNOW-001",
+          "evidence": [
+            "docs/spec/knowledge-runtime-decision.md",
+            "docs/spec/knowledge-ingestion-event.schema.json",
+            "/Users/n15318/RAG-app/apps/api/src/retrieval/platform-scope-contract.ts",
+            "/Users/n15318/RAG-app/apps/api/src/__tests__/retrieval/platform-scope-contract.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "R-SEC-002",
+          "evidence": [
+            "docs/spec/knowledge-retrieval-security.md",
+            "apps/platform-api/src/__tests__/knowledge-scope-contract.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "R-DATA-001",
+          "evidence": [
+            "docs/spec/knowledge-ingestion-event.schema.json",
+            "docs/spec/knowledge-retrieval-security.md"
+          ]
+        }
+      ],
+      "tokens": {
+        "budget": null,
+        "actual": 168537,
+        "overage_ratio": null,
+        "trigger_fired": false,
+        "estimate_method": "goal-token-usage"
+      }
+    },
+    "P11": {
+      "status": "complete",
+      "completed_at": "2026-07-02T11:01:28+05:30",
+      "evidence": [
+        "deploy/docker-compose/policing-platform.yml",
+        "deploy/nginx/policing-platform.local.conf",
+        "scripts/smoke-platform-local.sh",
+        "e2e/tests/platform-pilot-flow.spec.ts",
+        "docs/spec/platform-local-deployment.md"
+      ],
+      "checks": [
+        "docker compose -f deploy/docker-compose/policing-platform.yml config",
+        "docker compose -f deploy/docker-compose/policing-platform.yml up --wait (blocked: Docker daemon not running in this session)",
+        "bash scripts/smoke-platform-local.sh",
+        "npx playwright test --config=e2e/playwright.config.ts --project=platform-chromium e2e/tests/platform-pilot-flow.spec.ts --reporter=line",
+        "bash docs/spec/pipeline/checks/p11.sh"
+      ],
+      "traceability": [
+        {
+          "requirement_id": "P11-integrated-local-deployment",
+          "evidence": [
+            "deploy/docker-compose/policing-platform.yml",
+            "deploy/nginx/policing-platform.local.conf",
+            "scripts/smoke-platform-local.sh",
+            "e2e/tests/platform-pilot-flow.spec.ts",
+            "docs/spec/platform-local-deployment.md"
+          ]
+        },
+        {
+          "requirement_id": "G-SEC-001",
+          "evidence": [
+            "deploy/nginx/policing-platform.local.conf",
+            "scripts/smoke-platform-local.sh",
+            "e2e/tests/platform-pilot-flow.spec.ts"
+          ]
+        },
+        {
+          "requirement_id": "P8-pilot-domain-auth-adapters",
+          "evidence": [
+            "deploy/docker-compose/policing-platform.yml",
+            "deploy/nginx/policing-platform.local.conf",
+            "docs/spec/platform-local-deployment.md"
+          ]
+        }
+      ],
+      "tokens": {
+        "budget": null,
+        "actual": 149121,
+        "overage_ratio": null,
+        "trigger_fired": false,
+        "estimate_method": "goal-token-usage"
+      }
+    },
+    "P12": {
+      "status": "complete",
+      "completed_at": "2026-07-02T12:03:42+05:30",
+      "evidence": [
+        "docs/spec/release-gate.md",
+        "docs/spec/cutover-governance-runbook.md",
+        "docs/spec/run-state-governance.md",
+        "docs/spec/traceability-matrix.md"
+      ],
+      "checks": [
+        "npm run typecheck",
+        "npm --workspace apps/platform-api run test",
+        "npm --workspace apps/platform-web run test",
+        "bash scripts/smoke-platform-local.sh",
+        "bash docs/spec/pipeline/checks/p12.sh"
+      ],
+      "traceability": [
+        {
+          "requirement_id": "G-SEC-001",
+          "evidence": [
+            "docs/spec/release-gate.md",
+            "docs/spec/traceability-matrix.md",
+            "scripts/smoke-platform-local.sh"
+          ]
+        },
+        {
+          "requirement_id": "G-SEC-002",
+          "evidence": [
+            "docs/spec/release-gate.md",
+            "docs/spec/traceability-matrix.md",
+            "docs/spec/authorization-decision-evidence.md"
+          ]
+        },
+        {
+          "requirement_id": "G-SEC-003",
+          "evidence": [
+            "docs/spec/release-gate.md",
+            "docs/spec/traceability-matrix.md",
+            "docs/spec/data-classification-policy.md"
+          ]
+        },
+        {
+          "requirement_id": "G-SEC-004",
+          "evidence": [
+            "docs/spec/release-gate.md",
+            "docs/spec/traceability-matrix.md",
+            "docs/spec/knowledge-retrieval-security.md"
+          ]
+        },
+        {
+          "requirement_id": "G-OPS-001",
+          "evidence": [
+            "docs/spec/cutover-governance-runbook.md",
+            "docs/spec/run-state-governance.md",
+            "docs/spec/traceability-matrix.md"
+          ]
+        },
+        {
+          "requirement_id": "R-OPS-001",
+          "evidence": [
+            "docs/spec/release-gate.md",
+            "docs/spec/cutover-governance-runbook.md",
+            "docs/spec/run-state-governance.md",
+            "docs/spec/traceability-matrix.md"
+          ]
+        }
+      ],
+      "tokens": {
+        "budget": null,
+        "actual": 154627,
+        "overage_ratio": null,
+        "trigger_fired": false,
+        "estimate_method": "goal-token-usage"
+      }
+    },
+    "P13": {
+      "status": "complete",
+      "completed_at": "2026-07-02T12:32:00+05:30",
+      "evidence": [
+        "apps/forensic-api/src/middleware/platform-auth.ts",
+        "apps/forensic-api/src/__tests__/platform-auth.test.ts",
+        "apps/forensic-api/src/app.ts",
+        "apps/platform-api/src/app-registry.ts",
+        "deploy/docker-compose/policing-platform.yml",
+        "deploy/nginx/policing-platform.local.conf",
+        "scripts/smoke-platform-local.sh",
+        "docs/spec/release-gate.md",
+        "docs/spec/run-state-governance.md",
+        "docs/spec/traceability-matrix.md",
+        "docs/spec/manifest.json"
+      ],
+      "checks": [
+        "npm --workspace apps/forensic-api exec -- vitest run src/__tests__/platform-auth.test.ts",
+        "npm --workspace apps/forensic-api run typecheck",
+        "npm --workspace apps/platform-api run test",
+        "npm --workspace apps/platform-web run test",
+        "bash scripts/smoke-platform-local.sh",
+        "bash docs/spec/pipeline-p13/checks/p13.sh"
+      ],
+      "traceability": [
+        {
+          "requirement_id": "P13-R-SEC-001",
+          "evidence": [
+            "apps/forensic-api/src/middleware/platform-auth.ts",
+            "apps/forensic-api/src/__tests__/platform-auth.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "P13-R-SEC-002",
+          "evidence": [
+            "apps/forensic-api/src/middleware/platform-auth.ts",
+            "apps/forensic-api/src/__tests__/platform-auth.test.ts",
+            "apps/forensic-api/src/app.ts"
+          ]
+        },
+        {
+          "requirement_id": "P13-R-SEC-003",
+          "evidence": [
+            "apps/forensic-api/src/middleware/platform-auth.ts",
+            "apps/forensic-api/src/__tests__/platform-auth.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "P13-R-REG-001",
+          "evidence": [
+            "apps/platform-api/src/app-registry.ts",
+            "apps/platform-api/src/__tests__/app-registry.test.ts",
+            "apps/platform-web/src/__tests__/app-launcher.test.tsx"
+          ]
+        },
+        {
+          "requirement_id": "P13-R-OPS-001",
+          "evidence": [
+            "deploy/docker-compose/policing-platform.yml",
+            "deploy/nginx/policing-platform.local.conf",
+            "scripts/smoke-platform-local.sh"
+          ]
+        },
+        {
+          "requirement_id": "P13-R-TRACE-001",
+          "evidence": [
+            "docs/spec/release-gate.md",
+            "docs/spec/run-state-governance.md",
+            "docs/spec/traceability-matrix.md",
+            "docs/spec/manifest.json"
+          ]
+        },
+        {
+          "requirement_id": "G-SEC-001",
+          "evidence": [
+            "apps/platform-api/src/app-registry.ts",
+            "apps/forensic-api/src/middleware/platform-auth.ts",
+            "scripts/smoke-platform-local.sh"
+          ]
+        },
+        {
+          "requirement_id": "G-SEC-002",
+          "evidence": [
+            "apps/forensic-api/src/middleware/platform-auth.ts",
+            "apps/forensic-api/src/__tests__/platform-auth.test.ts",
+            "docs/spec/traceability-matrix.md"
+          ]
+        },
+        {
+          "requirement_id": "G-SEC-004",
+          "evidence": [
+            "apps/platform-api/src/app-registry.ts",
+            "scripts/smoke-platform-local.sh"
+          ]
+        },
+        {
+          "requirement_id": "G-OPS-001",
+          "evidence": [
+            "docs/spec/release-gate.md",
+            "docs/spec/run-state-governance.md",
+            "docs/spec/traceability-matrix.md"
+          ]
+        }
+      ],
+      "tokens": {
+        "budget": null,
+        "actual": 251227,
+        "overage_ratio": null,
+        "trigger_fired": false,
+        "estimate_method": "goal-token-usage"
+      }
+    },
+    "P14": {
+      "status": "complete",
+      "completed_at": "2026-07-02T13:05:00+05:30",
+      "evidence": [
+        "apps/social-media-api/src/middleware/platform-auth.ts",
+        "apps/social-media-api/src/__tests__/platform-auth.test.ts",
+        "apps/social-media-api/src/app.ts",
+        "apps/social-media-api/package.json",
+        "apps/platform-api/src/app-registry.ts",
+        "apps/platform-api/src/__tests__/app-registry.test.ts",
+        "apps/platform-web/src/__tests__/app-launcher.test.tsx",
+        "deploy/docker-compose/policing-platform.yml",
+        "deploy/nginx/policing-platform.local.conf",
+        "scripts/smoke-platform-local.sh",
+        "docs/spec/release-gate.md",
+        "docs/spec/run-state-governance.md",
+        "docs/spec/traceability-matrix.md",
+        "docs/spec/manifest.json"
+      ],
+      "checks": [
+        "npm --workspace apps/social-media-api exec -- vitest run src/__tests__/platform-auth.test.ts",
+        "npm --workspace apps/social-media-api run typecheck",
+        "npm --workspace apps/platform-api run test",
+        "npm --workspace apps/platform-web run test",
+        "bash scripts/smoke-platform-local.sh",
+        "bash docs/spec/pipeline-p14/checks/p14.sh"
+      ],
+      "traceability": [
+        {
+          "requirement_id": "P14-R-SEC-001",
+          "evidence": [
+            "apps/social-media-api/src/middleware/platform-auth.ts",
+            "apps/social-media-api/src/__tests__/platform-auth.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "P14-R-SEC-002",
+          "evidence": [
+            "apps/social-media-api/src/middleware/platform-auth.ts",
+            "apps/social-media-api/src/__tests__/platform-auth.test.ts",
+            "apps/social-media-api/src/app.ts"
+          ]
+        },
+        {
+          "requirement_id": "P14-R-REG-001",
+          "evidence": [
+            "apps/platform-api/src/app-registry.ts",
+            "apps/platform-api/src/__tests__/app-registry.test.ts",
+            "apps/platform-web/src/__tests__/app-launcher.test.tsx"
+          ]
+        },
+        {
+          "requirement_id": "P14-R-OPS-001",
+          "evidence": [
+            "deploy/docker-compose/policing-platform.yml",
+            "deploy/nginx/policing-platform.local.conf",
+            "scripts/smoke-platform-local.sh"
+          ]
+        },
+        {
+          "requirement_id": "P14-R-TRACE-001",
+          "evidence": [
+            "docs/spec/release-gate.md",
+            "docs/spec/run-state-governance.md",
+            "docs/spec/traceability-matrix.md",
+            "docs/spec/manifest.json"
+          ]
+        },
+        {
+          "requirement_id": "G-SEC-001",
+          "evidence": [
+            "apps/platform-api/src/app-registry.ts",
+            "apps/social-media-api/src/middleware/platform-auth.ts",
+            "scripts/smoke-platform-local.sh"
+          ]
+        },
+        {
+          "requirement_id": "G-SEC-002",
+          "evidence": [
+            "apps/social-media-api/src/middleware/platform-auth.ts",
+            "apps/social-media-api/src/__tests__/platform-auth.test.ts",
+            "docs/spec/traceability-matrix.md"
+          ]
+        },
+        {
+          "requirement_id": "G-SEC-004",
+          "evidence": [
+            "apps/platform-api/src/app-registry.ts",
+            "scripts/smoke-platform-local.sh"
+          ]
+        },
+        {
+          "requirement_id": "G-OPS-001",
+          "evidence": [
+            "docs/spec/release-gate.md",
+            "docs/spec/run-state-governance.md",
+            "docs/spec/traceability-matrix.md"
+          ]
+        }
+      ],
+      "tokens": {
+        "budget": null,
+        "actual": 204384,
+        "overage_ratio": null,
+        "trigger_fired": false,
+        "estimate_method": "goal-token-usage"
+      }
+    },
+    "P15": {
+      "status": "complete",
+      "completed_at": "2026-07-02T13:35:00+05:30",
+      "evidence": [
+        "domains/knowledge/api/package.json",
+        "domains/knowledge/api/src/platform-auth.ts",
+        "domains/knowledge/api/src/platform-scope.ts",
+        "domains/knowledge/api/src/__tests__/platform-auth.test.ts",
+        "packages/authz/src/abac.ts",
+        "docs/spec/auth-claim-fixtures.json",
+        "apps/platform-api/src/app-registry.ts",
+        "apps/platform-api/src/__tests__/app-registry.test.ts",
+        "apps/platform-api/src/__tests__/knowledge-scope-contract.test.ts",
+        "apps/platform-web/src/__tests__/app-launcher.test.tsx",
+        "deploy/docker-compose/policing-platform.yml",
+        "deploy/nginx/policing-platform.local.conf",
+        "scripts/smoke-platform-local.sh",
+        "docs/spec/release-gate.md",
+        "docs/spec/run-state-governance.md",
+        "docs/spec/traceability-matrix.md",
+        "docs/spec/manifest.json",
+        "/Users/n15318/RAG-app/apps/api/src/retrieval/platform-scope-contract.ts",
+        "/Users/n15318/RAG-app/apps/api/src/__tests__/retrieval/platform-scope-contract.test.ts"
+      ],
+      "checks": [
+        "npm --workspace domains/knowledge/api run test",
+        "npm --workspace domains/knowledge/api run typecheck",
+        "npm --workspace packages/authz run test",
+        "npm --workspace apps/platform-api run test",
+        "npm --workspace apps/platform-web run test",
+        "cd /Users/n15318/RAG-app && npm --workspace apps/api exec -- vitest run src/__tests__/retrieval/platform-scope-contract.test.ts",
+        "bash scripts/smoke-platform-local.sh",
+        "bash docs/spec/pipeline-p15/checks/p15.sh"
+      ],
+      "traceability": [
+        {
+          "requirement_id": "P15-R-SEC-001",
+          "evidence": [
+            "domains/knowledge/api/src/platform-auth.ts",
+            "domains/knowledge/api/src/__tests__/platform-auth.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "P15-R-KNOW-001",
+          "evidence": [
+            "domains/knowledge/api/src/platform-scope.ts",
+            "domains/knowledge/api/src/__tests__/platform-auth.test.ts",
+            "/Users/n15318/RAG-app/apps/api/src/retrieval/platform-scope-contract.ts",
+            "/Users/n15318/RAG-app/apps/api/src/__tests__/retrieval/platform-scope-contract.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "P15-R-KNOW-002",
+          "evidence": [
+            "domains/knowledge/api/src/platform-scope.ts",
+            "domains/knowledge/api/src/__tests__/platform-auth.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "P15-R-ABAC-001",
+          "evidence": [
+            "packages/authz/src/abac.ts",
+            "domains/knowledge/api/src/__tests__/platform-auth.test.ts",
+            "apps/platform-api/src/__tests__/knowledge-scope-contract.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "P15-R-REG-001",
+          "evidence": [
+            "apps/platform-api/src/app-registry.ts",
+            "apps/platform-api/src/__tests__/app-registry.test.ts",
+            "apps/platform-web/src/__tests__/app-launcher.test.tsx"
+          ]
+        },
+        {
+          "requirement_id": "P15-R-OPS-001",
+          "evidence": [
+            "deploy/docker-compose/policing-platform.yml",
+            "deploy/nginx/policing-platform.local.conf",
+            "scripts/smoke-platform-local.sh"
+          ]
+        },
+        {
+          "requirement_id": "P15-R-TRACE-001",
+          "evidence": [
+            "docs/spec/release-gate.md",
+            "docs/spec/run-state-governance.md",
+            "docs/spec/traceability-matrix.md",
+            "docs/spec/manifest.json"
+          ]
+        },
+        {
+          "requirement_id": "G-SEC-001",
+          "evidence": [
+            "apps/platform-api/src/app-registry.ts",
+            "domains/knowledge/api/src/platform-auth.ts",
+            "scripts/smoke-platform-local.sh"
+          ]
+        },
+        {
+          "requirement_id": "G-SEC-002",
+          "evidence": [
+            "domains/knowledge/api/src/platform-auth.ts",
+            "domains/knowledge/api/src/__tests__/platform-auth.test.ts",
+            "docs/spec/traceability-matrix.md"
+          ]
+        },
+        {
+          "requirement_id": "G-SEC-004",
+          "evidence": [
+            "packages/authz/src/abac.ts",
+            "domains/knowledge/api/src/platform-scope.ts",
+            "domains/knowledge/api/src/__tests__/platform-auth.test.ts",
+            "apps/platform-api/src/__tests__/knowledge-scope-contract.test.ts"
+          ]
+        },
+        {
+          "requirement_id": "G-OPS-001",
+          "evidence": [
+            "docs/spec/release-gate.md",
+            "docs/spec/run-state-governance.md",
+            "docs/spec/traceability-matrix.md"
+          ]
+        }
+      ],
+      "tokens": {
+        "budget": null,
+        "actual": 201151,
+        "overage_ratio": null,
+        "trigger_fired": false,
+        "estimate_method": "goal-token-usage"
+      }
+    },
+    "P16": {
+      "status": "complete",
+      "completed_at": "2026-07-02T13:55:00+05:30",
+      "evidence": [
+        "docs/spec/p16-pilot-cutover-readiness-plan.md",
+        "docs/spec/pilot-cutover-approval.json",
+        "scripts/check-pilot-cutover-readiness.mjs",
+        "docs/spec/platform-local-deployment.md",
+        "docs/spec/cutover-governance-runbook.md",
+        "docs/spec/release-gate.md",
+        "docs/spec/run-state-governance.md",
+        "docs/spec/traceability-matrix.md",
+        "docs/spec/manifest.json",
+        "docs/spec/pipeline-p16/phases.yaml",
+        "docs/spec/pipeline-p16/prompts/P16.md",
+        "docs/spec/pipeline-p16/checks/p16.sh"
+      ],
+      "checks": [
+        "node scripts/check-pilot-cutover-readiness.mjs",
+        "bash docs/spec/pipeline-p15/checks/p15.sh",
+        "bash docs/spec/pipeline-p16/checks/p16.sh"
+      ],
+      "traceability": [
+        {
+          "requirement_id": "P16-R-OPS-001",
+          "evidence": [
+            "docs/spec/pilot-cutover-approval.json",
+            "docs/spec/cutover-governance-runbook.md",
+            "docs/spec/platform-local-deployment.md"
+          ]
+        },
+        {
+          "requirement_id": "P16-R-VERIFY-001",
+          "evidence": [
+            "scripts/check-pilot-cutover-readiness.mjs",
+            "docs/spec/pipeline-p16/checks/p16.sh"
+          ]
+        },
+        {
+          "requirement_id": "G-OPS-001",
+          "evidence": [
+            "docs/spec/release-gate.md",
+            "docs/spec/run-state-governance.md",
+            "docs/spec/traceability-matrix.md",
+            "docs/spec/pilot-cutover-approval.json"
+          ]
+        },
+        {
+          "requirement_id": "R-OPS-001",
+          "evidence": [
+            "docs/spec/cutover-governance-runbook.md",
+            "docs/spec/run-state-governance.md",
+            "docs/spec/pilot-cutover-approval.json",
+            "scripts/check-pilot-cutover-readiness.mjs"
+          ]
+        }
+      ],
+      "tokens": {
+        "budget": null,
+        "actual": 0,
+        "overage_ratio": null,
+        "trigger_fired": false,
+        "estimate_method": "manual-phase-execution"
+      }
+    }
+  },
+  "skill_status": {
+    "requested": "plan-to-pipeline",
+    "available": true,
+    "used_for": "docs/spec/pipeline execution harness",
+    "note": "The Claude Code skill was converted into a Codex skill and used to expand the phased plan into a gated execution pipeline."
+  },
+  "artifacts": {
+    "source_architecture": "docs/discovery/policing-platform/holistic-architecture.md",
+    "execution_plan": "docs/spec/policing-platform-integration-execution-plan.md",
+    "council_report": "doc/evaluations/policing-platform-integration-council-report-20260702-000617.md",
+    "phased_plan": "docs/spec/phased-plan.yaml",
+    "pipeline_elaboration": "docs/spec/pipeline-elaboration.md",
+    "pipeline_harness": "docs/spec/pipeline/phases.yaml",
+    "pipeline_driver": "docs/spec/pipeline/run.sh"
+  },
+  "release_1": {
+    "objective": "Prove a single policing platform control plane before broad module exposure.",
+    "pilot_domains": ["dopams-api", "iqw-api", "forensic-api", "social-media-api", "knowledge-api"],
+    "planned_not_active_until_gated": [],
+    "must_not_ship_without": [
+      "server-side platform claim enforcement for active routes",
+      "deny-by-default ABAC policies",
+      "immutable authorization decision evidence",
+      "central evidence metadata without storage_uri by default",
+      "cutover and run-state governance"
+    ]
+  },
+  "global_gates": [
+    {
+      "id": "G-SEC-001",
+      "rule": "No active domain route appears in the platform app registry until that domain enforces platform claims server-side."
+    },
+    {
+      "id": "G-SEC-002",
+      "rule": "Every platform allow/deny decision records claims snapshot, policy version, source/projection version, redaction decision, service path, outcome, and correlation ID."
+    },
+    {
+      "id": "G-SEC-003",
+      "rule": "Central evidence APIs do not return storage_uri by default."
+    },
+    {
+      "id": "G-SEC-004",
+      "rule": "Knowledge retrieval remains default-denied unless pre-retrieval scope filtering and citation filtering are proven by the P15 adapter."
+    },
+    {
+      "id": "G-OPS-001",
+      "rule": "Cutover and run-state governance are documented before any production pilot."
+    }
+  ],
+  "pipeline_gates": [
+    {
+      "id": "Gate-A",
+      "name": "Foundation and Policy Gate",
+      "after_phases": ["P0", "P1", "P2", "P3", "P4"],
+      "required_evidence": [
+        "source inventory and import allowlist",
+        "secret hygiene report",
+        "auth entitlement contract",
+        "data classification and ABAC policy",
+        "synthetic pilot fixtures"
+      ]
+    },
+    {
+      "id": "Gate-B",
+      "name": "Control Plane Contract Gate",
+      "after_phases": ["P5", "P6", "P7"],
+      "required_evidence": [
+        "authz, audit, case, and evidence package tests",
+        "platform API entitlement and app registry tests",
+        "platform shell app registry E2E test"
+      ]
+    },
+    {
+      "id": "Gate-C",
+      "name": "Pilot Release Gate",
+      "after_phases": ["P8", "P9", "P10", "P11", "P12", "P13", "P14", "P15", "P16"],
+      "required_evidence": [
+        "DOPAMS, IQW, Forensic, Social Media, and Knowledge server-side claim tests",
+        "case and evidence projection authorization tests",
+        "knowledge runtime security decision and P15 scoped retrieval proof",
+        "local integrated smoke test",
+        "P16 pilot cutover readiness package",
+        "cutover and run-state governance approval"
+      ]
+    }
+  ],
+  "phases": [
+    {"id": "P0", "name": "Source Freeze, Secret Hygiene, and Import Map", "category": "CONFLICT/migration"},
+    {"id": "P1", "name": "Target Monorepo Layout", "category": "CONFLICT/migration"},
+    {"id": "P2", "name": "Platform Auth Claim and Entitlement Contract", "category": "PARTIAL modifications"},
+    {"id": "P3", "name": "Data Classification, ABAC, Threat Model, and Decision Evidence", "category": "PARTIAL modifications"},
+    {"id": "P4", "name": "Pilot Users, Cases, Evidence, and Classification Fixtures", "category": "MISSING data"},
+    {"id": "P5", "name": "Platform Service Packages", "category": "service"},
+    {"id": "P6", "name": "Platform API and App Registry", "category": "API"},
+    {"id": "P7", "name": "Platform Web Shell", "category": "UI"},
+    {"id": "P8", "name": "Pilot Domain Auth Adapters", "category": "service"},
+    {"id": "P9", "name": "Pilot Case and Evidence Projections", "category": "service"},
+    {"id": "P10", "name": "Knowledge Runtime Decision and Retrieval Security", "category": "service"},
+    {"id": "P11", "name": "Integrated Local Deployment", "category": "integration"},
+    {"id": "P12", "name": "Governance, Cutover, and Release Gate", "category": "integration"},
+    {"id": "P13", "name": "Forensic Platform Adapter and Pilot Launch", "category": "integration"},
+    {"id": "P14", "name": "Social Media Platform Adapter and Pilot Launch", "category": "integration"},
+    {"id": "P15", "name": "Knowledge Platform Adapter and Pilot Launch", "category": "integration"},
+    {"id": "P16", "name": "Pilot Cutover Readiness and Approval Evidence", "category": "integration"}
+  ],
+  "traceability_requirements": [
+    {
+      "id": "R-SEC-001",
+      "statement": "Active platform routes require server-side platform claim enforcement.",
+      "phases": ["P2", "P3", "P6", "P8", "P13", "P14", "P15"],
+      "evidence": ["claim fixture tests", "ABAC negative tests", "domain adapter tests", "app registry tests"]
+    },
+    {
+      "id": "R-SEC-002",
+      "statement": "Every allow and deny decision is auditable from immutable decision evidence.",
+      "phases": ["P3", "P5", "P6", "P9", "P13", "P14", "P15"],
+      "evidence": ["decision evidence contract tests", "platform API decision tests", "case360 authz tests"]
+    },
+    {
+      "id": "R-DATA-001",
+      "statement": "Central case and evidence projections expose only classified, redacted metadata.",
+      "phases": ["P3", "P4", "P9"],
+      "evidence": ["classification fixtures", "projection tests", "storage_uri exclusion tests"]
+    },
+    {
+      "id": "R-KNOW-001",
+      "statement": "Knowledge query access requires scoped retrieval, filtered citations, and adapter-enabled default-denied ABAC.",
+      "phases": ["P3", "P10", "P15"],
+      "evidence": ["knowledge runtime decision", "retrieval scope tests", "citation filtering tests", "P15 Knowledge adapter tests"]
+    },
+    {
+      "id": "R-OPS-001",
+      "statement": "Production pilot requires cutover, rollback, access review, incident response, and stale projection remediation governance.",
+      "phases": ["P0", "P11", "P12", "P13", "P14", "P15", "P16"],
+      "evidence": ["cutover runbook", "run-state governance", "release gate", "pilot-cutover-approval.json", "cutover readiness checker"]
+    }
+  ],
+  "next_action": {
+    "recommended_goal": "Review docs/spec/pipeline prompts/checks, then execute P0 on a sandbox branch with docs/spec/pipeline/run.sh --execute.",
+    "hard_stops": [
+      "real secrets detected in import scope",
+      "destructive database migration required",
+      "auth or ABAC ambiguity cannot be resolved from existing artifacts",
+      "a route can be launched without server-side platform claims"
+    ]
+  }
+}

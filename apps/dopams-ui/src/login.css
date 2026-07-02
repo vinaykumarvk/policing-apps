@@ -208,7 +208,7 @@
 }
 
 /* Mobile */
-@media (max-width: 30rem) {
+@media (max-width: 22.5rem) {
   .login-page {
     padding: var(--space-3);
     align-items: flex-start;

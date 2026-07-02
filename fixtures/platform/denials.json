@@ -1,0 +1,530 @@
+{
+  "schema_version": "platform.pilot_decision_scenarios.v1",
+  "generated_at": "2026-07-02T00:45:00+05:30",
+  "synthetic_data": true,
+  "policy_version": "platform.abac.v1",
+  "entitlement_policy_version": "platform.entitlements.v1",
+  "notes": "Scenario catalog covers allow, deny, redact, legal hold, stale state, revocation, wrong module, and wrong jurisdiction rules.",
+  "scenarios": [
+    {
+      "id": "allow_dopams_case_read",
+      "outcome_group": "allow",
+      "claim_persona_id": "io",
+      "control_plane_rules": ["allow", "redaction", "dopams"],
+      "options": {
+        "now": "2026-07-01T18:45:00Z",
+        "expectedSourceVersion": "idp-seed-v1",
+        "projectionMaxAgeSeconds": 300
+      },
+      "request": {
+        "action": "platform.case.read",
+        "path": "/api/v1/platform/cases/CASE-DOPAMS-001",
+        "correlation_id": "corr-p4-allow-dopams-case",
+        "module": "dopams",
+        "domain": "dopams",
+        "permission": "case:read",
+        "purpose": "investigation",
+        "require_mfa": true,
+        "server_verified": true,
+        "resource": {
+          "kind": "platform_case",
+          "resource_id": "CASE-DOPAMS-001",
+          "source_system": "dopams",
+          "source_record_id": "SYN-DOPAMS-CASE-001",
+          "source_version": "dopams-case-v1",
+          "projection_version": "platform-case-v1",
+          "projected_at": "2026-07-01T18:44:30Z",
+          "source_status": "active",
+          "classification": "confidential",
+          "org_id": "mohali-district",
+          "unit_id": "narcotics-cell-mohali",
+          "jurisdiction": {
+            "country": "IN",
+            "state": "PB",
+            "district": "SAS Nagar",
+            "police_station": "Phase-8"
+          },
+          "assignment": {
+            "case_id": "CASE-DOPAMS-001"
+          },
+          "legal_hold_status": "none"
+        },
+        "redaction_decision": {
+          "profile": "case-summary-v1",
+          "fields_redacted": ["subject_identifiers"],
+          "storage_uri_exposed": false,
+          "reason": "case_summary_subjects_redacted"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "reason": "ALLOW",
+        "redaction_profile": "case-summary-v1",
+        "storage_uri_exposed": false
+      }
+    },
+    {
+      "id": "allow_iqw_case_redacted",
+      "outcome_group": "allow",
+      "claim_persona_id": "desk-operator",
+      "control_plane_rules": ["allow", "redaction", "iqw"],
+      "options": {
+        "now": "2026-07-01T18:45:00Z",
+        "expectedSourceVersion": "idp-seed-v1",
+        "projectionMaxAgeSeconds": 300
+      },
+      "request": {
+        "action": "platform.case.read",
+        "path": "/api/v1/platform/cases/CASE-IQW-001",
+        "correlation_id": "corr-p4-allow-iqw-redacted",
+        "module": "iqw",
+        "domain": "iqw",
+        "permission": "complaint:read",
+        "purpose": "complaint_intake",
+        "require_mfa": true,
+        "server_verified": true,
+        "resource": {
+          "kind": "platform_case",
+          "resource_id": "CASE-IQW-001",
+          "source_system": "iqw",
+          "source_record_id": "SYN-IQW-COMPLAINT-001",
+          "source_version": "iqw-case-v1",
+          "projection_version": "platform-case-v1",
+          "projected_at": "2026-07-01T18:44:30Z",
+          "source_status": "active",
+          "classification": "restricted",
+          "org_id": "mohali-district",
+          "unit_id": "desk-mohali",
+          "jurisdiction": {
+            "country": "IN",
+            "state": "PB",
+            "district": "SAS Nagar",
+            "police_station": "Phase-8"
+          },
+          "assignment": {
+            "queue_id": "desk-mohali-intake"
+          },
+          "legal_hold_status": "none"
+        },
+        "redaction_decision": {
+          "profile": "case-summary-v1",
+          "fields_redacted": ["title", "summary", "lead_investigator_id", "subject_identifiers"],
+          "storage_uri_exposed": false,
+          "reason": "intake_redacted_summary"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "reason": "ALLOW",
+        "redacted_fields_include": ["title", "summary", "subject_identifiers"],
+        "storage_uri_exposed": false
+      }
+    },
+    {
+      "id": "allow_legal_hold_evidence_review",
+      "outcome_group": "allow",
+      "claim_persona_id": "legal-reviewer",
+      "control_plane_rules": ["allow", "legal_hold", "redaction"],
+      "options": {
+        "now": "2026-07-01T18:45:00Z",
+        "expectedSourceVersion": "idp-seed-v1",
+        "projectionMaxAgeSeconds": 300
+      },
+      "request": {
+        "action": "platform.evidence.read",
+        "path": "/api/v1/platform/evidence/EVID-DOPAMS-001",
+        "correlation_id": "corr-p4-allow-legal-hold",
+        "module": "dopams",
+        "domain": "dopams",
+        "permission": "evidence:metadata-read",
+        "purpose": "legal_review",
+        "require_mfa": true,
+        "server_verified": true,
+        "resource": {
+          "kind": "platform_evidence",
+          "resource_id": "EVID-DOPAMS-001",
+          "source_system": "dopams",
+          "source_record_id": "SYN-DOPAMS-EVID-001",
+          "source_version": "dopams-evidence-v1",
+          "projection_version": "platform-evidence-v1",
+          "projected_at": "2026-07-01T18:44:30Z",
+          "source_status": "active",
+          "classification": "confidential",
+          "org_id": "legal-cell",
+          "unit_id": "prosecution-review",
+          "jurisdiction": {
+            "country": "IN",
+            "state": "PB",
+            "district": "SAS Nagar"
+          },
+          "assignment": {
+            "case_id": "CASE-DOPAMS-001",
+            "evidence_id": "EVID-DOPAMS-001"
+          },
+          "legal_hold_status": "active"
+        },
+        "redaction_decision": {
+          "profile": "legal-review-v1",
+          "fields_redacted": ["storage_uri"],
+          "storage_uri_exposed": false,
+          "reason": "legal_hold_metadata_only"
+        }
+      },
+      "expected": {
+        "allowed": true,
+        "reason": "ALLOW",
+        "redaction_profile": "legal-review-v1",
+        "storage_uri_exposed": false
+      }
+    },
+    {
+      "id": "deny_wrong_module_admin_to_dopams",
+      "outcome_group": "deny",
+      "claim_persona_id": "admin",
+      "control_plane_rules": ["deny", "wrong_module"],
+      "options": {
+        "now": "2026-07-01T18:45:00Z",
+        "expectedSourceVersion": "idp-seed-v1",
+        "projectionMaxAgeSeconds": 300
+      },
+      "request": {
+        "action": "platform.case.read",
+        "path": "/api/v1/platform/cases/CASE-DOPAMS-001",
+        "correlation_id": "corr-p4-deny-wrong-module",
+        "module": "dopams",
+        "domain": "dopams",
+        "permission": "case:read",
+        "purpose": "investigation",
+        "require_mfa": true,
+        "server_verified": true,
+        "resource": {
+          "kind": "platform_case",
+          "resource_id": "CASE-DOPAMS-001",
+          "source_system": "dopams",
+          "source_record_id": "SYN-DOPAMS-CASE-001",
+          "source_version": "dopams-case-v1",
+          "projection_version": "platform-case-v1",
+          "projected_at": "2026-07-01T18:44:30Z",
+          "source_status": "active",
+          "classification": "confidential",
+          "org_id": "mohali-district",
+          "unit_id": "narcotics-cell-mohali",
+          "jurisdiction": {
+            "country": "IN",
+            "state": "PB",
+            "district": "SAS Nagar",
+            "police_station": "Phase-8"
+          },
+          "assignment": {
+            "case_id": "CASE-DOPAMS-001"
+          },
+          "legal_hold_status": "none"
+        },
+        "redaction_decision": {
+          "profile": "case-summary-v1",
+          "fields_redacted": ["subject_identifiers"],
+          "storage_uri_exposed": false,
+          "reason": "case_summary_subjects_redacted"
+        }
+      },
+      "expected": {
+        "allowed": false,
+        "reason": "ENTITLEMENT_DENIED",
+        "detail": "MODULE_DENIED",
+        "storage_uri_exposed": false
+      }
+    },
+    {
+      "id": "deny_wrong_jurisdiction",
+      "outcome_group": "deny",
+      "claim_persona_id": "io",
+      "control_plane_rules": ["deny", "wrong_jurisdiction", "jurisdiction"],
+      "options": {
+        "now": "2026-07-01T18:45:00Z",
+        "expectedSourceVersion": "idp-seed-v1",
+        "projectionMaxAgeSeconds": 300
+      },
+      "request": {
+        "action": "platform.case.read",
+        "path": "/api/v1/platform/cases/CASE-DOPAMS-001",
+        "correlation_id": "corr-p4-deny-jurisdiction",
+        "module": "dopams",
+        "domain": "dopams",
+        "permission": "case:read",
+        "purpose": "investigation",
+        "require_mfa": true,
+        "server_verified": true,
+        "resource": {
+          "kind": "platform_case",
+          "resource_id": "CASE-DOPAMS-001",
+          "source_system": "dopams",
+          "source_record_id": "SYN-DOPAMS-CASE-001",
+          "source_version": "dopams-case-v1",
+          "projection_version": "platform-case-v1",
+          "projected_at": "2026-07-01T18:44:30Z",
+          "source_status": "active",
+          "classification": "confidential",
+          "org_id": "mohali-district",
+          "unit_id": "narcotics-cell-mohali",
+          "jurisdiction": {
+            "country": "IN",
+            "state": "PB",
+            "district": "Ludhiana",
+            "police_station": "Synthetic-Out-Of-Scope"
+          },
+          "assignment": {
+            "case_id": "CASE-DOPAMS-001"
+          },
+          "legal_hold_status": "none"
+        },
+        "redaction_decision": {
+          "profile": "case-summary-v1",
+          "fields_redacted": ["subject_identifiers"],
+          "storage_uri_exposed": false,
+          "reason": "case_summary_subjects_redacted"
+        }
+      },
+      "expected": {
+        "allowed": false,
+        "reason": "ENTITLEMENT_DENIED",
+        "detail": "JURISDICTION_DENIED",
+        "storage_uri_exposed": false
+      }
+    },
+    {
+      "id": "deny_stale_projection",
+      "outcome_group": "deny",
+      "claim_persona_id": "io",
+      "control_plane_rules": ["deny", "stale", "projection_freshness"],
+      "options": {
+        "now": "2026-07-01T18:45:00Z",
+        "expectedSourceVersion": "idp-seed-v1",
+        "projectionMaxAgeSeconds": 300
+      },
+      "request": {
+        "action": "platform.case.read",
+        "path": "/api/v1/platform/cases/CASE-DOPAMS-001",
+        "correlation_id": "corr-p4-deny-stale",
+        "module": "dopams",
+        "domain": "dopams",
+        "permission": "case:read",
+        "purpose": "investigation",
+        "require_mfa": true,
+        "server_verified": true,
+        "resource": {
+          "kind": "platform_case",
+          "resource_id": "CASE-DOPAMS-001",
+          "source_system": "dopams",
+          "source_record_id": "SYN-DOPAMS-CASE-001",
+          "source_version": "dopams-case-v1",
+          "projection_version": "platform-case-v1",
+          "projected_at": "2026-07-01T18:30:00Z",
+          "source_status": "active",
+          "classification": "confidential",
+          "org_id": "mohali-district",
+          "unit_id": "narcotics-cell-mohali",
+          "jurisdiction": {
+            "country": "IN",
+            "state": "PB",
+            "district": "SAS Nagar",
+            "police_station": "Phase-8"
+          },
+          "assignment": {
+            "case_id": "CASE-DOPAMS-001"
+          },
+          "legal_hold_status": "none"
+        },
+        "redaction_decision": {
+          "profile": "case-summary-v1",
+          "fields_redacted": ["subject_identifiers"],
+          "storage_uri_exposed": false,
+          "reason": "case_summary_subjects_redacted"
+        }
+      },
+      "expected": {
+        "allowed": false,
+        "reason": "STALE_PROJECTION",
+        "decision_inputs": {
+          "projection_fresh": false
+        },
+        "storage_uri_exposed": false
+      }
+    },
+    {
+      "id": "deny_legal_hold_investigation",
+      "outcome_group": "deny",
+      "claim_persona_id": "io",
+      "control_plane_rules": ["deny", "legal_hold"],
+      "options": {
+        "now": "2026-07-01T18:45:00Z",
+        "expectedSourceVersion": "idp-seed-v1",
+        "projectionMaxAgeSeconds": 300
+      },
+      "request": {
+        "action": "platform.evidence.read",
+        "path": "/api/v1/platform/evidence/EVID-DOPAMS-001",
+        "correlation_id": "corr-p4-deny-legal-hold",
+        "module": "dopams",
+        "domain": "dopams",
+        "permission": "evidence:metadata-read",
+        "purpose": "investigation",
+        "require_mfa": true,
+        "server_verified": true,
+        "resource": {
+          "kind": "platform_evidence",
+          "resource_id": "EVID-DOPAMS-001",
+          "source_system": "dopams",
+          "source_record_id": "SYN-DOPAMS-EVID-001",
+          "source_version": "dopams-evidence-v1",
+          "projection_version": "platform-evidence-v1",
+          "projected_at": "2026-07-01T18:44:30Z",
+          "source_status": "active",
+          "classification": "confidential",
+          "org_id": "mohali-district",
+          "unit_id": "narcotics-cell-mohali",
+          "jurisdiction": {
+            "country": "IN",
+            "state": "PB",
+            "district": "SAS Nagar",
+            "police_station": "Phase-8"
+          },
+          "assignment": {
+            "case_id": "CASE-DOPAMS-001",
+            "evidence_id": "EVID-DOPAMS-001"
+          },
+          "legal_hold_status": "active"
+        },
+        "redaction_decision": {
+          "profile": "evidence-metadata-v1",
+          "fields_redacted": ["hash_sha256", "chain_of_custody_head", "storage_uri"],
+          "storage_uri_exposed": false,
+          "reason": "central_metadata_only"
+        }
+      },
+      "expected": {
+        "allowed": false,
+        "reason": "LEGAL_HOLD_DENIED",
+        "storage_uri_exposed": false
+      }
+    },
+    {
+      "id": "deny_storage_uri_redaction",
+      "outcome_group": "deny",
+      "claim_persona_id": "io",
+      "control_plane_rules": ["deny", "redaction", "storage_uri"],
+      "options": {
+        "now": "2026-07-01T18:45:00Z",
+        "expectedSourceVersion": "idp-seed-v1",
+        "projectionMaxAgeSeconds": 300
+      },
+      "request": {
+        "action": "platform.evidence.read",
+        "path": "/api/v1/platform/evidence/EVID-DOPAMS-001",
+        "correlation_id": "corr-p4-deny-storage-uri",
+        "module": "dopams",
+        "domain": "dopams",
+        "permission": "evidence:metadata-read",
+        "purpose": "investigation",
+        "require_mfa": true,
+        "server_verified": true,
+        "resource": {
+          "kind": "platform_evidence",
+          "resource_id": "EVID-DOPAMS-001",
+          "source_system": "dopams",
+          "source_record_id": "SYN-DOPAMS-EVID-001",
+          "source_version": "dopams-evidence-v1",
+          "projection_version": "platform-evidence-v1",
+          "projected_at": "2026-07-01T18:44:30Z",
+          "source_status": "active",
+          "classification": "confidential",
+          "org_id": "mohali-district",
+          "unit_id": "narcotics-cell-mohali",
+          "jurisdiction": {
+            "country": "IN",
+            "state": "PB",
+            "district": "SAS Nagar",
+            "police_station": "Phase-8"
+          },
+          "assignment": {
+            "case_id": "CASE-DOPAMS-001",
+            "evidence_id": "EVID-DOPAMS-001"
+          },
+          "legal_hold_status": "none"
+        },
+        "redaction_decision": {
+          "profile": "evidence-metadata-v1",
+          "fields_redacted": [],
+          "storage_uri_exposed": true,
+          "reason": "negative_test_attempted_storage_uri_exposure"
+        }
+      },
+      "expected": {
+        "allowed": false,
+        "reason": "STORAGE_URI_DENIED",
+        "redacted_fields_include": ["storage_uri"],
+        "storage_uri_exposed": false
+      }
+    },
+    {
+      "id": "deny_revocation_incompatible_claim_source",
+      "outcome_group": "deny",
+      "claim_persona_id": "io",
+      "claim_mutation": {
+        "source_version": "idp-seed-revoked-v0"
+      },
+      "control_plane_rules": ["deny", "revocation", "claim_source"],
+      "options": {
+        "now": "2026-07-01T18:45:00Z",
+        "expectedSourceVersion": "idp-seed-v1",
+        "projectionMaxAgeSeconds": 300
+      },
+      "request": {
+        "action": "platform.case.read",
+        "path": "/api/v1/platform/cases/CASE-DOPAMS-001",
+        "correlation_id": "corr-p4-deny-revocation",
+        "module": "dopams",
+        "domain": "dopams",
+        "permission": "case:read",
+        "purpose": "investigation",
+        "require_mfa": true,
+        "server_verified": true,
+        "resource": {
+          "kind": "platform_case",
+          "resource_id": "CASE-DOPAMS-001",
+          "source_system": "dopams",
+          "source_record_id": "SYN-DOPAMS-CASE-001",
+          "source_version": "dopams-case-v1",
+          "projection_version": "platform-case-v1",
+          "projected_at": "2026-07-01T18:44:30Z",
+          "source_status": "active",
+          "classification": "confidential",
+          "org_id": "mohali-district",
+          "unit_id": "narcotics-cell-mohali",
+          "jurisdiction": {
+            "country": "IN",
+            "state": "PB",
+            "district": "SAS Nagar",
+            "police_station": "Phase-8"
+          },
+          "assignment": {
+            "case_id": "CASE-DOPAMS-001"
+          },
+          "legal_hold_status": "none"
+        },
+        "redaction_decision": {
+          "profile": "case-summary-v1",
+          "fields_redacted": ["subject_identifiers"],
+          "storage_uri_exposed": false,
+          "reason": "case_summary_subjects_redacted"
+        }
+      },
+      "expected": {
+        "allowed": false,
+        "reason": "ENTITLEMENT_DENIED",
+        "detail": "CLAIMS_DENIED",
+        "claim_validation_reason": "CLAIM_INCOMPATIBLE_SOURCE",
+        "storage_uri_exposed": false
+      }
+    }
+  ]
+}

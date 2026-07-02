@@ -3,6 +3,8 @@
   "private": true,
   "workspaces": [
     "apps/*",
+    "domains/*/*",
+    "domains/*/packages/*",
     "packages/*"
   ],
   "scripts": {
@@ -33,6 +35,11 @@
     "build:social-media-ui": "npm run build:shared && npm --workspace apps/social-media-ui run build",
     "build:all": "npm run build:packages && npm run build:api && npm run build:citizen && npm run build:officer && npm run build:dopams && npm run build:forensic && npm run build:social-media && npm run build:dopams-ui && npm run build:forensic-ui && npm run build:social-media-ui",
     "typecheck": "npm --workspace packages/workflow-engine run typecheck && npm --workspace packages/shared run typecheck && npm --workspace packages/api-core run typecheck && npm --workspace packages/api-integrations run typecheck && npm --workspace apps/api run typecheck && npm --workspace apps/citizen run typecheck && npm --workspace apps/officer run typecheck && npm --workspace apps/dopams-api run typecheck && npm --workspace apps/forensic-api run typecheck && npm --workspace apps/social-media-api run typecheck",
+    "check:repo-layout": "node scripts/check-repo-layout.mjs",
+    "build:platform": "node scripts/run-workspace-script-if-present.mjs build apps/platform-api apps/platform-web",
+    "typecheck:platform": "node scripts/run-workspace-script-if-present.mjs typecheck apps/platform-api apps/platform-web",
+    "build:domains": "node scripts/run-workspace-script-if-present.mjs build domains/*/* domains/*/packages/*",
+    "typecheck:domains": "node scripts/run-workspace-script-if-present.mjs typecheck domains/*/* domains/*/packages/*",
     "test:workflow-engine": "npm --workspace packages/workflow-engine run test",
     "test:api": "npm --workspace apps/api run test",
     "test:dopams": "npm --workspace apps/dopams-api run test",

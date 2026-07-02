@@ -9,6 +9,10 @@ export default {
   "nav.settings": "Settings",
   "nav.logout": "Logout",
   "nav.more": "More",
+  "nav.notifications": "\u0938\u0942\u091a\u0928\u093e\u090f\u0902",
+  "nav.unread_count": "{{count}} \u0905\u092a\u0920\u093f\u0924 \u0938\u0942\u091a\u0928\u093e\u090f\u0902",
+  "notification.sla_warning": "{{count}} \u0906\u0935\u0947\u0926\u0928 SLA \u0938\u092e\u092f-\u0938\u0940\u092e\u093e \u0915\u0947 \u0928\u093f\u0915\u091f \u092f\u093e \u092a\u093e\u0930",
+  "notification.no_unread": "\u0915\u094b\u0908 \u0905\u092a\u0920\u093f\u0924 \u0938\u0942\u091a\u0928\u093e\u090f\u0902 \u0928\u0939\u0940\u0902",
 
   // App bar
   "app.brand": "PUDA Officer Workbench",
@@ -33,6 +37,12 @@ export default {
   "login.user_id_placeholder": "e.g. officer1",
   "login.password_placeholder": "Enter password",
 
+  // Dashboard stats
+  "dashboard.total_pending": "कुल लंबित",
+  "dashboard.overdue": "अतिदेय",
+  "dashboard.due_soon": "24 घंटे में देय",
+  "dashboard.on_track": "समय पर",
+
   // Inbox
   "inbox.no_tasks": "No pending tasks",
   "inbox.no_tasks_desc": "Your inbox is empty. Tasks will appear here when applications need your review.",
@@ -41,8 +51,11 @@ export default {
   "inbox.service": "Service",
   "inbox.stage": "Stage",
   "inbox.required_role": "Required Role",
-  "inbox.sla_due": "SLA Due",
-  "inbox.overdue": "Overdue",
+  "inbox.sla_due": "SLA देय",
+  "inbox.overdue": "अतिदेय",
+  "inbox.due_soon": "शीघ्र देय",
+  "inbox.on_track": "समय पर",
+  "inbox.sort_overdue_first": "अतिदेय पहले",
   "inbox.arn_label": "ARN: {{arn}}",
 
   // Search
@@ -171,6 +184,29 @@ export default {
   "task.preview_unavailable": "Preview is not available for this file type.",
   "task.download_to_view": "Download to view",
 
+  // Inspections
+  "inspection.title": "स्थल निरीक्षण",
+  "inspection.no_inspections": "इस आवेदन के लिए कोई निरीक्षण निर्धारित नहीं है",
+  "inspection.type": "निरीक्षण प्रकार",
+  "inspection.status": "स्थिति",
+  "inspection.scheduled_at": "निर्धारित तिथि",
+  "inspection.assign_to_me": "मुझे सौंपें",
+  "inspection.complete": "निरीक्षण पूर्ण करें",
+  "inspection.cancel_inspection": "निरीक्षण रद्द करें",
+  "inspection.outcome": "परिणाम",
+  "inspection.findings": "निष्कर्ष सारांश",
+  "inspection.remarks": "परिणाम टिप्पणियां",
+  "inspection.outcome_pass": "उत्तीर्ण",
+  "inspection.outcome_fail": "अनुत्तीर्ण",
+  "inspection.outcome_reinspection": "पुनर्निरीक्षण आवश्यक",
+  "inspection.outcome_na": "लागू नहीं",
+  "inspection.status_scheduled": "निर्धारित",
+  "inspection.status_in_progress": "प्रगति में",
+  "inspection.status_completed": "पूर्ण",
+  "inspection.status_cancelled": "रद्द",
+  "inspection.completed_on": "पूर्ण तिथि",
+  "inspection.assigned_to_you": "आपको सौंपा गया",
+
   // Actions
   "action.forward": "Forward",
   "action.query": "Raise Query",
@@ -244,12 +280,38 @@ export default {
   "feedback.offline_workflow": "आप ऑफ़लाइन हैं। रीड-ओनली मोड में वर्कफ़्लो कार्रवाइयां अक्षम हैं।",
   "feedback.query_message_required": "प्रश्न सबमिट करने से पहले प्रश्न संदेश आवश्यक है।",
   "feedback.remarks_required_rejection": "आवेदन अस्वीकार करते समय टिप्पणियां आवश्यक हैं।",
+  "feedback.remarks_required": "सभी वर्कफ़्लो कार्रवाइयों के लिए टिप्पणियां आवश्यक हैं।",
   "feedback.action_completed": "कार्रवाई {{action}} सफलतापूर्वक पूर्ण हुई।",
   "feedback.offline_complaints": "ऑफ़लाइन मोड सक्रिय है। शिकायत डेटा अनुपलब्ध है।",
   "feedback.failed_load_complaints": "शिकायतें लोड करने में विफल",
   "feedback.failed_load_complaint": "शिकायत लोड करने में विफल",
   "feedback.failed_load_evidence": "साक्ष्य फ़ाइल लोड करने में विफल।",
   "feedback.assign_failed": "कार्य असाइनमेंट विफल। किसी अन्य अधिकारी ने यह कार्य ले लिया हो सकता है।",
+  "feedback.inspection_assigned": "निरीक्षण आपको सौंपा गया",
+  "feedback.inspection_completed": "निरीक्षण सफलतापूर्वक पूर्ण हुआ",
+  "feedback.inspection_cancelled": "निरीक्षण रद्द किया गया",
+  "feedback.inspection_error": "निरीक्षण अपडेट करने में विफल",
+
+  // Reason Codes
+  "task.reason_code": "कारण कोड",
+  "task.select_reason": "कारण चुनें...",
+  "reason.incomplete_docs": "अपूर्ण दस्तावेज़",
+  "reason.policy_violation": "नीति उल्लंघन",
+  "reason.incorrect_info": "गलत जानकारी",
+  "reason.missing_doc": "दस्तावेज़ गायब",
+  "reason.clarification": "स्पष्टीकरण आवश्यक",
+  "reason.additional_info": "अतिरिक्त जानकारी आवश्यक",
+  "reason.other": "अन्य",
+
+  // Batch Document Verification
+  "task.verify_all_docs": "सभी दस्तावेज़ सत्यापित करें",
+  "feedback.all_docs_verified": "सभी दस्तावेज़ सत्यापित किए गए",
+
+  // Internal Notes
+  "task.notes": "आंतरिक टिप्पणियां",
+  "task.add_note": "टिप्पणी जोड़ें",
+  "task.note_placeholder": "एक आंतरिक टिप्पणी जोड़ें...",
+  "feedback.note_added": "टिप्पणी सफलतापूर्वक जोड़ी गई",
 
   // NL Assistant
   "assistant.open": "सहायक खोलें",

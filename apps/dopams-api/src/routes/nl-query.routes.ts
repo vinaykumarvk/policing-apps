@@ -2,6 +2,28 @@ import { FastifyInstance } from "fastify";
 import { executeNlQuery, getQueryHistory } from "../services/nl-query";
 import { sendError } from "../errors";
 
+/**
+ * Quick pre-check: reject questions that look like embedded SQL injection
+ * attempts (e.g. user typing raw SQL statements as their "question").
+ * This is defense-in-depth — the service layer also validates generated SQL.
+ */
+function rejectSqlInjectionInQuestion(question: string): string | null {
+  const trimmed = question.trim();
+  const upper = trimmed.toUpperCase();
+
+  // Block questions that ARE raw SQL statements
+  if (/^\s*(SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|WITH)\s/i.test(trimmed)) {
+    return "Question appears to contain raw SQL. Please ask in natural language.";
+  }
+
+  // Block embedded semicolons followed by SQL keywords (statement injection in question text)
+  if (/;\s*(SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE)\b/i.test(trimmed)) {
+    return "Question contains suspicious SQL-like syntax";
+  }
+
+  return null;
+}
+
 export async function registerNlQueryRoutes(app: FastifyInstance): Promise<void> {
   // Execute a natural-language query
   app.post("/api/v1/query", {
@@ -27,6 +49,13 @@ export async function registerNlQueryRoutes(app: FastifyInstance): Promise<void>
 
     if (!userId) {
       return sendError(reply, 401, "AUTHENTICATION_REQUIRED", "User must be authenticated");
+    }
+
+    // Defense-in-depth: reject questions that look like raw SQL injection
+    const injectionCheck = rejectSqlInjectionInQuestion(question);
+    if (injectionCheck) {
+      request.log.warn({ question: question.substring(0, 200) }, "NL query rejected: SQL injection pattern in question");
+      return sendError(reply, 400, "VALIDATION_ERROR", injectionCheck);
     }
 
     try {

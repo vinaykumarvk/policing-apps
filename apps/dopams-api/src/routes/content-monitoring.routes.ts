@@ -282,7 +282,7 @@ export async function registerContentMonitoringRoutes(app: FastifyInstance): Pro
     schema: { tags: ["content-monitoring"] },
   }, async (request, reply) => {
     try {
-      const result = await query(`SELECT * FROM monitoring_rule WHERE is_active = TRUE ORDER BY created_at DESC`);
+      const result = await query(`SELECT * FROM monitoring_rule WHERE is_active = TRUE ORDER BY created_at DESC LIMIT 200`);
       return { rules: result.rows };
     } catch (err: unknown) {
       request.log.error(err, "Failed to list monitoring rules");

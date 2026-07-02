@@ -27,15 +27,16 @@ steps:
       - "--image"
       - "gcr.io/$PROJECT_ID/puda-citizen:$COMMIT_SHA"
       - "--region"
-      - "europe-west1"
+      - "asia-southeast1"
       - "--platform"
       - "managed"
+      - "--allow-unauthenticated"
 
 images:
   - "gcr.io/$PROJECT_ID/puda-citizen:$COMMIT_SHA"
 
 substitutions:
-  _API_URL: "https://puda-api-47249889063.europe-west1.run.app"
+  _API_URL: ""
 
 options:
   logging: CLOUD_LOGGING_ONLY

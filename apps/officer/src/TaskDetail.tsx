@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Card, Field, Input, Modal, Textarea } from "@puda/shared";
+import { Alert, Button, Card, Field, Input, Modal, Select, Textarea } from "@puda/shared";
 import { Bilingual } from "./Bilingual";
-import { Task, Application, apiBaseUrl } from "./types";
+import { Task, Application, Inspection, apiBaseUrl } from "./types";
 
 // Field label map for structured data display
 const FIELD_LABELS: Record<string, string> = {
@@ -142,6 +142,24 @@ export default function TaskDetail({
   const [docVerifyLoading, setDocVerifyLoading] = useState<string | null>(null);
   const [docVerifyFeedback, setDocVerifyFeedback] = useState<{ docId: string; variant: "success" | "error"; text: string } | null>(null);
 
+  // Inspection state
+  const [inspections, setInspections] = useState<Inspection[]>([]);
+  const [inspectionLoading, setInspectionLoading] = useState(false);
+  const [inspectionOutcome, setInspectionOutcome] = useState("");
+  const [inspectionRemarks, setInspectionRemarks] = useState("");
+  const [inspectionFindings, setInspectionFindings] = useState("");
+
+  // Reason code state (O2)
+  const [reasonCode, setReasonCode] = useState("");
+
+  // Internal notes state (O5)
+  const [internalNotes, setInternalNotes] = useState<Array<{ id: string; text: string; created_at: string; officer_id: string }>>([]);
+  const [newNote, setNewNote] = useState("");
+  const [noteLoading, setNoteLoading] = useState(false);
+
+  // Batch doc verification state (O6)
+  const [batchVerifyLoading, setBatchVerifyLoading] = useState(false);
+
   // Document preview state
   const [previewDoc, setPreviewDoc] = useState<any | null>(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
@@ -154,6 +172,7 @@ export default function TaskDetail({
     setConfirmOpen(false);
     setFeedback(null);
     setError(null);
+    setReasonCode("");
   }, [action]);
 
   useEffect(() => {
@@ -189,6 +208,155 @@ export default function TaskDetail({
       if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
     };
   }, [previewBlobUrl]);
+
+  // Load inspections for the current application
+  const loadInspections = useCallback(async (arn: string) => {
+    setInspectionLoading(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/v1/inspections/for-application/${encodeURIComponent(arn)}`, authHeaders());
+      if (!res.ok) throw new Error("Failed to load inspections");
+      const data = await res.json();
+      setInspections(data.inspections || []);
+    } catch {
+      setInspections([]);
+    } finally {
+      setInspectionLoading(false);
+    }
+  }, [authHeaders]);
+
+  useEffect(() => {
+    if (application?.arn) {
+      void loadInspections(application.arn);
+    }
+  }, [application?.arn, loadInspections]);
+
+  // Load internal notes for the current application (O5)
+  const loadNotes = useCallback(async (arn: string) => {
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/v1/applications/${encodeURIComponent(arn)}/notes?visibility=INTERNAL`, authHeaders());
+      if (!res.ok) return;
+      const data = await res.json();
+      setInternalNotes(data.notes || []);
+    } catch {
+      // silently fail — notes are supplementary
+    }
+  }, [authHeaders]);
+
+  useEffect(() => {
+    if (application?.arn) {
+      void loadNotes(application.arn);
+    }
+  }, [application?.arn, loadNotes]);
+
+  const handleAddNote = useCallback(async () => {
+    if (!newNote.trim() || !application?.arn) return;
+    setNoteLoading(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/v1/applications/${encodeURIComponent(application.arn)}/notes`, {
+        ...authHeaders(),
+        method: "POST",
+        body: JSON.stringify({ text: newNote.trim(), visibility: "INTERNAL", officerUserId }),
+      });
+      if (!res.ok) throw new Error("Failed to add note");
+      setNewNote("");
+      setFeedback({ variant: "success", text: t("feedback.note_added") });
+      void loadNotes(application.arn);
+    } catch {
+      setFeedback({ variant: "error", text: "Failed to add note" });
+    } finally {
+      setNoteLoading(false);
+    }
+  }, [newNote, application?.arn, authHeaders, officerUserId, t, loadNotes]);
+
+  // Batch verify all documents (O6)
+  const handleVerifyAllDocs = useCallback(async () => {
+    if (!application?.documents?.length) return;
+    setBatchVerifyLoading(true);
+    try {
+      const unverifiedDocs = application.documents.filter(
+        (doc) => doc.verification_status !== "VERIFIED"
+      );
+      for (const doc of unverifiedDocs) {
+        await fetch(`${apiBaseUrl}/api/v1/documents/${doc.doc_id}/verify`, {
+          ...authHeaders(),
+          method: "PATCH",
+          body: JSON.stringify({ status: "VERIFIED", remarks: "", officerUserId }),
+        });
+      }
+      setFeedback({ variant: "success", text: t("feedback.all_docs_verified") });
+      if (onApplicationUpdate) {
+        onApplicationUpdate((prev) => ({
+          ...prev,
+          documents: prev.documents.map((d) => ({ ...d, verification_status: "VERIFIED" })),
+        }));
+      }
+    } catch {
+      setFeedback({ variant: "error", text: "Failed to verify all documents" });
+    } finally {
+      setBatchVerifyLoading(false);
+    }
+  }, [application?.documents, authHeaders, officerUserId, t, onApplicationUpdate]);
+
+  const handleAssignInspection = useCallback(async (inspectionId: string) => {
+    setInspectionLoading(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/v1/inspections/${inspectionId}/assign`, {
+        ...authHeaders(),
+        method: "PATCH",
+        body: JSON.stringify({ officerUserId }),
+      });
+      if (!res.ok) throw new Error("Assignment failed");
+      setFeedback({ variant: "success", text: t("feedback.inspection_assigned") });
+      void loadInspections(application.arn);
+    } catch {
+      setFeedback({ variant: "error", text: t("feedback.inspection_error") });
+    } finally {
+      setInspectionLoading(false);
+    }
+  }, [authHeaders, officerUserId, application.arn, loadInspections, t]);
+
+  const handleCompleteInspection = useCallback(async (inspectionId: string) => {
+    if (!inspectionOutcome) return;
+    setInspectionLoading(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/v1/inspections/${inspectionId}/complete`, {
+        ...authHeaders(),
+        method: "PATCH",
+        body: JSON.stringify({
+          outcome: inspectionOutcome,
+          findingsSummary: inspectionFindings || undefined,
+          outcomeRemarks: inspectionRemarks || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error("Completion failed");
+      setFeedback({ variant: "success", text: t("feedback.inspection_completed") });
+      setInspectionOutcome("");
+      setInspectionFindings("");
+      setInspectionRemarks("");
+      void loadInspections(application.arn);
+    } catch {
+      setFeedback({ variant: "error", text: t("feedback.inspection_error") });
+    } finally {
+      setInspectionLoading(false);
+    }
+  }, [authHeaders, inspectionOutcome, inspectionFindings, inspectionRemarks, application.arn, loadInspections, t]);
+
+  const handleCancelInspection = useCallback(async (inspectionId: string) => {
+    setInspectionLoading(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/v1/inspections/${inspectionId}/cancel`, {
+        ...authHeaders(),
+        method: "PATCH",
+      });
+      if (!res.ok) throw new Error("Cancellation failed");
+      setFeedback({ variant: "success", text: t("feedback.inspection_cancelled") });
+      void loadInspections(application.arn);
+    } catch {
+      setFeedback({ variant: "error", text: t("feedback.inspection_error") });
+    } finally {
+      setInspectionLoading(false);
+    }
+  }, [authHeaders, application.arn, loadInspections, t]);
 
   const fetchDocBlob = useCallback(async (docId: string): Promise<{ url: string; mime: string }> => {
     const res = await fetch(`${apiBaseUrl}/api/v1/documents/${docId}/download`, authHeaders());
@@ -292,9 +460,9 @@ export default function TaskDetail({
       setFeedback({ variant: "warning", text: t("feedback.query_message_required") });
       return;
     }
-    if (action === "REJECT" && !remarks.trim()) {
+    if (!remarks.trim()) {
       setError(null);
-      setFeedback({ variant: "warning", text: t("feedback.remarks_required_rejection") });
+      setFeedback({ variant: "warning", text: t("feedback.remarks_required") });
       return;
     }
     if (!confirmed && (action === "APPROVE" || action === "REJECT")) {
@@ -307,6 +475,9 @@ export default function TaskDetail({
     setFeedback(null);
     try {
       const body: any = { action, userId: officerUserId, remarks };
+      if (reasonCode) {
+        body.reasonCode = reasonCode;
+      }
       if (action === "QUERY") {
         body.queryMessage = queryMessage;
         body.unlockedFields = unlockedFields;
@@ -390,7 +561,19 @@ export default function TaskDetail({
         )}
 
         <div className="documents-section">
-          <h2>{t("task.documents_section", { count: application.documents.length })}</h2>
+          <div className="documents-section-header">
+            <h2>{t("task.documents_section", { count: application.documents.length })}</h2>
+            {!fromSearch && !["APPROVED", "REJECTED", "CLOSED"].includes(application.state_id) && application.documents.length > 0 && (
+              <Button
+                size="sm"
+                variant="success"
+                disabled={isOffline || batchVerifyLoading || application.documents.every((d) => d.verification_status === "VERIFIED")}
+                onClick={() => void handleVerifyAllDocs()}
+              >
+                {batchVerifyLoading ? t("common.loading") : t("task.verify_all_docs")}
+              </Button>
+            )}
+          </div>
           {application.documents.length > 0 ? (
             <div className="detail-card-list">
               {application.documents.map((doc) => {
@@ -488,6 +671,174 @@ export default function TaskDetail({
           )}
         </div>
 
+        {/* Site Inspection Section */}
+        <div className="inspection-section">
+          <h2><Bilingual tKey="inspection.title" /></h2>
+          {inspections.length === 0 ? (
+            <Alert variant="info" className="empty-read-alert">
+              {t("inspection.no_inspections")}
+            </Alert>
+          ) : (
+            <div className="detail-card-list">
+              {inspections.map((insp) => {
+                const statusKey =
+                  insp.status === "SCHEDULED" ? "inspection.status_scheduled"
+                  : insp.status === "IN_PROGRESS" ? "inspection.status_in_progress"
+                  : insp.status === "COMPLETED" ? "inspection.status_completed"
+                  : "inspection.status_cancelled";
+                const statusClass =
+                  insp.status === "COMPLETED" ? "badge-approved"
+                  : insp.status === "CANCELLED" ? "badge-rejected"
+                  : insp.status === "IN_PROGRESS" ? "badge-query"
+                  : "badge-pending";
+                const isAssignedToMe = insp.officer_user_id === officerUserId;
+                const canAct = (insp.status === "SCHEDULED" || insp.status === "IN_PROGRESS");
+
+                return (
+                  <Card key={insp.inspection_id} className="detail-read-card">
+                    <div className="read-card-header">
+                      <p className="read-card-title">{insp.inspection_type}</p>
+                      <span className={`badge ${statusClass}`}>{t(statusKey)}</span>
+                    </div>
+                    <div className="read-card-grid">
+                      <div className="read-meta-row">
+                        <span className="read-meta-key"><Bilingual tKey="inspection.type" /></span>
+                        <span className="read-meta-value">{insp.inspection_type || "\u2014"}</span>
+                      </div>
+                      <div className="read-meta-row">
+                        <span className="read-meta-key"><Bilingual tKey="inspection.status" /></span>
+                        <span className="read-meta-value">{t(statusKey)}</span>
+                      </div>
+                      <div className="read-meta-row">
+                        <span className="read-meta-key"><Bilingual tKey="inspection.scheduled_at" /></span>
+                        <span className="read-meta-value">
+                          {insp.scheduled_at ? new Date(insp.scheduled_at).toLocaleString() : "\u2014"}
+                        </span>
+                      </div>
+                      {insp.status === "COMPLETED" && insp.actual_at && (
+                        <div className="read-meta-row">
+                          <span className="read-meta-key"><Bilingual tKey="inspection.completed_on" /></span>
+                          <span className="read-meta-value">
+                            {new Date(insp.actual_at).toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                      {isAssignedToMe && canAct && (
+                        <div className="read-meta-row">
+                          <span className="read-meta-key">&nbsp;</span>
+                          <span className="read-meta-value" style={{ color: "var(--color-success)" }}>
+                            {t("inspection.assigned_to_you")}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Assign to Me button: SCHEDULED + unassigned */}
+                    {insp.status === "SCHEDULED" && !insp.officer_user_id && (
+                      <div style={{ marginTop: "var(--space-3)" }}>
+                        <Button
+                          onClick={() => void handleAssignInspection(insp.inspection_id)}
+                          disabled={isOffline || inspectionLoading}
+                        >
+                          {t("inspection.assign_to_me")}
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Complete inspection form: assigned to current officer, SCHEDULED or IN_PROGRESS */}
+                    {isAssignedToMe && canAct && (
+                      <div className="inspection-form" style={{ marginTop: "var(--space-3)" }}>
+                        <Field label={<Bilingual tKey="inspection.outcome" />} htmlFor={`insp-outcome-${insp.inspection_id}`} required>
+                          <Select
+                            id={`insp-outcome-${insp.inspection_id}`}
+                            value={inspectionOutcome}
+                            onChange={(e) => setInspectionOutcome(e.target.value)}
+                            disabled={isOffline || inspectionLoading}
+                          >
+                            <option value="">{t("complaints.select_status")}</option>
+                            <option value="PASS">{t("inspection.outcome_pass")}</option>
+                            <option value="FAIL">{t("inspection.outcome_fail")}</option>
+                            <option value="REINSPECTION_REQUIRED">{t("inspection.outcome_reinspection")}</option>
+                            <option value="NA">{t("inspection.outcome_na")}</option>
+                          </Select>
+                        </Field>
+                        <Field label={<Bilingual tKey="inspection.findings" />} htmlFor={`insp-findings-${insp.inspection_id}`}>
+                          <Textarea
+                            id={`insp-findings-${insp.inspection_id}`}
+                            value={inspectionFindings}
+                            onChange={(e) => setInspectionFindings(e.target.value)}
+                            rows={3}
+                            disabled={isOffline || inspectionLoading}
+                          />
+                        </Field>
+                        <Field label={<Bilingual tKey="inspection.remarks" />} htmlFor={`insp-remarks-${insp.inspection_id}`}>
+                          <Textarea
+                            id={`insp-remarks-${insp.inspection_id}`}
+                            value={inspectionRemarks}
+                            onChange={(e) => setInspectionRemarks(e.target.value)}
+                            rows={3}
+                            disabled={isOffline || inspectionLoading}
+                          />
+                        </Field>
+                        <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-3)" }}>
+                          <Button
+                            onClick={() => void handleCompleteInspection(insp.inspection_id)}
+                            disabled={isOffline || inspectionLoading || !inspectionOutcome}
+                          >
+                            {t("inspection.complete")}
+                          </Button>
+                          <Button
+                            variant="danger"
+                            onClick={() => void handleCancelInspection(insp.inspection_id)}
+                            disabled={isOffline || inspectionLoading}
+                          >
+                            {t("inspection.cancel_inspection")}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Read-only view for completed inspections */}
+                    {insp.status === "COMPLETED" && (
+                      <div className="read-card-grid" style={{ marginTop: "var(--space-3)" }}>
+                        <div className="read-meta-row">
+                          <span className="read-meta-key"><Bilingual tKey="inspection.outcome" /></span>
+                          <span className="read-meta-value">{insp.outcome || "\u2014"}</span>
+                        </div>
+                        {insp.findings_summary && (
+                          <div className="read-meta-row">
+                            <span className="read-meta-key"><Bilingual tKey="inspection.findings" /></span>
+                            <span className="read-meta-value">{insp.findings_summary}</span>
+                          </div>
+                        )}
+                        {insp.outcome_remarks && (
+                          <div className="read-meta-row">
+                            <span className="read-meta-key"><Bilingual tKey="inspection.remarks" /></span>
+                            <span className="read-meta-value">{insp.outcome_remarks}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Cancel button for non-assigned SCHEDULED or IN_PROGRESS */}
+                    {canAct && !isAssignedToMe && insp.officer_user_id && (
+                      <div style={{ marginTop: "var(--space-3)" }}>
+                        <Button
+                          variant="danger"
+                          onClick={() => void handleCancelInspection(insp.inspection_id)}
+                          disabled={isOffline || inspectionLoading}
+                        >
+                          {t("inspection.cancel_inspection")}
+                        </Button>
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         <div className="queries-section">
           <h2>{t("task.queries_section", { count: application.queries.length })}</h2>
           {application.queries.length > 0 ? (
@@ -562,6 +913,46 @@ export default function TaskDetail({
           </div>
         )}
 
+        {/* Internal Notes Section (O5) */}
+        {!fromSearch && (
+          <div className="notes-section">
+            <h2>{t("task.notes")}</h2>
+            <div className="notes-list">
+              {internalNotes.length > 0 ? (
+                internalNotes.map((note) => (
+                  <Card key={note.id} className="note-card">
+                    <p className="note-text">{note.text}</p>
+                    <div className="note-meta">
+                      <span className="note-author">{note.officer_id}</span>
+                      <span className="note-date">{new Date(note.created_at).toLocaleString()}</span>
+                    </div>
+                  </Card>
+                ))
+              ) : (
+                <p className="notes-empty">{t("task.note_placeholder")}</p>
+              )}
+            </div>
+            {!["APPROVED", "REJECTED", "CLOSED"].includes(application.state_id) && (
+              <div className="note-form">
+                <Textarea
+                  value={newNote}
+                  onChange={(e) => setNewNote(e.target.value)}
+                  placeholder={t("task.note_placeholder")}
+                  rows={2}
+                  disabled={isOffline || noteLoading}
+                />
+                <Button
+                  size="sm"
+                  onClick={() => void handleAddNote()}
+                  disabled={isOffline || noteLoading || !newNote.trim()}
+                >
+                  {noteLoading ? t("common.loading") : t("task.add_note")}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
         {error ? <Alert variant="error">{error}</Alert> : null}
 
         {!fromSearch && !["APPROVED", "REJECTED", "CLOSED"].includes(application.state_id) && task.task_id && (
@@ -576,6 +967,33 @@ export default function TaskDetail({
 
             {action && (
               <div className="action-form">
+                {(action === "REJECT" || action === "QUERY") && (
+                  <Field label={<Bilingual tKey="task.reason_code" />} htmlFor="reason-code">
+                    <Select
+                      id="reason-code"
+                      value={reasonCode}
+                      onChange={(e) => setReasonCode(e.target.value)}
+                      disabled={isOffline || actionLoading}
+                    >
+                      <option value="">{t("task.select_reason")}</option>
+                      {action === "REJECT" ? (
+                        <>
+                          <option value="INCOMPLETE_DOCS">{t("reason.incomplete_docs")}</option>
+                          <option value="POLICY_VIOLATION">{t("reason.policy_violation")}</option>
+                          <option value="INCORRECT_INFO">{t("reason.incorrect_info")}</option>
+                          <option value="OTHER">{t("reason.other")}</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="MISSING_DOC">{t("reason.missing_doc")}</option>
+                          <option value="CLARIFICATION">{t("reason.clarification")}</option>
+                          <option value="ADDITIONAL_INFO">{t("reason.additional_info")}</option>
+                          <option value="OTHER">{t("reason.other")}</option>
+                        </>
+                      )}
+                    </Select>
+                  </Field>
+                )}
                 {action === "QUERY" && (
                   <>
                     <Field label={<Bilingual tKey="task.query_message" />} htmlFor="query-message" required>

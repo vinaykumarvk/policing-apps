@@ -22,6 +22,7 @@ export async function registerReportTemplateRoutes(app: FastifyInstance): Promis
       },
     },
   }, async (request, reply) => {
+    if (!requireReportAccess(request, reply)) return;
     try {
       const { templateType, limit: rawLimit, offset: rawOffset } = request.query as Record<string, string | undefined>;
       const limit = Math.min(parseInt(rawLimit || "50", 10) || 50, 200);
@@ -180,6 +181,7 @@ export async function registerReportTemplateRoutes(app: FastifyInstance): Promis
       },
     },
   }, async (request, reply) => {
+    if (!requireReportAccess(request, reply)) return;
     try {
       const { from, to } = request.query as { from?: string; to?: string };
       const result = await query(
@@ -217,6 +219,7 @@ export async function registerReportTemplateRoutes(app: FastifyInstance): Promis
       },
     },
   }, async (request, reply) => {
+    if (!requireReportAccess(request, reply)) return;
     try {
       const { from, to } = request.query as { from?: string; to?: string };
       const result = await query(
@@ -250,6 +253,7 @@ export async function registerReportTemplateRoutes(app: FastifyInstance): Promis
       },
     },
   }, async (request, reply) => {
+    if (!requireReportAccess(request, reply)) return;
     try {
       const { from, to } = request.query as { from?: string; to?: string };
       const result = await query(
@@ -290,6 +294,7 @@ export async function registerReportTemplateRoutes(app: FastifyInstance): Promis
       },
     },
   }, async (request, reply) => {
+    if (!requireReportAccess(request, reply)) return;
     try {
       const { from, to, interval: intv } = request.query as { from?: string; to?: string; interval?: string };
       const truncInterval = intv === "day" ? "day" : intv === "month" ? "month" : "week";
@@ -324,6 +329,7 @@ export async function registerReportTemplateRoutes(app: FastifyInstance): Promis
       },
     },
   }, async (request, reply) => {
+    if (!requireReportAccess(request, reply)) return;
     try {
       const { from, to } = request.query as { from?: string; to?: string };
       const result = await query(
@@ -368,6 +374,7 @@ export async function registerReportTemplateRoutes(app: FastifyInstance): Promis
       },
     },
   }, async (request, reply) => {
+    if (!requireReportAccess(request, reply)) return;
     try {
       const { from, to } = request.query as { from?: string; to?: string };
       const result = await query(

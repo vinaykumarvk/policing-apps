@@ -5,6 +5,7 @@
  * Projects route tests to the correct dev server:
  *   - citizen-* specs → localhost:5173 (citizen portal)
  *   - officer-* specs → localhost:5174 (officer portal)
+ *   - platform-* specs → localhost:5176 (platform shell)
  */
 import { defineConfig, devices } from "@playwright/test";
 
@@ -29,6 +30,11 @@ export default defineConfig({
       name: "officer-chromium",
       testMatch: /officer-.*/,
       use: { ...devices["Desktop Chrome"], baseURL: "http://localhost:5174" },
+    },
+    {
+      name: "platform-chromium",
+      testMatch: /platform-.*/,
+      use: { ...devices["Desktop Chrome"], baseURL: "http://localhost:5176" },
     },
     {
       name: "citizen-mobile",

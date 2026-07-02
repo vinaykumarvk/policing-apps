@@ -9,6 +9,14 @@ export type { AuthPayload } from "@puda/api-core";
  *  LDAP, OIDC conditional blocks in app.ts). */
 export const DEV_JWT_SECRET = "dopams-dev-secret-DO-NOT-USE-IN-PRODUCTION";
 
+// Defense-in-depth: fail fast at module load if production is missing JWT_SECRET
+if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
+  throw new Error(
+    "FATAL: JWT_SECRET environment variable must be set in production. " +
+      "Refusing to start with the hardcoded dev secret.",
+  );
+}
+
 const auth = createAuthMiddleware({
   cookieName: "dopams_auth",
   defaultDevSecret: DEV_JWT_SECRET,

@@ -9,6 +9,10 @@ export default {
   "nav.settings": "Settings",
   "nav.logout": "Logout",
   "nav.more": "More",
+  "nav.notifications": "\u0A38\u0A42\u0A1A\u0A28\u0A3E\u0A35\u0A3E\u0A02",
+  "nav.unread_count": "{{count}} \u0A05\u0A23\u0A2A\u0A5C\u0A4D\u0A39\u0A40\u0A06\u0A02 \u0A38\u0A42\u0A1A\u0A28\u0A3E\u0A35\u0A3E\u0A02",
+  "notification.sla_warning": "{{count}} \u0A05\u0A30\u0A1C\u0A3C\u0A40(\u0A06\u0A02) SLA \u0A38\u0A2E\u0A3E\u0A02-\u0A38\u0A40\u0A2E\u0A3E \u0A26\u0A47 \u0A28\u0A47\u0A5C\u0A47 \u0A1C\u0A3E\u0A02 \u0A2A\u0A3E\u0A30",
+  "notification.no_unread": "\u0A15\u0A4B\u0A08 \u0A05\u0A23\u0A2A\u0A5C\u0A4D\u0A39\u0A40 \u0A38\u0A42\u0A1A\u0A28\u0A3E \u0A28\u0A39\u0A40\u0A02",
 
   // App bar
   "app.brand": "PUDA Officer Workbench",
@@ -33,6 +37,12 @@ export default {
   "login.user_id_placeholder": "e.g. officer1",
   "login.password_placeholder": "Enter password",
 
+  // Dashboard stats
+  "dashboard.total_pending": "ਕੁੱਲ ਲੰਬਿਤ",
+  "dashboard.overdue": "ਮਿਆਦ ਪੁੱਗੀ",
+  "dashboard.due_soon": "24 ਘੰਟਿਆਂ ਵਿੱਚ ਦੇਯ",
+  "dashboard.on_track": "ਸਮੇਂ ਸਿਰ",
+
   // Inbox
   "inbox.no_tasks": "No pending tasks",
   "inbox.no_tasks_desc": "Your inbox is empty. Tasks will appear here when applications need your review.",
@@ -41,8 +51,11 @@ export default {
   "inbox.service": "Service",
   "inbox.stage": "Stage",
   "inbox.required_role": "Required Role",
-  "inbox.sla_due": "SLA Due",
-  "inbox.overdue": "Overdue",
+  "inbox.sla_due": "SLA ਦੇਯ",
+  "inbox.overdue": "ਮਿਆਦ ਪੁੱਗੀ",
+  "inbox.due_soon": "ਜਲਦੀ ਦੇਯ",
+  "inbox.on_track": "ਸਮੇਂ ਸਿਰ",
+  "inbox.sort_overdue_first": "ਮਿਆਦ ਪੁੱਗੀ ਪਹਿਲਾਂ",
   "inbox.arn_label": "ARN: {{arn}}",
 
   // Search
@@ -171,6 +184,29 @@ export default {
   "task.preview_unavailable": "Preview is not available for this file type.",
   "task.download_to_view": "Download to view",
 
+  // Inspections
+  "inspection.title": "ਸਾਈਟ ਨਿਰੀਖਣ",
+  "inspection.no_inspections": "ਇਸ ਅਰਜ਼ੀ ਲਈ ਕੋਈ ਨਿਰੀਖਣ ਨਿਰਧਾਰਤ ਨਹੀਂ ਹੈ",
+  "inspection.type": "ਨਿਰੀਖਣ ਕਿਸਮ",
+  "inspection.status": "ਸਥਿਤੀ",
+  "inspection.scheduled_at": "ਨਿਰਧਾਰਤ ਮਿਤੀ",
+  "inspection.assign_to_me": "ਮੈਨੂੰ ਸੌਂਪੋ",
+  "inspection.complete": "ਨਿਰੀਖਣ ਪੂਰਾ ਕਰੋ",
+  "inspection.cancel_inspection": "ਨਿਰੀਖਣ ਰੱਦ ਕਰੋ",
+  "inspection.outcome": "ਨਤੀਜਾ",
+  "inspection.findings": "ਖੋਜ ਸਾਰ",
+  "inspection.remarks": "ਨਤੀਜਾ ਟਿੱਪਣੀਆਂ",
+  "inspection.outcome_pass": "ਪਾਸ",
+  "inspection.outcome_fail": "ਫੇਲ",
+  "inspection.outcome_reinspection": "ਮੁੜ-ਨਿਰੀਖਣ ਲੋੜੀਂਦਾ",
+  "inspection.outcome_na": "ਲਾਗੂ ਨਹੀਂ",
+  "inspection.status_scheduled": "ਨਿਰਧਾਰਤ",
+  "inspection.status_in_progress": "ਪ੍ਰਗਤੀ ਵਿੱਚ",
+  "inspection.status_completed": "ਪੂਰਾ",
+  "inspection.status_cancelled": "ਰੱਦ",
+  "inspection.completed_on": "ਪੂਰਾ ਹੋਣ ਦੀ ਮਿਤੀ",
+  "inspection.assigned_to_you": "ਤੁਹਾਨੂੰ ਸੌਂਪਿਆ ਗਿਆ",
+
   // Actions
   "action.forward": "Forward",
   "action.query": "Raise Query",
@@ -244,12 +280,38 @@ export default {
   "feedback.offline_workflow": "ਤੁਸੀਂ ਆਫ਼ਲਾਈਨ ਹੋ। ਰੀਡ-ਓਨਲੀ ਮੋਡ ਵਿੱਚ ਵਰਕਫ਼ਲੋ ਕਾਰਵਾਈਆਂ ਅਯੋਗ ਹਨ।",
   "feedback.query_message_required": "ਸਵਾਲ ਸਬਮਿਟ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਸਵਾਲ ਸੁਨੇਹਾ ਲੋੜੀਂਦਾ ਹੈ।",
   "feedback.remarks_required_rejection": "ਅਰਜ਼ੀ ਰੱਦ ਕਰਨ ਸਮੇਂ ਟਿੱਪਣੀਆਂ ਲੋੜੀਂਦੀਆਂ ਹਨ।",
+  "feedback.remarks_required": "ਸਾਰੀਆਂ ਵਰਕਫ਼ਲੋ ਕਾਰਵਾਈਆਂ ਲਈ ਟਿੱਪਣੀਆਂ ਲੋੜੀਂਦੀਆਂ ਹਨ।",
   "feedback.action_completed": "ਕਾਰਵਾਈ {{action}} ਸਫ਼ਲਤਾਪੂਰਵਕ ਪੂਰੀ ਹੋਈ।",
   "feedback.offline_complaints": "ਆਫ਼ਲਾਈਨ ਮੋਡ ਸਰਗਰਮ ਹੈ। ਸ਼ਿਕਾਇਤ ਡੇਟਾ ਉਪਲਬਧ ਨਹੀਂ ਹੈ।",
   "feedback.failed_load_complaints": "ਸ਼ਿਕਾਇਤਾਂ ਲੋਡ ਕਰਨ ਵਿੱਚ ਅਸਫ਼ਲ",
   "feedback.failed_load_complaint": "ਸ਼ਿਕਾਇਤ ਲੋਡ ਕਰਨ ਵਿੱਚ ਅਸਫ਼ਲ",
   "feedback.failed_load_evidence": "ਸਬੂਤ ਫ਼ਾਈਲ ਲੋਡ ਕਰਨ ਵਿੱਚ ਅਸਫ਼ਲ।",
   "feedback.assign_failed": "ਕਾਰਜ ਅਸਾਈਨਮੈਂਟ ਅਸਫ਼ਲ। ਕਿਸੇ ਹੋਰ ਅਧਿਕਾਰੀ ਨੇ ਇਹ ਕਾਰਜ ਲੈ ਲਿਆ ਹੋ ਸਕਦਾ ਹੈ।",
+  "feedback.inspection_assigned": "ਨਿਰੀਖਣ ਤੁਹਾਨੂੰ ਸੌਂਪਿਆ ਗਿਆ",
+  "feedback.inspection_completed": "ਨਿਰੀਖਣ ਸਫਲਤਾਪੂਰਵਕ ਪੂਰਾ ਹੋਇਆ",
+  "feedback.inspection_cancelled": "ਨਿਰੀਖਣ ਰੱਦ ਕੀਤਾ ਗਿਆ",
+  "feedback.inspection_error": "ਨਿਰੀਖਣ ਅੱਪਡੇਟ ਕਰਨ ਵਿੱਚ ਅਸਫਲ",
+
+  // Reason Codes
+  "task.reason_code": "ਕਾਰਨ ਕੋਡ",
+  "task.select_reason": "ਕਾਰਨ ਚੁਣੋ...",
+  "reason.incomplete_docs": "ਅਧੂਰੇ ਦਸਤਾਵੇਜ਼",
+  "reason.policy_violation": "ਨੀਤੀ ਉਲੰਘਣਾ",
+  "reason.incorrect_info": "ਗਲਤ ਜਾਣਕਾਰੀ",
+  "reason.missing_doc": "ਦਸਤਾਵੇਜ਼ ਗੁੰਮ",
+  "reason.clarification": "ਸਪੱਸ਼ਟੀਕਰਨ ਲੋੜੀਂਦਾ",
+  "reason.additional_info": "ਵਾਧੂ ਜਾਣਕਾਰੀ ਲੋੜੀਂਦੀ",
+  "reason.other": "ਹੋਰ",
+
+  // Batch Document Verification
+  "task.verify_all_docs": "ਸਾਰੇ ਦਸਤਾਵੇਜ਼ ਤਸਦੀਕ ਕਰੋ",
+  "feedback.all_docs_verified": "ਸਾਰੇ ਦਸਤਾਵੇਜ਼ ਤਸਦੀਕ ਕੀਤੇ ਗਏ",
+
+  // Internal Notes
+  "task.notes": "ਅੰਦਰੂਨੀ ਟਿੱਪਣੀਆਂ",
+  "task.add_note": "ਟਿੱਪਣੀ ਜੋੜੋ",
+  "task.note_placeholder": "ਇੱਕ ਅੰਦਰੂਨੀ ਟਿੱਪਣੀ ਜੋੜੋ...",
+  "feedback.note_added": "ਟਿੱਪਣੀ ਸਫਲਤਾਪੂਰਵਕ ਜੋੜੀ ਗਈ",
 
   // NL Assistant
   "assistant.open": "ਸਹਾਇਕ ਖੋਲੋ",

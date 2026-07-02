@@ -42,7 +42,7 @@ export async function registerLeadRoutes(app: FastifyInstance): Promise<void> {
          WHERE ($1::text IS NULL OR state_id = $1)
            AND ($2::text IS NULL OR priority = $2)
            AND ($3::text IS NULL OR source_type = $3)
-           AND (unit_id = $4::uuid)
+           AND ($4::uuid IS NULL OR unit_id = $4::uuid)
          ORDER BY created_at DESC
          LIMIT $5 OFFSET $6`,
         [state_id || null, priority || null, source_type || null, unitId, limit, offset],
@@ -59,9 +59,9 @@ export async function registerLeadRoutes(app: FastifyInstance): Promise<void> {
     try {
       const unitId = request.authUser?.unitId || null;
       const [stateRows, priorityRows, sourceRows] = await Promise.all([
-        query(`SELECT state_id AS value, COUNT(*)::int AS count FROM lead WHERE (unit_id = $1::uuid) GROUP BY state_id ORDER BY count DESC`, [unitId]),
-        query(`SELECT priority AS value, COUNT(*)::int AS count FROM lead WHERE (unit_id = $1::uuid) GROUP BY priority ORDER BY count DESC`, [unitId]),
-        query(`SELECT source_type AS value, COUNT(*)::int AS count FROM lead WHERE (unit_id = $1::uuid) GROUP BY source_type ORDER BY count DESC`, [unitId]),
+        query(`SELECT state_id AS value, COUNT(*)::int AS count FROM lead WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY state_id ORDER BY count DESC`, [unitId]),
+        query(`SELECT priority AS value, COUNT(*)::int AS count FROM lead WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY priority ORDER BY count DESC`, [unitId]),
+        query(`SELECT source_type AS value, COUNT(*)::int AS count FROM lead WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY source_type ORDER BY count DESC`, [unitId]),
       ]);
       return { facets: { state_id: stateRows.rows, priority: priorityRows.rows, source_type: sourceRows.rows } };
     } catch (err) {
@@ -150,7 +150,7 @@ export async function registerLeadRoutes(app: FastifyInstance): Promise<void> {
                 subject_id, assigned_to, channel, informant_name, informant_contact, urgency,
                 duplicate_of_lead_id, auto_memo_generated, geo_latitude, geo_longitude,
                 created_by, created_at, updated_at
-         FROM lead WHERE lead_id = $1 AND unit_id = $2::uuid`,
+         FROM lead WHERE lead_id = $1 AND ($2::uuid IS NULL OR unit_id = $2::uuid)`,
         [id, unitId],
       );
       if (result.rows.length === 0) {
@@ -170,38 +170,43 @@ export async function registerLeadRoutes(app: FastifyInstance): Promise<void> {
     },
   }, async (request, reply) => {
     if (!requireLeadTransition(request, reply)) return;
-    const { id } = request.params as { id: string };
-    const { transitionId, remarks } = request.body as { transitionId: string; remarks?: string };
-    const { userId, roles } = request.authUser!;
+    try {
+      const { id } = request.params as { id: string };
+      const { transitionId, remarks } = request.body as { transitionId: string; remarks?: string };
+      const { userId, roles } = request.authUser!;
 
-    const result = await executeTransition(
-      id, "dopams_lead", transitionId, userId, "OFFICER", roles, remarks,
-    );
-    if (!result.success) {
-      if (result.error === "ENTITY_NOT_FOUND") return send404(reply, "LEAD_NOT_FOUND", "Lead not found");
-      return sendError(reply, 409, result.error || "TRANSITION_FAILED", "Lead transition failed");
-    }
-
-    // FR-16 AC-04: Auto-generate memo when lead is ESCALATED
-    if (result.newStateId === "ESCALATED") {
-      try {
-        const leadData = await query(`SELECT summary FROM lead WHERE lead_id = $1`, [id]);
-        if (leadData.rows.length > 0) {
-          const summary = leadData.rows[0].summary;
-          const memoRef = await query(`SELECT 'DOP-MEMO-' || EXTRACT(YEAR FROM NOW())::text || '-' || LPAD(nextval('dopams_memo_ref_seq')::text, 6, '0') AS ref`);
-          await query(
-            `INSERT INTO memo (lead_id, memo_number, subject, body, created_by)
-             VALUES ($1, $2, $3, $4, $5)`,
-            [id, memoRef.rows[0].ref, `Escalation memo: ${summary.substring(0, 100)}`, `Lead escalated.\n\nRemarks: ${remarks || "N/A"}\n\nSummary: ${summary}`, userId],
-          );
-          await query(`UPDATE lead SET auto_memo_generated = TRUE WHERE lead_id = $1`, [id]);
-        }
-      } catch (memoErr) {
-        request.log.warn(memoErr, "Auto-memo on escalation failed");
+      const result = await executeTransition(
+        id, "dopams_lead", transitionId, userId, "OFFICER", roles, remarks,
+      );
+      if (!result.success) {
+        if (result.error === "ENTITY_NOT_FOUND") return send404(reply, "LEAD_NOT_FOUND", "Lead not found");
+        return sendError(reply, 409, result.error || "TRANSITION_FAILED", "Lead transition failed");
       }
-    }
 
-    return { success: true, newStateId: result.newStateId };
+      // FR-16 AC-04: Auto-generate memo when lead is ESCALATED
+      if (result.newStateId === "ESCALATED") {
+        try {
+          const leadData = await query(`SELECT summary FROM lead WHERE lead_id = $1`, [id]);
+          if (leadData.rows.length > 0) {
+            const summary = leadData.rows[0].summary;
+            const memoRef = await query(`SELECT 'DOP-MEMO-' || EXTRACT(YEAR FROM NOW())::text || '-' || LPAD(nextval('dopams_memo_ref_seq')::text, 6, '0') AS ref`);
+            await query(
+              `INSERT INTO memo (lead_id, memo_number, subject, body, created_by)
+               VALUES ($1, $2, $3, $4, $5)`,
+              [id, memoRef.rows[0].ref, `Escalation memo: ${summary.substring(0, 100)}`, `Lead escalated.\n\nRemarks: ${remarks || "N/A"}\n\nSummary: ${summary}`, userId],
+            );
+            await query(`UPDATE lead SET auto_memo_generated = TRUE WHERE lead_id = $1`, [id]);
+          }
+        } catch (memoErr) {
+          request.log.warn(memoErr, "Auto-memo on escalation failed");
+        }
+      }
+
+      return { success: true, newStateId: result.newStateId };
+    } catch (err) {
+      request.log.error(err, "Failed to transition lead");
+      reply.code(500).send({ error: "INTERNAL_ERROR", message: "Failed to transition lead" });
+    }
   });
 
   app.get("/api/v1/leads/:id/transitions", {

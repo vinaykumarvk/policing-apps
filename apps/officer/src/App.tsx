@@ -62,6 +62,9 @@ export default function App() {
     typeof navigator !== "undefined" ? !navigator.onLine : false
   );
 
+  const [unreadCount, setUnreadCount] = useState(0);
+  const notificationToastShownRef = useRef(false);
+
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const avatarMenuRef = useRef<HTMLDivElement>(null);
@@ -212,6 +215,38 @@ export default function App() {
       setLoading(false);
     }
   }, [officerUserId, authorities, authHeaders, isOffline]);
+
+  // --- SLA notification polling ---
+  const loadNotifications = useCallback(async () => {
+    if (!officerUserId || isOffline) return;
+    try {
+      const res = await fetch(
+        `${apiBaseUrl}/api/v1/notifications?limit=50&unreadOnly=true`,
+        authHeaders()
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const notifs = data.notifications || data || [];
+        const count = Array.isArray(notifs) ? notifs.length : 0;
+        setUnreadCount(count);
+
+        // Show a one-time SLA toast when there are unread notifications
+        if (count > 0 && !notificationToastShownRef.current) {
+          notificationToastShownRef.current = true;
+          showToast("warning", t("notification.sla_warning", { count }));
+        }
+      }
+    } catch {
+      /* silent — non-critical polling */
+    }
+  }, [officerUserId, isOffline, authHeaders, showToast, t]);
+
+  useEffect(() => {
+    if (!officerUserId || isOffline) return;
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 60_000);
+    return () => clearInterval(interval);
+  }, [officerUserId, isOffline, loadNotifications]);
 
   const loadApplication = useCallback(async (arn: string) => {
     if (isOffline) {
@@ -512,6 +547,7 @@ export default function App() {
       <ul className="sidebar__nav">
         <li>
           <button
+            type="button"
             className={`sidebar__item ${view === "inbox" ? "sidebar__item--active" : ""}`}
             onClick={() => navigate("inbox")}
             title={t("nav.inbox")}
@@ -524,6 +560,7 @@ export default function App() {
         </li>
         <li>
           <button
+            type="button"
             className={`sidebar__item ${view === "search" ? "sidebar__item--active" : ""}`}
             onClick={() => navigate("search")}
             title={t("nav.search")}
@@ -536,6 +573,7 @@ export default function App() {
         </li>
         <li>
           <button
+            type="button"
             className={`sidebar__item ${view === "complaints" ? "sidebar__item--active" : ""}`}
             onClick={() => navigate("complaints")}
             title={t("nav.complaints")}
@@ -548,6 +586,7 @@ export default function App() {
         </li>
         <li>
           <button
+            type="button"
             className={`sidebar__item ${view === "service-config" ? "sidebar__item--active" : ""}`}
             onClick={() => navigate("service-config")}
             title={t("nav.service_config")}
@@ -560,6 +599,7 @@ export default function App() {
         </li>
         <li>
           <button
+            type="button"
             className={`sidebar__item ${view === "assistant-admin" ? "sidebar__item--active" : ""}`}
             onClick={() => navigate("assistant-admin")}
             title={t("assistant.title")}
@@ -573,6 +613,7 @@ export default function App() {
         <li className="sidebar__divider" role="separator" />
         <li>
           <button
+            type="button"
             className={`sidebar__item ${view === "settings" ? "sidebar__item--active" : ""}`}
             onClick={() => navigate("settings")}
             title={t("nav.settings")}
@@ -585,7 +626,7 @@ export default function App() {
         </li>
       </ul>
       <div className="sidebar__footer">
-        <button className="sidebar__item" onClick={handleLogout} title={t("nav.logout")}>
+        <button type="button" className="sidebar__item" onClick={handleLogout} title={t("nav.logout")}>
           <span className="sidebar__item-icon" aria-hidden="true">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1-2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           </span>
@@ -626,6 +667,20 @@ export default function App() {
               <span className="app-bar__page-title">{pageTitle}</span>
             </div>
           </div>
+          <button
+            className="app-bar__icon-btn notification-bell"
+            type="button"
+            onClick={() => navigate("inbox")}
+            aria-label={t("nav.notifications")}
+            title={t("nav.notifications")}
+          >
+            <span aria-hidden="true">&#128276;</span>
+            {unreadCount > 0 && (
+              <span className="notification-badge" aria-label={t("nav.unread_count", { count: unreadCount })}>
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </button>
           <div className="app-bar__avatar-wrap" style={{ position: "relative" }}>
             <button
               ref={avatarBtnRef}
@@ -748,7 +803,7 @@ export default function App() {
                   <div className="page__header">
                     <h1>{t("app.page_inbox")}</h1>
                     <p className="subtitle">
-                      {postings.map((p) => p.designation_name).join(", ") || "Loading..."} | Roles: {roles.join(", ") || "\u2014"}
+                      {postings.map((p) => p.designation_name).join(", ") || "\u2014"} | Roles: {roles.join(", ") || "\u2014"}
                     </p>
                   </div>
                   {inboxFeedback && (

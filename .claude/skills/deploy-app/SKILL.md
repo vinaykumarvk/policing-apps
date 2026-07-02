@@ -22,7 +22,7 @@ Options the user may append:
 - `docker-only` — stop after local Docker sanity check (skip GCloud deploy)
 - `cloud-only` — skip local Docker, deploy straight to GCloud (assumes prior local verification)
 - `no-commit` — fix issues but do not commit
-- `no-cleanup` — skip code cleanup phase (Phase 2.9)
+- `no-cleanup` — skip code cleanup phase (Phase 2.8)
 - `dry-run` — run readiness check only, report findings, do not fix or deploy
 - `force` — skip user confirmation prompts for non-destructive fixes
 
@@ -47,17 +47,33 @@ When the user specifies just an app name (e.g., `dopams`, `forensic`, `social-me
 
 ### Service Registry
 
-| Service | Dockerfile | Cloud Run Name | Region | Image Registry |
-|---------|-----------|----------------|--------|----------------|
-| apps/api | Dockerfile.api | puda-api | asia-southeast1 | `asia-southeast1-docker.pkg.dev/policing-apps/policing-apps/puda-api` |
-| apps/citizen | Dockerfile.citizen | puda-citizen | asia-southeast1 | `asia-southeast1-docker.pkg.dev/policing-apps/policing-apps/puda-citizen` |
-| apps/officer | Dockerfile.officer | puda-officer | asia-southeast1 | `asia-southeast1-docker.pkg.dev/policing-apps/policing-apps/puda-officer` |
-| apps/dopams-api | Dockerfile.dopams-api | dopams-api | asia-southeast1 | `asia-southeast1-docker.pkg.dev/policing-apps/policing-apps/dopams-api` |
-| apps/dopams-ui | Dockerfile.dopams-ui | dopams-ui | asia-southeast1 | `asia-southeast1-docker.pkg.dev/policing-apps/policing-apps/dopams-ui` |
-| apps/forensic-api | Dockerfile.forensic-api | forensic-api | asia-southeast1 | `asia-southeast1-docker.pkg.dev/policing-apps/policing-apps/forensic-api` |
-| apps/forensic-ui | Dockerfile.forensic-ui | forensic-ui | asia-southeast1 | `asia-southeast1-docker.pkg.dev/policing-apps/policing-apps/forensic-ui` |
-| apps/social-media-api | Dockerfile.social-media-api | social-media-api | asia-southeast1 | `asia-southeast1-docker.pkg.dev/policing-apps/policing-apps/social-media-api` |
-| apps/social-media-ui | Dockerfile.social-media-ui | social-media-ui | asia-southeast1 | `asia-southeast1-docker.pkg.dev/policing-apps/policing-apps/social-media-ui` |
+| Service | Dockerfile | Cloud Run Name | GCloud Project | Region | Custom Domain |
+|---------|-----------|----------------|---------------|--------|---------------|
+| apps/api | Dockerfile.api | puda-api | puda-489215 | asia-southeast1 | — |
+| apps/citizen | Dockerfile.citizen | puda-citizen | puda-489215 | asia-southeast1 | puda.adssoftek.com |
+| apps/officer | Dockerfile.officer | puda-officer | puda-489215 | asia-southeast1 | puda-officer.adssoftek.com |
+| apps/dopams-api | Dockerfile.dopams-api | dopams-api | policing-apps | asia-southeast1 | — |
+| apps/dopams-ui | Dockerfile.dopams-ui | dopams-ui | policing-apps | asia-southeast1 | — |
+| apps/forensic-api | Dockerfile.forensic-api | forensic-api | policing-apps | asia-southeast1 | — |
+| apps/forensic-ui | Dockerfile.forensic-ui | forensic-ui | policing-apps | asia-southeast1 | — |
+| apps/social-media-api | Dockerfile.social-media-api | social-media-api | policing-apps | asia-southeast1 | — |
+| apps/social-media-ui | Dockerfile.social-media-ui | social-media-ui | policing-apps | asia-southeast1 | — |
+
+### Custom Domain Proxy Architecture (PUDA)
+
+PUDA citizen and officer apps have custom domains mapped via Cloud Run domain mappings. To avoid third-party cookie issues (see T7), these apps use an **nginx reverse proxy** pattern:
+
+```
+Browser → puda.adssoftek.com/api/v1/... → nginx proxy → puda-api-xxx.run.app/api/v1/...
+Browser → puda.adssoftek.com/           → nginx serves SPA static files
+```
+
+**Key implications for deployment**:
+1. `VITE_API_BASE_URL` must be `""` (empty string) — SPA calls `/api/` relative to same origin
+2. `apiBaseUrl` in source must use `??` (not `||`) to preserve empty string — see T8
+3. `nginx.citizen.conf` and `nginx.officer.conf` must have `/api/` proxy blocks
+4. API cookie `SameSite=Strict` is correct (same-origin via proxy)
+5. API `ALLOWED_ORIGINS` should still include the custom domains for direct API access
 
 ### Cloud SQL
 
@@ -65,6 +81,8 @@ When the user specifies just an app name (e.g., `dopams`, `forensic`, `social-me
 - All API services connect via Cloud SQL socket (not public IP)
 - Database URLs stored in Secret Manager (e.g., `dopams-database-url`, `puda-database-url`)
 - JWT secrets stored in Secret Manager (e.g., `dopams-jwt-secret`, `puda-jwt-secret`)
+- **CRITICAL: `DATABASE_SSL=false` is REQUIRED** for all API services on Cloud Run. Cloud SQL Unix sockets do not support SSL, but `@puda/api-core` defaults to `ssl: { rejectUnauthorized: true }` when `DATABASE_SSL` is unset. Without this, the app crashes with "The server does not support SSL connections".
+- **Cloud SQL instances annotation is REQUIRED**: Always include `--add-cloudsql-instances "policing-apps:asia-southeast1:policing-db,policing-apps:asia-southeast1:policing-db-v2"` when deploying API services. Without it, the Unix socket path (`/cloudsql/...`) doesn't exist in the container.
 
 ### Cloud Build with Custom Dockerfiles
 
@@ -103,8 +121,18 @@ images: ['$_IMAGE']
 When deploying an app with both API and UI (e.g., `dopams`):
 1. **Build API image first** → deploy API to Cloud Run
 2. **Get the API service URL** from the deployment output
-3. **Build UI image** with `VITE_API_BASE_URL=<api-url>` build arg → deploy UI
+3. **Build UI image** with appropriate `VITE_API_BASE_URL` build arg → deploy UI
 4. **Verify CORS**: API's `ALLOWED_ORIGINS` must include the UI service URL
+
+**IMPORTANT — Custom domain apps (PUDA citizen/officer)**:
+- These apps use nginx reverse proxy (see T7) — `VITE_API_BASE_URL` must be `""` (empty)
+- The proxy is configured in `nginx.citizen.conf` / `nginx.officer.conf`
+- API URL is hardcoded in the nginx proxy block, NOT baked into the JS bundle
+- Deploy order: API first (get URL), update nginx proxy target if URL changed, then build+deploy UI
+
+**Standard apps (DOPAMS, Forensic, Social Media)**:
+- These apps use direct API calls — `VITE_API_BASE_URL=<api-cloud-run-url>`
+- No nginx proxy needed (no custom domains, no third-party cookie issue)
 
 ### Docker Desktop May Not Be Available
 
@@ -952,11 +980,16 @@ curl -s -o /dev/null -w "Response time: %{time_total}s\n" http://localhost:<port
 
 ### 5.2: Authentication
 
+**IMPORTANT**: Check the "Auth Testing" section in Project-Specific Infrastructure for the correct login field name and credentials. The field varies by app (e.g., `"username"` for DOPAMS/Forensic/SocialMedia, `"login"` for PUDA).
+
 ```bash
 # For API apps — test login endpoint
+# Discover the correct login field name first:
+rg -n "loginSchema\|LoginBody\|loginBody" <app-dir>/src/ --glob '*.ts' | head -5
+
 LOGIN_RESPONSE=$(curl -s http://localhost:<port>/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"login":"<test-user>","password":"<test-password>"}')
+  -d '{"<login-field>":"<test-user>","password":"<test-password>"}')
 echo "Login response: $(echo $LOGIN_RESPONSE | head -c 200)"
 
 # Extract token for subsequent tests
@@ -1155,9 +1188,16 @@ gcloud run deploy <service-name> \
 - `--port`: Must match the port the app listens on (8080 for all apps in this project).
 - `--memory`: 512Mi for API apps, 256Mi for UI apps (nginx).
 - `--allow-unauthenticated`: All apps in this project are public-facing.
-- `--set-env-vars`: All required env vars from Phase 1 inventory.
-- `--set-secrets`: Database URLs and JWT secrets from Secret Manager (e.g., `DOPAMS_DATABASE_URL=dopams-database-url:latest`).
+- `--add-cloudsql-instances`: **REQUIRED for all API apps** — `"policing-apps:asia-southeast1:policing-db,policing-apps:asia-southeast1:policing-db-v2"`. Without this, the Cloud SQL Unix socket path doesn't exist and DB connections fail.
+- `--cpu-boost`: Recommended for API apps to speed up cold starts (migration runner + app init).
+- `--set-env-vars`: Must include at minimum: `NODE_ENV=production,DATABASE_SSL=false,ALLOWED_ORIGINS=<ui-url>`. The `DATABASE_SSL=false` is critical (see Cloud SQL section). The `ALLOWED_ORIGINS` is required — the app crashes on startup without it in production.
+- `--set-secrets`: Database URLs, JWT secrets, and API keys from Secret Manager. Known secrets per app:
+  - **dopams-api**: `DATABASE_URL=dopams-database-url:latest,JWT_SECRET=dopams-jwt-secret:latest,OPEN_AI_API_KEY=openai-api-key:latest,OPEN_AI_MODEL=dopams-openai-model:latest`
+  - **puda-api**: `DATABASE_URL=puda-database-url:latest,JWT_SECRET=puda-jwt-secret:latest`
+  - **social-media-api**: `DATABASE_URL=sm-database-url:latest,JWT_SECRET=sm-jwt-secret:latest,OPEN_AI_API_KEY=sm-openai-api-key:latest`
+- **Secret Manager gotcha**: If a secret doesn't exist yet, `gcloud run deploy` fails with "Permission denied on secret". You must first `gcloud secrets create <name> --data-file=-` and then `gcloud secrets add-iam-policy-binding <name> --member="serviceAccount:809677427844-compute@developer.gserviceaccount.com" --role="roles/secretmanager.secretAccessor"`.
 - For API apps: Verify `ALLOWED_ORIGINS` includes the UI service URL.
+- **CORS with commas**: When `ALLOWED_ORIGINS` contains multiple URLs separated by commas, use gcloud's `^##^` delimiter escape: `--set-env-vars "^##^ALLOWED_ORIGINS=https://url1,https://url2"`. Otherwise gcloud interprets the comma as an env var separator.
 - UI apps need NO env vars (all config is baked in at build time via `VITE_API_BASE_URL`).
 
 ### 6.3: Deployment Verification
@@ -1191,7 +1231,71 @@ gcloud run services update-traffic <service-name> \
   --platform managed --region <region> 2>&1
 ```
 
-Record the rollback command in the report for manual use if needed.
+**First-time deployments** (no previous revision exists):
+
+```bash
+# Check if this is a first deploy (no existing revisions)
+REVISION_COUNT=$(gcloud run revisions list --service <service-name> \
+  --platform managed --region <region> --format='value(REVISION)' 2>/dev/null | wc -l)
+
+if [ "$REVISION_COUNT" -le 1 ]; then
+  echo "FIRST DEPLOY — no rollback target. Fix forward or delete the service:"
+  echo "  gcloud run services delete <service-name> --platform managed --region <region>"
+fi
+```
+
+For first deploys, there is no previous revision to roll back to. Options:
+1. **Fix forward** — identify the issue, fix it, redeploy
+2. **Delete the service** — `gcloud run services delete` and start fresh
+3. **Set traffic to 0** — `gcloud run services update-traffic --to-revisions=LATEST=0` to prevent access while debugging
+
+Record the rollback command (or first-deploy status) in the report for manual use if needed.
+
+### 6.5: Database Migration Verification (for API apps)
+
+After deploying an API app, verify that the cloud database schema matches what the new code expects:
+
+```bash
+# Connect via cloud-sql-proxy
+cloud-sql-proxy "<project>:<region>:<instance>" --port 15435 --gcloud-auth &
+sleep 3
+
+DB_URL="postgresql://<user>:<pass>@127.0.0.1:15435/<dbname>"
+
+# Check if migration files exist
+ls apps/<app>/src/migrations/ apps/<app>/scripts/migrate* 2>/dev/null
+
+# List tables in the database
+psql "$DB_URL" -c "\dt" 2>/dev/null | head -30
+
+# Check for missing tables/columns that the new code references
+# Extract table names from SQL in the codebase
+rg -oN 'FROM\s+"?(\w+)"?' --glob '*.ts' apps/<app>/src/ | sort -u
+rg -oN 'INSERT INTO\s+"?(\w+)"?' --glob '*.ts' apps/<app>/src/ | sort -u
+
+# Compare against actual tables
+psql "$DB_URL" -c "SELECT tablename FROM pg_tables WHERE schemaname='public'" 2>/dev/null
+```
+
+**Common migration issues**:
+
+| Issue | Detection | Fix |
+|-------|-----------|-----|
+| Missing table | `relation "xxx" does not exist` in API logs | Run migration SQL via cloud-sql-proxy |
+| Missing column | `column "xxx" does not exist` in API logs | Add column via ALTER TABLE or run migration |
+| Type mismatch | `invalid input syntax for type uuid` | Check column type matches app expectations (TEXT vs UUID) |
+| Missing seed data | Queries return 0 rows | Run seed scripts: `psql -f apps/<app>/scripts/seed-*.sql` |
+
+```bash
+# Run pending migrations if needed
+psql "$DB_URL" -f apps/<app>/src/migrations/<migration>.sql 2>&1
+
+# Verify seed data exists
+psql "$DB_URL" -c "SELECT COUNT(*) FROM \"user\"" 2>/dev/null
+
+# Kill cloud-sql-proxy when done
+kill %1 2>/dev/null
+```
 
 ---
 
@@ -1404,7 +1508,8 @@ These are the most frequent issues encountered during and after deployment. The 
 
 | Cause | How to Detect | Fix |
 |-------|--------------|-----|
-| `VITE_API_BASE_URL` baked wrong at build time | Inspect the built JS: `curl -s $UI_URL/assets/index-*.js \| grep -o 'https://[^"]*'` — does it point to the correct API URL? | Rebuild UI image with correct `--build-arg VITE_API_BASE_URL=<api-url>` |
+| `VITE_API_BASE_URL` baked wrong at build time | Inspect the built JS: `curl -s $UI_URL/assets/index-*.js \| grep -o 'https://[^"]*'` — does it point to the correct API URL? | Rebuild UI image with correct `--build-arg VITE_API_BASE_URL=<api-url>`. For PUDA apps with custom domains, use `""` (empty) with nginx proxy — see T7 |
+| `VITE_API_BASE_URL` empty but `\|\|` fallback used | JS calls `http://localhost:3001` despite empty build arg | Change `\|\|` to `??` in apiBaseUrl definition — see T8 |
 | API not deployed yet when UI was built | UI points to old/nonexistent API URL | Deploy API first, get URL, then build+deploy UI (see Deploy Order) |
 | CORS: API doesn't allow UI origin | `curl -sI -X OPTIONS $API_URL/api/v1/auth/login -H "Origin: $UI_URL"` — no `Access-Control-Allow-Origin` | Add UI URL to API's `ALLOWED_ORIGINS` env var, redeploy API |
 | Local dev: Vite proxy port mismatch | Frontend calls `/api/v1/...` but proxy target port doesn't match running API | Check `vite.config.ts` proxy target vs actual API port in `.env` |
@@ -1446,14 +1551,26 @@ rg -n "username\|login\|password" apps/<app>/scripts/seed.ts | head -20
 rg -n "loginSchema\|LoginBody\|loginBody" apps/<app>/src/ --glob '*.ts' | head -10
 
 # Test login with discovered credentials
+# Use the correct login field — check Auth Testing section
 curl -s $API_URL/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"password"}' | head -c 300
+  -d '{"<login-field>":"<test-user>","password":"<test-password>"}' | head -c 300
 ```
 
 ### T3: Empty Data After Login (Authenticated But No Data)
 
 **Symptoms**: Login succeeds, dashboard/list pages load, but all data sections show "No results", empty tables, or zero counts.
+
+**Decision Tree** — follow in order, stop at first match:
+
+```text
+1. Open browser DevTools → Network tab → reload dashboard
+   ├─ API calls return 401? → Cookie/token not being sent → check T7 (cross-origin) or credentials: "include"
+   ├─ API calls return 403? → User role lacks permission → check role assignment in seed data
+   ├─ API calls return 200 with empty data? → Database not seeded or wrong filter → check seed data below
+   ├─ API calls return 200 with data but UI empty? → JS error → check Console tab for render errors
+   └─ No API calls at all? → API URL wrong → check T1 / T8
+```
 
 **Root Causes & Fixes**:
 
@@ -1462,6 +1579,7 @@ curl -s $API_URL/api/v1/auth/login \
 | Database not seeded | `SELECT COUNT(*) FROM <main_table>` returns 0 | Run seed scripts via cloud-sql-proxy |
 | Auth token not sent with API calls | Browser DevTools → Network tab shows 401 on data endpoints | Ensure `credentials: "include"` on all fetch calls, or `Authorization: Bearer` header |
 | Cookie not set after login | `document.cookie` is empty after login | Check `Set-Cookie` header has correct `SameSite`, `Secure`, `Domain` attributes |
+| Third-party cookie blocked | Login works but data calls return 401; especially in Chrome Incognito | Use nginx reverse proxy so cookie is same-origin — see T7 |
 | Role-based filtering returns nothing | Login works but user's role has no data assigned | Check seed data assigns records to the test user's district/unit/role |
 | API returns data but UI doesn't render | `curl` with token returns data, but UI shows empty | Check browser console for JS errors; check if UI component expects different response shape |
 | CORS blocks data requests (not login) | Login works (simple POST) but GET with custom headers fails | Verify CORS allows `Authorization` header: `Access-Control-Allow-Headers` |
@@ -1474,9 +1592,10 @@ psql "$DB_URL" -c "SELECT COUNT(*) FROM subject_profile" 2>/dev/null
 psql "$DB_URL" -c "SELECT offender_status, COUNT(*) FROM subject_profile GROUP BY offender_status" 2>/dev/null
 
 # Verify API returns data when authenticated
+# Use the correct login field — check Auth Testing section
 TOKEN=$(curl -s $API_URL/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"password"}' | python3 -c "import json,sys; print(json.load(sys.stdin).get('token',''))")
+  -d '{"<login-field>":"<test-user>","password":"<test-password>"}' | python3 -c "import json,sys; print(json.load(sys.stdin).get('token',''))")
 
 curl -s "$API_URL/api/v1/subjects?page=1&limit=5" \
   -H "Authorization: Bearer $TOKEN" \
@@ -1494,14 +1613,301 @@ else:
 psql "$DB_URL" -c "\dt" 2>/dev/null | head -20
 ```
 
-### Quick Reference: The Big Three Checklist
+### T4: Container Crashes on Startup — SSL / Cloud SQL Socket
 
-Before declaring a deployment complete, verify these three things explicitly:
+**Symptoms**: Cloud Run revision fails with "The user-provided container failed to start and listen on the port". Logs show `"The server does not support SSL connections"` or `"FATAL: DATABASE_SSL=false is not allowed in production"`.
 
-```text
-□ T1 — UI→API connectivity: Frontend JS contains correct API URL; CORS allows UI origin
-□ T2 — Authentication works: Correct field name + password; token returned in response
-□ T3 — Data is visible: At least one list endpoint returns >0 items; dashboard has non-zero counts
+**Root Causes & Fixes**:
+
+| Cause | How to Detect | Fix |
+|-------|--------------|-----|
+| `DATABASE_SSL` not set | Logs: `"The server does not support SSL connections"` — `@puda/api-core` defaults to `ssl: { rejectUnauthorized: true }` | Add `DATABASE_SSL=false` to `--set-env-vars` |
+| `DATABASE_SSL=false` but env var prefix mismatch | Logs: `"FATAL: DATABASE_SSL=false is not allowed in production (except Cloud SQL Unix sockets)"` | The SSL safety check in `api-core/db.ts` looks for `${envPrefix}_DATABASE_URL` (e.g., `DOPAMS_DATABASE_URL`) to detect Unix sockets, but Cloud Run secret is mapped to `DATABASE_URL`. Fix: ensure `db.ts` also checks fallback `DATABASE_URL` |
+| Cloud SQL instances annotation missing | Logs: `"connect ENOENT /cloudsql/policing-apps:asia-southeast1:policing-db-v2/.s.PGSQL.5432"` | Add `--add-cloudsql-instances "policing-apps:asia-southeast1:policing-db,policing-apps:asia-southeast1:policing-db-v2"` to deploy command |
+
+**Quick diagnostic**:
+```bash
+# Check revision logs for SSL errors
+gcloud logging read "resource.type=cloud_run_revision AND \
+  resource.labels.service_name=<service> AND \
+  resource.labels.revision_name=<revision>" \
+  --limit 20 --format json --project policing-apps 2>&1 | \
+  python3 -c "import json,sys; [print(l.get('textPayload','')[:200]) for l in sorted(json.load(sys.stdin), key=lambda x: x.get('timestamp',''))]"
+
+# Verify current env vars on the service
+gcloud run services describe <service> --platform managed --region asia-southeast1 \
+  --format 'yaml(spec.template.spec.containers[0].env)' 2>&1
 ```
 
-If any fails, use the corresponding T1/T2/T3 diagnostic above.
+### T5: Container Crashes on Startup — Missing Secret Manager Secrets
+
+**Symptoms**: Cloud Run deploy fails with `"Permission denied on secret: projects/.../secrets/<name>/versions/latest"`.
+
+**Root Causes & Fixes**:
+
+| Cause | How to Detect | Fix |
+|-------|--------------|-----|
+| Secret doesn't exist | Error says "Permission denied" but `gcloud secrets describe <name>` returns 404 | Create: `echo -n "value" \| gcloud secrets create <name> --data-file=- --project policing-apps` |
+| Secret exists but no IAM binding | `gcloud secrets describe <name>` works but deploy still fails | Grant: `gcloud secrets add-iam-policy-binding <name> --member="serviceAccount:809677427844-compute@developer.gserviceaccount.com" --role="roles/secretmanager.secretAccessor" --project policing-apps` |
+
+**Quick diagnostic**:
+```bash
+# List all secrets in the project
+gcloud secrets list --project policing-apps 2>&1 | grep -i "<keyword>"
+
+# Check if a specific secret exists
+gcloud secrets describe <name> --project policing-apps 2>&1
+
+# Check IAM bindings on a secret
+gcloud secrets get-iam-policy <name> --project policing-apps 2>&1
+```
+
+**Known secrets per service** (create these before first deploy):
+
+| Service | Secret Name | Content |
+|---------|-------------|---------|
+| dopams-api | `dopams-database-url` | `postgresql://puda:...@/dopams?host=/cloudsql/policing-apps:asia-southeast1:policing-db-v2` |
+| dopams-api | `dopams-jwt-secret` | JWT signing secret |
+| dopams-api | `openai-api-key` | OpenAI API key (`sk-proj-...`) |
+| dopams-api | `dopams-openai-model` | Model name (e.g., `gpt-5.2`) |
+| puda-api | `puda-database-url` | PostgreSQL connection string |
+| puda-api | `puda-jwt-secret` | JWT signing secret |
+| social-media-api | `sm-database-url` | PostgreSQL connection string |
+| social-media-api | `sm-jwt-secret` | JWT signing secret |
+| social-media-api | `sm-openai-api-key` | OpenAI API key |
+
+### T6: Container Crashes on Startup — Missing ALLOWED_ORIGINS
+
+**Symptoms**: Migrations pass, then app crashes with `"FATAL: ALLOWED_ORIGINS must be set in production"`. The app enforces this check in `buildApp()` before starting the HTTP server.
+
+**Root Cause**: `ALLOWED_ORIGINS` env var is not set on Cloud Run. All API apps require this in production for CORS configuration.
+
+**Fix**:
+```bash
+# Get the UI service URL
+UI_URL=$(gcloud run services describe <app>-ui --platform managed --region asia-southeast1 \
+  --format 'value(status.url)' --project policing-apps)
+
+# Deploy with ALLOWED_ORIGINS
+gcloud run deploy <app>-api ... --set-env-vars "...,ALLOWED_ORIGINS=$UI_URL"
+
+# If updating an existing service with multiple origins (comma in value):
+gcloud run services update <app>-api \
+  --update-env-vars "^##^ALLOWED_ORIGINS=https://url1,https://url2" \
+  --project policing-apps --region asia-southeast1 --quiet
+```
+
+**Important**: The `^##^` prefix tells gcloud to use `##` as the key-value separator instead of `,`, allowing commas inside values.
+
+### Quick Reference: The Big Twelve Checklist
+
+Before declaring a deployment complete, verify all twelve items:
+
+```text
+□ T1  — UI→API connectivity: Frontend JS contains correct API URL; CORS allows UI origin
+□ T2  — Authentication works: Correct field name + password; token returned in response
+□ T3  — Data is visible: At least one list endpoint returns >0 items; dashboard has non-zero counts
+□ T4  — Cloud SQL SSL: DATABASE_SSL=false is set; Cloud SQL instances annotation is present
+□ T5  — Secrets exist: All --set-secrets references exist in Secret Manager with IAM bindings
+□ T6  — ALLOWED_ORIGINS set: API apps have ALLOWED_ORIGINS env var with UI service URL
+□ T7  — Cross-origin cookies: SPA uses nginx API proxy (same-origin); no third-party cookie reliance
+□ T8  — API URL fallback: ?? (not ||) for VITE_API_BASE_URL to preserve empty string
+□ T9  — Dockerfile workspace sync: All @puda/* deps in package.json are in Dockerfile (all 3 stages)
+□ T10 — Cloud Build COMMIT_SHA: Manual builds need --substitutions=COMMIT_SHA=<hash>
+□ T11 — Cloud Build IAM: Service account may lack run.services.get; use gcloud run deploy directly
+□ T12 — GCloud project context: Verify gcloud project matches target (puda-489215 vs policing-apps)
+```
+
+If any fails, use the corresponding T1–T12 diagnostic below.
+
+---
+
+### T7: Cross-Origin Cookie Blocking (Third-Party Cookie Problem)
+
+**Symptoms**: Login succeeds (response body contains user data) but dashboard shows no data. All subsequent API calls return 401. Happens especially in Chrome Incognito or browsers with third-party cookie blocking enabled.
+
+**Root Cause**: Frontend SPA is on domain A (`puda.adssoftek.com`) but API is on domain B (`puda-api-xxx.run.app`). The auth cookie is set for domain B. Browsers treat this as a third-party cookie and block it — especially Chrome Incognito which blocks ALL third-party cookies regardless of `SameSite` setting.
+
+**Why `SameSite=None` is NOT sufficient**: Even with `SameSite=None; Secure`, Chrome Incognito and Safari block third-party cookies entirely. This is not a misconfiguration — it's browser privacy policy.
+
+**The Correct Fix — Nginx Reverse Proxy**:
+
+Add an `/api/` proxy block to the frontend's nginx config so all API calls go through the same origin:
+
+```nginx
+# In nginx.citizen.conf / nginx.officer.conf
+location /api/ {
+    proxy_pass https://puda-api-40220923312.asia-southeast1.run.app;
+    proxy_set_header Host puda-api-40220923312.asia-southeast1.run.app;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_ssl_server_name on;
+    proxy_cookie_path / /;
+}
+```
+
+With this proxy:
+- Browser calls `https://puda.adssoftek.com/api/v1/auth/login` (same origin)
+- Nginx proxies to `https://puda-api-xxx.run.app/api/v1/auth/login`
+- Cookie is set for `puda.adssoftek.com` (first-party) → always works
+- `SameSite=Strict` is correct and secure
+- No CORS issues (same origin)
+
+**Build-time requirement**: Set `VITE_API_BASE_URL=""` (empty string) so the SPA calls `/api/v1/...` (relative) instead of an absolute API URL.
+
+**Quick diagnostic**:
+```bash
+# Check if custom domain has nginx proxy configured
+curl -s "https://<custom-domain>/api/v1/config/services" | head -c 100
+# If 404 from nginx → proxy not configured
+# If JSON response → proxy is working
+
+# Check if cookie is first-party (same domain)
+# Use the correct login field — check Auth Testing section and loginSchema in the app's source
+curl -sv -c /tmp/test.txt "https://<custom-domain>/api/v1/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"<login-field>":"<test-user>","password":"<test-password>"}' 2>&1 | grep "Set-Cookie"
+# Cookie domain should match the custom domain, NOT the run.app domain
+```
+
+**Checklist for PUDA apps with custom domains**:
+```text
+□ nginx.citizen.conf has location /api/ proxy block
+□ nginx.officer.conf has location /api/ proxy block
+□ VITE_API_BASE_URL="" (empty) in cloudbuild substitutions
+□ apiBaseUrl uses ?? operator (not ||) — see T8
+□ API cookie SameSite=Strict (not None — same-origin doesn't need None)
+□ API ALLOWED_ORIGINS includes both custom domain AND run.app URL
+```
+
+### T8: Empty String Fallback Bug (`||` vs `??` for VITE_API_BASE_URL)
+
+**Symptoms**: SPA deployed with `VITE_API_BASE_URL=""` (for nginx proxy) but browser console shows requests to `http://localhost:3001`. Dashboard shows "Failed to fetch".
+
+**Root Cause**: JavaScript's `||` operator treats empty string as falsy:
+```typescript
+// BUG: empty string "" is falsy, falls back to localhost
+export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
+
+// FIX: nullish coalescing only falls back on null/undefined
+export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
+```
+
+**Files to check**:
+```bash
+# Find all API base URL definitions
+rg "VITE_API_BASE_URL.*\|\|" apps/*/src/ --glob '*.{ts,tsx}'
+# Any matches are BUGS — change || to ??
+```
+
+**Affected files in this project**:
+- `apps/citizen/src/citizen-types.ts` — `apiBaseUrl` definition
+- `apps/officer/src/types.ts` — `apiBaseUrl` definition
+
+### T9: Dockerfile Missing Workspace Packages
+
+**Symptoms**: Cloud Build image build fails with `npm ERR! missing: @puda/<package>@^0.1.0` or runtime error `Cannot find module '@puda/<package>'`.
+
+**Root Cause**: A new workspace package was added to the app's `package.json` dependencies, but the Dockerfile was not updated to include it in all three stages (deps, build, production).
+
+**Dockerfiles have THREE stages that ALL need updating**:
+
+1. **Stage 1 (deps)**: `COPY packages/<pkg>/package.json` + add to `npm ci --workspace=` list
+2. **Stage 2 (build)**: `COPY packages/<pkg>/tsconfig.json` + `COPY packages/<pkg>/src/` + add to build command
+3. **Stage 3 (production)**: `COPY packages/<pkg>/package.json` + add to `npm ci --workspace=` list + `COPY --from=build packages/<pkg>/dist/`
+
+**Quick diagnostic**:
+```bash
+# Compare app's package.json workspace deps vs Dockerfile COPY lines
+APP_DEPS=$(rg '"@puda/' <app-dir>/package.json | grep -oP '@puda/[\w-]+')
+echo "App deps: $APP_DEPS"
+
+DOCKERFILE_PKGS=$(grep "COPY packages/" Dockerfile.<app> | grep -oP 'packages/[\w-]+' | sort -u)
+echo "Dockerfile packages: $DOCKERFILE_PKGS"
+
+# Any dep in APP_DEPS not in DOCKERFILE_PKGS is a bug
+```
+
+### T10: Cloud Build $COMMIT_SHA Empty in Manual Builds
+
+**Symptoms**: `gcloud builds submit --config=cloudbuild-xxx.yaml` fails with `invalid image name "gcr.io/<project>/<app>:"` — note the trailing colon with no tag.
+
+**Root Cause**: `$COMMIT_SHA` is a built-in substitution that Cloud Build auto-populates ONLY when triggered by a source repository trigger (GitHub, Cloud Source). For manual `gcloud builds submit`, it's empty.
+
+**Fix**: Always pass `--substitutions=COMMIT_SHA=<tag>` when using `gcloud builds submit` manually:
+```bash
+COMMIT_SHA=$(git rev-parse --short HEAD)
+gcloud builds submit --config=cloudbuild-<app>.yaml \
+  --project=<project> \
+  --substitutions=COMMIT_SHA=$COMMIT_SHA
+```
+
+### T11: Cloud Build Service Account Lacks Cloud Run Deploy Permission
+
+**Symptoms**: Docker image builds and pushes successfully (Steps 0 and 1 pass), but Step 2 (deploy) fails with `PERMISSION_DENIED: Permission 'run.services.get' denied on resource ... authenticated as <number>-compute@developer.gserviceaccount.com`.
+
+**Root Cause**: The default Compute Engine service account used by Cloud Build doesn't have the `Cloud Run Admin` role in the target project.
+
+**Workaround** (fast): Skip the Cloud Build deploy step and deploy directly:
+```bash
+# Build image via Cloud Build (steps 0-1 succeed, step 2 fails — that's OK)
+gcloud builds submit --config=cloudbuild-<app>.yaml \
+  --project=<project> --substitutions=COMMIT_SHA=<tag> --async
+
+# Poll build status until image push completes (steps 0-1)
+BUILD_ID=$(gcloud builds list --project=<project> --limit=1 --format='value(ID)')
+gcloud builds describe $BUILD_ID --project=<project> --format='value(status)'
+# Wait until status is SUCCESS or FAILURE. Steps 0-1 (build+push) must pass.
+# Even if step 2 (deploy) fails, the image is pushed and usable.
+
+# Then deploy directly with your auth
+gcloud run deploy <service-name> \
+  --image=gcr.io/<project>/<app>:<tag> \
+  --region=asia-southeast1 \
+  --platform=managed \
+  --allow-unauthenticated \
+  --project=<project>
+```
+
+**Permanent fix**: Grant Cloud Run Admin to the build service account:
+```bash
+PROJECT_NUMBER=$(gcloud projects describe <project> --format='value(projectNumber)')
+gcloud projects add-iam-policy-binding <project> \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/run.admin"
+gcloud iam service-accounts add-iam-policy-binding \
+  ${PROJECT_NUMBER}-compute@developer.gserviceaccount.com \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountUser" \
+  --project=<project>
+```
+
+### T12: Wrong GCloud Project Context
+
+**Symptoms**: `gcloud run services list` shows services from a different project, or deploy creates the service in the wrong project.
+
+**Root Cause**: Multiple GCloud projects exist (`policing-apps` for DOPAMS/Forensic/SocialMedia, `puda-489215` for PUDA). The active project may not match the target.
+
+**Project Registry**:
+
+| App | GCloud Project | Project ID |
+|-----|---------------|------------|
+| PUDA (citizen, officer, api) | PUDA | `puda-489215` |
+| DOPAMS (api, ui) | policing-apps | `policing-apps` |
+| Forensic (api, ui) | policing-apps | `policing-apps` |
+| Social Media (api, ui) | policing-apps | `policing-apps` |
+
+**Always verify before deploying**:
+```bash
+gcloud config get-value project
+# If wrong:
+gcloud config set project <correct-project>
+```
+
+**Also check cloudbuild YAML files**: Region and API URLs in substitutions must match the actual project:
+```bash
+# Verify region matches actual services
+grep "region" cloudbuild-<app>.yaml
+gcloud run services list --project=<project> --format="table(SERVICE,REGION)"
+```

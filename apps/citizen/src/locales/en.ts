@@ -175,6 +175,14 @@ const en = {
   "create.submit_dues_pending": "Submit (Dues Pending)",
   "create.submit_get_cert": "Submit & Get Certificate",
   "create.create_application": "Create Application",
+  "create.authority": "Authority / Development Body",
+  "create.select_authority": "Select authority...",
+
+  // Authority names
+  "authority.puda": "PUDA — Punjab Urban Development Authority",
+  "authority.gmada": "GMADA — Greater Mohali Area Development Authority",
+  "authority.glada": "GLADA — Greater Ludhiana Area Development Authority",
+  "authority.bda": "BDA — Bathinda Development Authority",
 
   // Application Detail
   "app_detail.title": "Application Details",
@@ -259,6 +267,25 @@ const en = {
   "ndc.submit_dues_pending": "Submit (Dues Pending)",
   "ndc.clear_dues": "Clear all outstanding dues to submit",
   "ndc.ledger_title": "NDC Payment Ledger",
+
+  // Generic Fee Payment
+  "payment.title": "Fee Payment",
+  "payment.amount_due": "Amount Due",
+  "payment.pay_now": "Pay Now",
+  "payment.status": "Payment Status",
+  "payment.status_pending": "Payment Pending",
+  "payment.status_completed": "Payment Completed",
+  "payment.status_failed": "Payment Failed",
+  "payment.fee_breakdown": "Fee Breakdown",
+  "payment.processing_fee": "Processing Fee",
+  "payment.total": "Total",
+  "payment.gateway_redirect": "You will be redirected to the payment gateway",
+  "payment.offline_unavailable": "Online payment is unavailable while offline",
+  "payment.no_fees": "No fees are required for this application.",
+  "payment.initiating": "Initiating payment...",
+  "payment.paid_amount": "Paid",
+  "payment.remaining": "Remaining",
+  "payment.demand_number": "Demand No.",
 
   // Document Locker
   "locker.title": "My Document Locker",
@@ -616,6 +643,18 @@ const en = {
   "common.download_certificate": "Download Certificate",
   "common.download_order": "Download Order",
 
+  // Receipt
+  "receipt.download": "Download Receipt",
+  "receipt.downloading": "Generating...",
+  "receipt.title": "Application Receipt",
+  "receipt.arn": "Application Reference Number",
+  "receipt.service": "Service",
+  "receipt.applicant": "Applicant",
+  "receipt.submitted_on": "Submitted On",
+  "receipt.status": "Status",
+  "receipt.authority": "Punjab Urban Planning & Development Authority (PUDA)",
+  "receipt.disclaimer": "This is a computer-generated receipt and does not require a signature.",
+
   // Legacy keys (backward compat aliases)
   app_title: "PUDA Citizen Portal",
   login: "Login",
@@ -781,6 +820,26 @@ const en = {
   "feedback.offline_doc_upload_readonly": "You are offline. Document upload is unavailable in read-only mode.",
   "feedback.offline_doc_reuse": "You are offline. Document reuse is unavailable.",
   "feedback.profile_completed": "Profile completed successfully!",
+
+  // Assisted Channels
+  "assisted.info": "You can also file applications through PUDA Facilitation Centers or Common Service Centers (CSC).",
+
+  // Application Withdrawal
+  "withdraw.button": "Withdraw Application",
+  "withdraw.confirm_title": "Withdraw Application?",
+  "withdraw.confirm_message": "Are you sure you want to withdraw this application? This action cannot be undone.",
+  "withdraw.success": "Application withdrawn successfully",
+  "withdraw.error": "Failed to withdraw application",
+
+  // Citizen Inspection Visibility
+  "citizen_inspection.title": "Inspection Status",
+  "citizen_inspection.no_inspections": "No inspections scheduled",
+  "citizen_inspection.type": "Type",
+  "citizen_inspection.status": "Status",
+  "citizen_inspection.scheduled": "Scheduled",
+  "citizen_inspection.in_progress": "In Progress",
+  "citizen_inspection.completed": "Completed",
+  "citizen_inspection.outcome": "Outcome",
 
   // NL Assistant
   "assistant.open": "Open Assistant",

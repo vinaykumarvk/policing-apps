@@ -212,23 +212,54 @@ BAD summaries (NEVER do this):
 
 The user does not care HOW the query works. They want the ANSWER.`;
 
-const FORBIDDEN_SQL = /\b(DELETE|UPDATE|INSERT|DROP|ALTER|TRUNCATE|GRANT|REVOKE|CREATE|EXEC)\b/i;
+/**
+ * Read-only SQL validation — defense-in-depth against LLM-generated SQL injection.
+ *
+ * Blocks:
+ *  - All DML/DDL keywords (DELETE, UPDATE, INSERT, DROP, ALTER, TRUNCATE, etc.)
+ *  - Administrative keywords (GRANT, REVOKE, SET, COPY, EXECUTE, PREPARE, EXPLAIN)
+ *  - Statement chaining via semicolons (multi-statement attacks)
+ *  - SQL comments (-- and /* ... *​/) that could bypass keyword filters
+ *  - Statements that don't start with SELECT or WITH
+ */
+const FORBIDDEN_SQL = /\b(DELETE|UPDATE|INSERT|DROP|ALTER|TRUNCATE|GRANT|REVOKE|CREATE|EXEC|EXECUTE|COPY|PREPARE|SET\s+(?:ROLE|SESSION|LOCAL)|SHOW|CALL|DO\b|LOCK|UNLISTEN|LISTEN|NOTIFY|VACUUM|ANALYZE|CLUSTER|REINDEX|REASSIGN|DISCARD|RESET|DEALLOCATE|COMMENT|SECURITY\s+LABEL)\b/i;
 
-function validateSql(sql: string): string | null {
+/** Block SQL comments that could hide malicious payloads */
+const SQL_COMMENT = /--|\/\*/;
+
+/** Block statement chaining — only one statement allowed */
+const MULTI_STATEMENT = /;\s*\S/;
+
+export function validateReadOnlySQL(sql: string): string | null {
   const trimmed = sql.trim();
-  const upper = trimmed.toUpperCase();
 
+  // Strip trailing semicolons and whitespace for checking
+  const normalized = trimmed.replace(/;\s*$/, "").trim();
+  const upper = normalized.toUpperCase();
+
+  // 1. Must start with SELECT or WITH (CTE)
   if (!upper.startsWith("SELECT") && !upper.startsWith("WITH")) {
     return "SQL must start with SELECT or WITH";
   }
 
-  if (FORBIDDEN_SQL.test(trimmed)) {
+  // 2. Block forbidden DML/DDL/admin keywords
+  if (FORBIDDEN_SQL.test(normalized)) {
     return "SQL contains forbidden DML/DDL keywords";
   }
 
-  // Ensure LIMIT clause exists — append if missing
-  if (!/\bLIMIT\b/i.test(trimmed)) {
-    return null; // We'll append LIMIT below
+  // 3. Block SQL comments (could hide injected statements)
+  if (SQL_COMMENT.test(normalized)) {
+    return "SQL contains comments which are not allowed";
+  }
+
+  // 4. Block multi-statement queries (semicolon followed by more SQL)
+  if (MULTI_STATEMENT.test(normalized)) {
+    return "SQL contains multiple statements which are not allowed";
+  }
+
+  // 5. Block INTO clause (SELECT ... INTO creates tables/variables)
+  if (/\bINTO\s+(?:TEMP|TEMPORARY|TABLE|UNLOGGED|STRICT|OUTFILE|DUMPFILE)\b/i.test(normalized)) {
+    return "SQL contains forbidden INTO clause";
   }
 
   return null;
@@ -273,7 +304,7 @@ async function tryLlmQuery(
   const { sql, summary, entityType } = llmResult.data;
 
   // Validate SQL safety
-  const validationError = validateSql(sql);
+  const validationError = validateReadOnlySQL(sql);
   if (validationError) {
     logWarn("NL query LLM SQL rejected", { sql, reason: validationError });
     return null;

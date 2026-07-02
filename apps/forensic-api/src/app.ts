@@ -7,6 +7,7 @@ import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { registerAuthMiddleware, registerMfaEnforcement } from "./middleware/auth";
+import { registerForensicPlatformAuthMiddleware } from "./middleware/platform-auth";
 import { registerAuditLogger } from "./middleware/audit-logger";
 import { setLogContext } from "./log-context";
 import { registerAuthRoutes } from "./routes/auth.routes";
@@ -162,6 +163,7 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
 
   registerAuthMiddleware(app);
   registerMfaEnforcement(app);
+  registerForensicPlatformAuthMiddleware(app);
   registerAuditLogger(app);
 
   const idempotencyMiddleware = createIdempotencyMiddleware({ queryFn: query });

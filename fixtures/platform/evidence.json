@@ -1,0 +1,107 @@
+{
+  "schema_version": "platform.pilot_evidence.v1",
+  "generated_at": "2026-07-02T00:45:00+05:30",
+  "synthetic_data": true,
+  "safeguards": {
+    "real_pii": false,
+    "real_evidence": false,
+    "storage_uri": false,
+    "notes": "Evidence metadata is synthetic. Central platform fixture omits storage_uri by design."
+  },
+  "evidence": [
+    {
+      "evidence_id": "EVID-DOPAMS-001",
+      "case_id": "CASE-DOPAMS-001",
+      "source_system": "dopams",
+      "source_record_id": "SYN-DOPAMS-EVID-001",
+      "display_name": "Synthetic DOPAMS evidence metadata",
+      "mime_type": "application/octet-stream",
+      "size_bytes": 4096,
+      "hash_sha256": "0000000000000000000000000000000000000000000000000000000000000001",
+      "chain_of_custody_head": "SYN-COC-DOPAMS-001",
+      "source_status": "active",
+      "classification": "confidential",
+      "legal_hold_status": "active",
+      "retention_status": "hold_active",
+      "source_version": "dopams-evidence-v1",
+      "projection_version": "platform-evidence-v1",
+      "projected_at": "2026-07-01T18:44:30Z",
+      "storage_uri_present": false,
+      "field_classification": {
+        "evidence_id": "restricted",
+        "case_id": "restricted",
+        "source_system": "restricted",
+        "source_record_id": "restricted",
+        "display_name": "confidential",
+        "mime_type": "restricted",
+        "size_bytes": "restricted",
+        "hash_sha256": "confidential",
+        "chain_of_custody_head": "confidential",
+        "classification": "restricted",
+        "legal_hold_status": "confidential",
+        "retention_status": "confidential",
+        "storage_uri": "secret",
+        "source_version": "restricted",
+        "projection_version": "restricted"
+      },
+      "redaction_profiles": {
+        "metadata": {
+          "profile": "evidence-metadata-v1",
+          "fields_redacted": ["hash_sha256", "chain_of_custody_head", "storage_uri"],
+          "storage_uri_exposed": false,
+          "reason": "central_metadata_only"
+        },
+        "legal_review": {
+          "profile": "legal-review-v1",
+          "fields_redacted": ["storage_uri"],
+          "storage_uri_exposed": false,
+          "reason": "legal_hold_metadata_only"
+        }
+      }
+    },
+    {
+      "evidence_id": "EVID-IQW-001",
+      "case_id": "CASE-IQW-001",
+      "source_system": "iqw",
+      "source_record_id": "SYN-IQW-ATTACHMENT-001",
+      "display_name": "Synthetic IQW intake attachment",
+      "mime_type": "text/plain",
+      "size_bytes": 1024,
+      "hash_sha256": "0000000000000000000000000000000000000000000000000000000000000002",
+      "chain_of_custody_head": "SYN-COC-IQW-001",
+      "source_status": "active",
+      "classification": "restricted",
+      "legal_hold_status": "none",
+      "retention_status": "standard",
+      "source_version": "iqw-evidence-v1",
+      "projection_version": "platform-evidence-v1",
+      "projected_at": "2026-07-01T18:44:30Z",
+      "storage_uri_present": false,
+      "field_classification": {
+        "evidence_id": "restricted",
+        "case_id": "restricted",
+        "source_system": "restricted",
+        "source_record_id": "restricted",
+        "display_name": "confidential",
+        "mime_type": "restricted",
+        "size_bytes": "restricted",
+        "hash_sha256": "confidential",
+        "chain_of_custody_head": "confidential",
+        "classification": "restricted",
+        "legal_hold_status": "confidential",
+        "retention_status": "confidential",
+        "storage_uri": "secret",
+        "source_version": "restricted",
+        "projection_version": "restricted"
+      },
+      "redaction_profiles": {
+        "metadata": {
+          "profile": "evidence-metadata-v1",
+          "fields_redacted": ["display_name", "hash_sha256", "chain_of_custody_head", "storage_uri"],
+          "storage_uri_exposed": false,
+          "reason": "intake_attachment_metadata_only"
+        }
+      }
+    }
+  ]
+}

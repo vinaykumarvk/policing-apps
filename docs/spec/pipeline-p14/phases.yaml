@@ -1,0 +1,11 @@
+version: 1
+defaults:
+  phase_timeout_seconds: 7200
+
+phases:
+  - id: P14
+    name: Social Media Platform Adapter and Pilot Launch
+    prompt: docs/spec/pipeline-p14/prompts/P14.md
+    exit_criteria: bash docs/spec/pipeline-p14/checks/p14.sh
+    gate: human
+    depends_on: []

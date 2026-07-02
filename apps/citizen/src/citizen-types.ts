@@ -33,6 +33,12 @@ export type ResumeSnapshot = {
   updatedAt: string;
 };
 
+export type FeeItem = {
+  feeType: string;
+  description?: string;
+  amount: number;
+};
+
 export type NdcDueLine = {
   dueCode: string;
   label: string;
@@ -68,7 +74,7 @@ export type NdcPaymentStatus = {
   generatedAt: string;
 };
 
-export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
+export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
 const RESUME_STATE_VERSION = "v1";
 export const CACHE_SCHEMAS = {
   services: "citizen-services-v1",

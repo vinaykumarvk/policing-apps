@@ -174,7 +174,7 @@ export async function registerLegalRoutes(app: FastifyInstance): Promise<void> {
         params.push(law_name);
         sql += ` AND law_name = $${params.length}`;
       }
-      sql += " ORDER BY severity_weight DESC, rule_code";
+      sql += " ORDER BY severity_weight DESC, rule_code LIMIT 500";
 
       const result = await query(sql, params);
       return { rules: result.rows };

@@ -29,6 +29,15 @@ If target includes `/`, generate a safe output slug: replace `/` with `-`, remov
 - Prioritize: Data correctness -> Functional gaps -> Error handling -> API contracts -> Test coverage -> Maintainability.
 - Save final report to `docs/reviews/quality-review-{targetSlug}-{YYYY-MM-DD}.md`.
 
+## Troubleshooting
+
+Common review blockers and how to resolve them:
+
+- **Build fails**: Run `npx tsc --noEmit 2>&1 | head -20` to identify type errors. Check if workspace packages need rebuilding (`npm run build:shared`).
+- **Tests fail with fixture errors**: Check for missing test database or seed data. Verify `.env.test` exists.
+- **Requirements documents not found**: Fall back to Phase 2B (code-inferred feature coverage).
+- **Context pressure from large codebase**: Use the Context-Overflow Strategy section.
+
 ## Quality Bar (Definition of Done)
 
 The review is complete only when all are present:
@@ -52,6 +61,8 @@ Use these fields for every finding:
 Risk scoring:
 
 `Risk Score = Impact (1-5) x Likelihood (1-5)`
+
+Risk Score to severity mapping: `16-25 = P0`, `9-15 = P1`, `4-8 = P2`, `1-3 = P3`.
 
 ---
 
@@ -78,6 +89,19 @@ Scan and document:
 - Entry points: API servers, CLI tools, UI apps, workers, cron jobs.
 - Configuration patterns: env vars, config files, feature flags.
 - Build and output structure.
+
+Recommended discovery commands:
+
+```bash
+# Module inventory
+ls -d apps/*/  packages/*/  2>/dev/null
+
+# Dependency graph between workspace packages
+rg '"@puda/' apps/*/package.json packages/*/package.json
+
+# Entry points
+rg -l "listen\(|createServer\|createApp" apps/*/src --glob '*.ts' | head -10
+```
 
 Include a module map (table or diagram) showing component relationships.
 
@@ -181,6 +205,21 @@ If no requirements docs, infer feature coverage from code:
 - Connection pooling configured with appropriate limits.
 - No unbounded queries (missing LIMIT/pagination on list endpoints).
 - Raw SQL is parameterized (no string interpolation with user input).
+
+### Database Diagnostic Queries
+
+Run these queries to quickly surface schema issues:
+
+```bash
+# List all tables and their column counts
+psql "$DATABASE_URL" -c "SELECT table_name, COUNT(*) as col_count FROM information_schema.columns WHERE table_schema='public' GROUP BY table_name ORDER BY table_name"
+
+# Check for missing indexes on foreign key columns
+psql "$DATABASE_URL" -c "SELECT tc.table_name, kcu.column_name FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name WHERE tc.constraint_type = 'FOREIGN KEY' AND kcu.column_name NOT IN (SELECT a.attname FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey) WHERE i.indrelid = (tc.table_name)::regclass) LIMIT 20"
+
+# Check for tables without primary keys
+psql "$DATABASE_URL" -c "SELECT t.table_name FROM information_schema.tables t LEFT JOIN information_schema.table_constraints tc ON t.table_name = tc.table_name AND tc.constraint_type = 'PRIMARY KEY' WHERE t.table_schema = 'public' AND tc.constraint_name IS NULL"
+```
 
 ### D) Data Integrity
 
@@ -294,6 +333,36 @@ If no requirements docs, infer feature coverage from code:
 - Version pinning with comments about compatibility issues.
 - Feature flags or conditional logic for deprecated features.
 
+### Common Fix Patterns
+
+**N+1 Query**: Replace loop-based queries with a single JOIN or IN clause:
+```typescript
+// BAD: N+1
+for (const id of ids) { await db.query("SELECT * FROM items WHERE id = $1", [id]); }
+// GOOD: Single query
+const items = await db.query("SELECT * FROM items WHERE id = ANY($1)", [ids]);
+```
+
+**Missing Error Handler**: Add global error handler in Fastify:
+```typescript
+app.setErrorHandler((error, request, reply) => {
+  request.log.error(error);
+  reply.status(error.statusCode ?? 500).send({ error: error.message });
+});
+```
+
+**Silent Error Swallowing**: Replace empty catch with logging:
+```typescript
+// BAD: catch(() => {})
+// GOOD: catch((err) => { logger.warn({ err }, "non-critical failure"); })
+```
+
+**Hardcoded String in UI**: Use i18n function:
+```tsx
+// BAD: <span>Submit</span>
+// GOOD: <span>{t("common.submit")}</span>
+```
+
 ## Phase 8: Internationalization and Content Quality
 
 ### A) i18n Coverage
@@ -338,6 +407,12 @@ Non-blocking gates:
 3. **i18n completeness** — All user-facing text internationalized where required.
 4. **Documentation** — API docs, code comments for non-obvious logic.
 
+Gate assessment criteria:
+
+- `PASS` — Evidence confirms the gate is fully satisfied with no significant gaps.
+- `PARTIAL` — Evidence shows the gate is addressed but with 1-3 notable exceptions or incomplete areas. Document each exception.
+- `FAIL` — Critical gap: no evidence of gate satisfaction, or evidence of systematic violation (3+ instances).
+
 Verdict policy:
 
 - Any blocking gate `FAIL` => `AT-RISK`.
@@ -362,6 +437,8 @@ Minimum counts:
 
 - Full-repo review: `10+` high-impact and `10+` medium-impact findings.
 - Scoped review: `5+` high-impact and `5+` medium-impact findings.
+
+High-impact = P0 + P1 findings. Medium-impact = P2 findings.
 
 Each finding must include:
 
@@ -435,7 +512,7 @@ rg -n "export (function|const|class|type|interface) " --glob '*.ts' --glob '*.ts
 # Then cross-reference: are these exports imported anywhere?
 
 # TODO/FIXME inventory
-rg -n "TODO|FIXME|HACK|XXX|TEMP" --glob '!node_modules' --glob '!*.lock'
+rg -n "\bTODO\b|\bFIXME\b|\bHACK\b|\bXXX\b|\bTEMP\b" --glob '!node_modules' --glob '!*.lock'
 
 # Unused imports (TypeScript)
 rg -n "^import .* from" --glob '*.ts' --glob '*.tsx' | head -30
@@ -457,6 +534,33 @@ npm run build 2>&1 | tail -20
 ```
 
 Record each command as `Executed` or `Not Executed` with reason.
+
+### Migration-to-Code Column Consistency
+
+Verify that column names in migration SQL match the names used in application queries:
+
+```bash
+# Extract column names from CREATE TABLE statements
+rg -n 'CREATE TABLE' --glob '*.sql' -A 20 | head -60
+
+# Cross-reference with query code — find column references
+rg -n "SELECT|INSERT INTO|UPDATE.*SET|WHERE" --glob '*.ts' --glob '!*.test.*' --glob '!*.spec.*' | head -40
+
+# Find potential mismatches: snake_case in SQL vs camelCase in code
+rg -n 'data_jsonb|state_id|created_at|updated_at' --glob '*.ts' --glob '!*.sql' | head -20
+```
+
+Flag any column referenced in queries that does not exist in the migration-defined schema.
+
+## Context-Overflow Strategy
+
+For large codebases (> 20 apps/packages or > 100K lines), prevent context overflow:
+
+1. **Phase 1**: Scan full codebase for structure, but only retain the module map.
+2. **Phase 2-8**: Process one app/package at a time. Record findings incrementally to the output file.
+3. **Phase 9-14**: Compile findings from all processed modules.
+4. If context pressure is high, prioritize: blocking-gate phases first, non-blocking phases second.
+5. Always complete the gate scorecard and verdict — these are the minimum viable output.
 
 ## Output
 

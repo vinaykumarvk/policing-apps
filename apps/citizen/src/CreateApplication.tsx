@@ -148,14 +148,14 @@ export default function CreateApplication({
             You already have {duplicateBanner.applications.length} in-progress application(s) for this service
             {formData?.property?.upn ? ` and property ${formData.property.upn}` : ""}:
             {duplicateBanner.applications.map((app) => (
-              <span key={app.arn} style={{ display: "block", marginTop: "0.25rem" }}>
+              <span key={app.arn} style={{ display: "block", marginTop: "var(--space-1)" }}>
                 <strong>{app.arn}</strong> — {getStatusLabel(app.state_id)} ({formatDate(app.created_at)})
                 {" "}
                 <Button
                   type="button"
                   variant="ghost"
                   className="ui-btn-ghost"
-                  style={{ fontSize: "0.85em", padding: "0 0.25rem" }}
+                  style={{ fontSize: "0.85em", padding: "0 var(--space-1)" }}
                   onClick={() => void onOpenApplication(app.arn)}
                 >
                   View
@@ -171,6 +171,24 @@ export default function CreateApplication({
         )}
         {!configLoading && serviceConfig?.form && (
           <>
+            {/* Authority picker — user selects PUDA/GMADA/GLADA/BDA */}
+            {formStep === "form" && (
+              <Field label={<Bilingual tKey="create.authority" />} htmlFor="authority-picker" required>
+                <Select
+                  id="authority-picker"
+                  value={formData?.authority_id || ""}
+                  onChange={(e) => onFormDataChange({ ...formData, authority_id: e.target.value })}
+                  disabled={isOffline}
+                >
+                  <option value="">{t("create.select_authority")}</option>
+                  <option value="PUDA">{t("authority.puda")}</option>
+                  <option value="GMADA">{t("authority.gmada")}</option>
+                  <option value="GLADA">{t("authority.glada")}</option>
+                  <option value="BDA">{t("authority.bda")}</option>
+                </Select>
+              </Field>
+            )}
+
             {/* FormRenderer: keep mounted, hide when on documents step */}
             <div style={{ display: formStep === "form" ? "block" : "none" }}>
               <ErrorBoundary fallback={<Alert variant="error">{t("create.form_error")}</Alert>}>
@@ -220,7 +238,7 @@ export default function CreateApplication({
                   className="save-draft-btn"
                   type="button"
                   variant="secondary"
-                  disabled={isOffline || !profileComplete || profileLoading}
+                  disabled={!profileComplete || profileLoading}
                 >
                   {t("create.save_draft")}
                 </Button>

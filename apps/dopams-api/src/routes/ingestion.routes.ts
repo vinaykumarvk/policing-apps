@@ -2,6 +2,9 @@ import { FastifyInstance } from "fastify";
 import { query } from "../db";
 import { send400, send404, sendError } from "../errors";
 import { deadLetterQueue } from "../connector-scheduler";
+import { createRoleGuard } from "@puda/api-core";
+
+const requireAdmin = createRoleGuard(["ADMINISTRATOR"]);
 
 export async function registerIngestionRoutes(app: FastifyInstance): Promise<void> {
   // --- Ingestion Jobs ---
@@ -135,7 +138,8 @@ export async function registerIngestionRoutes(app: FastifyInstance): Promise<voi
 
   // --- Connector Config ---
 
-  app.get("/api/v1/ingestion/connectors", async () => {
+  app.get("/api/v1/ingestion/connectors", async (request, reply) => {
+    if (!requireAdmin(request, reply)) return;
     const result = await query(
       `SELECT connector_id, connector_name, connector_type, is_active, last_poll_at,
               health_status, error_count, created_at

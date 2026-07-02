@@ -38,10 +38,35 @@ Options the user may append:
 
 ## Severity
 
-- `P0` — App won't start or crashes immediately
+- `P0` — App won't start or crashes immediately (BLOCKER — stop and fix before proceeding)
 - `P1` — Feature broken at runtime (auth fails, DB errors, route 404/401/403/500)
 - `P2` — Degraded behavior (missing data, UI glitch, slow response)
 - `P3` — Cosmetic or hardening issue
+
+If a P0/P1 issue cannot be fixed in 3 cycles, escalate as BLOCKER in the readiness report and stop.
+
+## Troubleshooting Quick Reference
+
+**API won't start — check in this order:**
+1. Port in use? → `lsof -ti:$API_PORT | xargs kill -9`
+2. Stale package dist? → Rebuild: `npm run build:shared && npm run build:api-core`
+3. Missing env var? → Check `.env` for `DATABASE_URL`, `JWT_SECRET`, `PORT`
+4. DB not running? → `psql "$DATABASE_URL" -c "SELECT 1"`
+5. Migrations not run? → Check for `relation "X" does not exist` in error output
+
+**Frontend loads but features don't work:**
+1. API not running? → `curl -sf http://localhost:$API_PORT/health`
+2. Wrong API URL? → Check `VITE_API_BASE_URL` in `.env` and `apiBaseUrl` in source
+3. Missing `credentials: "include"`? → Check fetch calls for cookie-based auth
+4. CORS blocking? → Check API CORS origin list includes frontend port
+5. Build-time flag missing? → Check `VITE_ENABLE_*` in `.env`
+
+**Enable verbose logging for debugging:**
+```bash
+# Start API with debug logging
+DEBUG=* npm run dev --workspace=<api-dir> 2>&1 | tee /tmp/api-debug.log &
+# Then search logs: grep -i "error\|warn\|fail" /tmp/api-debug.log
+```
 
 ---
 
@@ -71,9 +96,23 @@ ls <app-dir>/vite.config.* 2>/dev/null                      # Vite frontend
 rg "apiBaseUrl|API_URL|VITE_API" <app-dir>/src/ --glob '*.{ts,tsx}' | head -5
 ```
 
+### Frontend-to-API Mapping
+
+Use this table to determine which API app backs each frontend:
+
+| Frontend App | API App | API Port Default |
+|---|---|---|
+| apps/citizen | apps/api | 3001 |
+| apps/officer | apps/api | 3001 |
+| apps/dopams-ui | apps/dopams-api | 3002 |
+| apps/forensic-ui | apps/forensic-api | 3003 |
+| apps/social-media-ui | apps/social-media-api | 3004 |
+
+Set `<api-dir>` to the API app directory from this table. All subsequent phases use `<api-dir>` to reference the correct API.
+
 ### 0.3: Identify the API App
 
-For frontend apps, identify which API app serves the backend:
+For frontend apps, identify which API app serves the backend (confirm against the mapping table above):
 
 ```bash
 # Check vite proxy config or env vars
@@ -103,7 +142,7 @@ Record the build chain. All upstream packages must be rebuilt if their source ch
 
 ## Phase 1: Package Rebuild — Stale dist/ is the #1 Silent Killer
 
-**WHY**: `tsx --watch` auto-reloads the API on source changes to `apps/api/src/`, but does NOT detect changes to compiled `dist/` of workspace packages. If you modified `packages/api-core/src/` but didn't rebuild, the API imports stale code and you get runtime errors like `createXxx is not a function`.
+**WHY**: `tsx --watch` auto-reloads the API on source changes to `<api-dir>/src/`, but does NOT detect changes to compiled `dist/` of workspace packages. If you modified `packages/api-core/src/` but didn't rebuild, the API imports stale code and you get runtime errors like `createXxx is not a function`.
 
 ### 1.1: Detect Stale Packages
 
@@ -111,7 +150,7 @@ For each workspace package the app depends on, check if source is newer than dis
 
 ```bash
 # Check if any package source is newer than its dist
-for pkg in shared workflow-engine api-core api-integrations nl-assistant; do
+for pkg in shared workflow-engine api-core api-integrations; do
   PKG_DIR="packages/$pkg"
   if [ -d "$PKG_DIR/src" ]; then
     SRC_TIME=$(find "$PKG_DIR/src" -name '*.ts' -newer "$PKG_DIR/dist/index.js" 2>/dev/null | head -1)
@@ -174,7 +213,7 @@ cat .env 2>/dev/null | grep DATABASE_URL
 
 ```bash
 # Check if PostgreSQL is running on the expected port
-PGPORT=$(cat .env 2>/dev/null | grep DATABASE_URL | grep -oP ':(\d+)/' | tr -d ':/')
+PGPORT=$(cat .env 2>/dev/null | grep DATABASE_URL | grep -oE ':[0-9]+/' | tr -d ':/')
 echo "Expected PostgreSQL port: $PGPORT"
 
 # Is anything listening on that port?
@@ -215,7 +254,7 @@ psql "$(cat .env | grep '^DATABASE_URL=' | cut -d= -f2-)" -c "\dt" 2>&1 | head -
 
 # If tables are missing, run migrations
 # Check for migration runner in package.json
-cat apps/api/package.json | python3 -c "
+cat <api-dir>/package.json | python3 -c "
 import json,sys
 pkg = json.load(sys.stdin)
 scripts = pkg.get('scripts', {})
@@ -227,7 +266,7 @@ for k,v in scripts.items():
 
 If migrations haven't been run:
 ```bash
-npm run migrate --workspace=apps/api 2>&1
+npm run migrate --workspace=<api-dir> 2>&1
 # Or the specific migration command for this project
 ```
 
@@ -243,7 +282,7 @@ npm run migrate --workspace=apps/api 2>&1
 
 ```bash
 # API port (from .env or app source)
-API_PORT=$(rg "PORT.*=.*\d{4}" .env 2>/dev/null | head -1 | grep -oP '\d{4}')
+API_PORT=$(rg "PORT.*=.*[0-9]{4}" .env 2>/dev/null | head -1 | grep -oE '[0-9]{4}')
 echo "API port: ${API_PORT:-3001}"
 
 # Frontend port (from vite.config)
@@ -284,9 +323,9 @@ lsof -ti:$FE_PORT 2>/dev/null && echo "STILL IN USE" || echo "FREE"
 ### 4.1: Start API Server
 
 ```bash
-# Start API in background
+# Start API in background (uses the dev script defined in <api-dir>/package.json)
 cd <project-root>
-npx tsx watch apps/api/src/index.ts &
+npm run dev --workspace=<api-dir> &
 
 # Wait for startup (up to 15 seconds)
 for i in $(seq 1 15); do
@@ -312,6 +351,22 @@ done
 | `relation "xxx" does not exist` | Migrations not run | Run migrations (Phase 2.4) |
 | `column "xxx" does not exist` | Migration schema mismatch | Check migration SQL vs actual schema |
 
+### 4.1.1: Verify API is Running (if `ui-only`)
+
+When `ui-only` is passed, the API is NOT started by this skill. Verify it is already running before proceeding:
+
+```bash
+if ! curl -sf http://localhost:$API_PORT/health >/dev/null 2>&1; then
+  echo "BLOCKER: API is not running on port $API_PORT."
+  echo "Start the API first, or re-run without ui-only."
+  echo "Expected: curl http://localhost:$API_PORT/health returns 200"
+  # STOP — do not proceed to frontend startup
+fi
+echo "API confirmed running on port $API_PORT"
+```
+
+**Gate: If the API health check fails, stop and report the blocker. The frontend will not function without a running API.**
+
 ### 4.2: Start Frontend Dev Server (if not `api-only`)
 
 ```bash
@@ -334,14 +389,14 @@ sleep 5
 
 ```bash
 # Check seed/migration files for test users
-rg -n "INSERT INTO.*user" apps/api/src/ --glob '*.{ts,sql}' -i | head -10
-rg -n "password.*:" apps/api/src/ --glob '*.{ts,sql}' -i | grep -v node_modules | head -10
+rg -n "INSERT INTO.*user" <api-dir>/src/ --glob '*.{ts,sql}' -i | head -10
+rg -n "password.*:" <api-dir>/src/ --glob '*.{ts,sql}' -i | grep -v node_modules | head -10
 
 # Check for dev/test credentials in .env or config
-rg "TEST_USER\|DEFAULT_PASSWORD\|ADMIN_USER" .env apps/api/src/ 2>/dev/null | head -5
+rg "TEST_USER|DEFAULT_PASSWORD|ADMIN_USER" .env <api-dir>/src/ 2>/dev/null | head -5
 
 # Check seed scripts
-rg -rn "login.*officer\|password.*123\|test.*user" apps/api/src/ --glob '*.{ts,sql}' -i | head -10
+rg -rn "login.*officer|password.*123|test.*user" <api-dir>/src/ --glob '*.{ts,sql}' -i | head -10
 ```
 
 ### 5.2: Test Login via API
@@ -383,10 +438,10 @@ If testing a frontend app, verify the UI can authenticate:
 
 ```bash
 # Check that the frontend's API base URL points to the running API
-rg "apiBaseUrl\|API_URL\|VITE_API" <app-dir>/src/ --glob '*.{ts,tsx}' | head -5
+rg "apiBaseUrl|API_URL|VITE_API" <app-dir>/src/ --glob '*.{ts,tsx}' | head -5
 
 # Verify the frontend sends credentials with fetch calls
-rg 'credentials.*include\|withCredentials' <app-dir>/src/ --glob '*.{ts,tsx}' | head -10
+rg 'credentials.*include|withCredentials' <app-dir>/src/ --glob '*.{ts,tsx}' | head -10
 ```
 
 **Known issue**: If the app uses cookie-based auth (HttpOnly cookies), ALL fetch calls must include `credentials: "include"`. Missing this causes silent 401 failures — the request succeeds from curl (with `-b cookies.txt`) but fails from the browser.
@@ -401,10 +456,10 @@ rg 'credentials.*include\|withCredentials' <app-dir>/src/ --glob '*.{ts,tsx}' | 
 
 ```bash
 # Find public route definitions
-rg "PUBLIC_ROUTES\|public.*route\|skip.*auth" apps/api/src/ --glob '*.{ts,js}' | head -20
+rg "PUBLIC_ROUTES|public.*route|skip.*auth" <api-dir>/src/ --glob '*.{ts,js}' | head -20
 
 # Find route prefix patterns that skip auth
-rg "PUBLIC_ROUTE_PREFIXES\|public.*prefix" apps/api/src/ --glob '*.{ts,js}' | head -10
+rg "PUBLIC_ROUTE_PREFIXES|public.*prefix" <api-dir>/src/ --glob '*.{ts,js}' | head -10
 ```
 
 **Known issue**: If auth middleware skips all routes under a prefix (e.g., `/api/v1/config/*`), then routes registered under that prefix NEVER get `request.authUser` populated. Any route that needs auth must NOT be under a public prefix.
@@ -415,7 +470,7 @@ Verify: no protected route is accidentally under a public prefix.
 
 ```bash
 # How does auth middleware set the user?
-rg "request\.(authUser|user|auth)\s*=" apps/api/src/ --glob '*.{ts,js}' | head -5
+rg "request\.(authUser|user|auth)\s*=" <api-dir>/src/ --glob '*.{ts,js}' | head -5
 
 # How do route handlers read the user?
 rg "request\.(authUser|user|auth)" packages/ --glob '*.{ts,js}' | head -20
@@ -427,10 +482,10 @@ rg "request\.(authUser|user|auth)" packages/ --glob '*.{ts,js}' | head -20
 
 ```bash
 # What roles does the app use?
-rg "system_role_ids\|role_key\|userType\|roles" apps/api/src/ --glob '*.{ts,js}' | head -20
+rg "system_role_ids|role_key|userType|roles" <api-dir>/src/ --glob '*.{ts,js}' | head -20
 
 # What roles do route guards check for?
-rg "isAdmin\|adminRoles\|ADMIN\|SUPER_ADMIN" packages/ --glob '*.{ts,js}' | head -20
+rg "isAdmin|adminRoles|ADMIN|SUPER_ADMIN" packages/ --glob '*.{ts,js}' | head -20
 ```
 
 **Known issue**: Generic `isAdmin()` checks for `["ADMIN", "SUPER_ADMIN"]` but PUDA officers have role IDs like `["CLERK", "SDO", "SENIOR_ASSISTANT"]`. The admin role list must match the app's actual role structure:
@@ -472,7 +527,7 @@ psql "$DATABASE_URL" -c "\d <table_name>" 2>/dev/null | head -20
 
 ```bash
 # Check for UUID vs TEXT user ID mismatches
-rg "UUID\|uuid" packages/api-core/src/migrations/ --glob '*.sql' | grep user_id
+rg "UUID|uuid" packages/api-core/src/migrations/ --glob '*.sql' | grep user_id
 ```
 
 **Known issue**: If migrations define `user_id UUID` but the app uses text-based IDs (e.g., `"test-officer-1"`), inserts fail with `invalid input syntax for type uuid`. Use TEXT for user_id columns when the app doesn't guarantee UUID format.
@@ -518,7 +573,7 @@ If the feature has UI components:
 rg "import.*<FeatureComponent>" <app-dir>/src/ --glob '*.{tsx,ts}' | head -5
 
 # Check for conditional rendering (build flags, feature flags)
-rg "VITE_ENABLE\|featureFlag\|flags\." <app-dir>/src/ --glob '*.{tsx,ts}' | head -10
+rg "VITE_ENABLE|featureFlag|flags\." <app-dir>/src/ --glob '*.{tsx,ts}' | head -10
 ```
 
 ### 7.5: Verify External Service Configuration (if applicable)
@@ -530,7 +585,7 @@ If the feature depends on external services (LLM providers, payment gateways, et
 psql "$DATABASE_URL" -c "SELECT provider, display_name, model_id, is_active FROM llm_provider_config" 2>/dev/null
 
 # For API keys: check .env
-rg "API_KEY\|SECRET" .env 2>/dev/null | sed 's/=.*/=***/'  # mask values
+rg "API_KEY|SECRET" .env 2>/dev/null | sed 's/=.*/=***/'  # mask values
 ```
 
 If a required external service isn't configured, seed it:
@@ -549,7 +604,7 @@ psql "$DATABASE_URL" -c "INSERT INTO llm_provider_config (...) VALUES (...) ON C
 
 ```bash
 # Check API CORS settings
-rg "cors\|Access-Control\|origin" apps/api/src/ --glob '*.{ts,js}' | head -10
+rg "cors|Access-Control|origin" <api-dir>/src/ --glob '*.{ts,js}' | head -10
 
 # Verify the frontend origin is allowed
 # Frontend runs on http://localhost:XXXX — is that in the CORS allow list?
@@ -586,7 +641,7 @@ done < /tmp/fetch-files.txt
 
 ```bash
 # What URL does the frontend use for API calls?
-rg "apiBaseUrl\|API_BASE\|VITE_API" <app-dir>/src/ --glob '*.{ts,tsx}' | head -5
+rg "apiBaseUrl|API_BASE|VITE_API" <app-dir>/src/ --glob '*.{ts,tsx}' | head -5
 
 # Is it pointing to the correct port?
 # Must match the actual API port from Phase 4
@@ -667,3 +722,26 @@ These are the most frequent issues discovered during local deployment. The phase
 | 13 | LLM SQL errors | Schema context has wrong column names | Verify schema context against actual DB |
 | 14 | Frontend shows but features missing | Build-time flag not set | Set `VITE_ENABLE_XXX=true` in .env |
 | 15 | API starts, queries fail silently | DB tables missing — migrations not run | Run migrations |
+
+### Appendix Severity Reference
+
+| Severity | Issues |
+|----------|--------|
+| P0 | #2 (EADDRINUSE), #3 (ECONNREFUSED), #15 (tables missing) |
+| P1 | #1 (stale dist), #4 (401 all requests), #5 (401 public), #6 (403), #7 (user undefined), #8 (column missing), #9 (UUID mismatch) |
+| P2 | #10 (feature flag), #11 (wrong port), #13 (LLM SQL), #14 (features missing) |
+| P3 | #12 (lockfile sync) |
+
+### Migration Verification
+
+After starting the API, verify all migrations have been applied:
+
+```bash
+# Check if key tables exist (substitute actual table names for the target app)
+psql "$DATABASE_URL" -c "\dt" 2>/dev/null | head -30
+
+# If using a migration tracking table, check latest migration
+psql "$DATABASE_URL" -c "SELECT * FROM migrations ORDER BY id DESC LIMIT 5" 2>/dev/null
+# Or check the app-specific migration table name
+rg "migrations|migrate" <api-dir>/package.json
+```

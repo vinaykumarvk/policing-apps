@@ -6,6 +6,9 @@ import {
   logPrediction, getModelPerformanceStats, getVersionHistory
 } from "../services/model-governance";
 import { sendError } from "../errors";
+import { createRoleGuard } from "@puda/api-core";
+
+const requireAdmin = createRoleGuard(["ADMINISTRATOR"]);
 
 export async function registerModelRoutes(app: FastifyInstance): Promise<void> {
   // Register a new model
@@ -30,6 +33,7 @@ export async function registerModelRoutes(app: FastifyInstance): Promise<void> {
       }
     }
   }, async (request, reply) => {
+    if (!requireAdmin(request, reply)) return;
     try {
       const body = request.body as any;
       const userId = (request as any).authUser?.userId;
@@ -98,6 +102,7 @@ export async function registerModelRoutes(app: FastifyInstance): Promise<void> {
       }
     }
   }, async (request, reply) => {
+    if (!requireAdmin(request, reply)) return;
     try {
       const { modelId } = request.params as { modelId: string };
       const { status } = request.body as { status: string };
@@ -126,6 +131,7 @@ export async function registerModelRoutes(app: FastifyInstance): Promise<void> {
       }
     }
   }, async (request, reply) => {
+    if (!requireAdmin(request, reply)) return;
     try {
       const { modelId } = request.params as { modelId: string };
       const { metrics } = request.body as { metrics: any };
@@ -166,6 +172,7 @@ export async function registerModelRoutes(app: FastifyInstance): Promise<void> {
       }
     }
   }, async (request, reply) => {
+    if (!requireAdmin(request, reply)) return;
     try {
       const { modelId } = request.params as { modelId: string };
       const body = request.body as any;

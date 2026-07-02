@@ -175,6 +175,12 @@ const pa: Record<string, string> = {
   "create.submit_dues_pending": "ਜਮ੍ਹਾਂ ਕਰੋ (ਬਕਾਇਆ ਲੰਬਿਤ)",
   "create.submit_get_cert": "ਜਮ੍ਹਾਂ ਕਰੋ ਅਤੇ ਸਰਟੀਫਿਕੇਟ ਪ੍ਰਾਪਤ ਕਰੋ",
   "create.create_application": "ਅਰਜ਼ੀ ਬਣਾਓ",
+  "create.authority": "ਅਥਾਰਟੀ / ਵਿਕਾਸ ਸੰਸਥਾ",
+  "create.select_authority": "ਅਥਾਰਟੀ ਚੁਣੋ...",
+  "authority.puda": "PUDA — ਪੰਜਾਬ ਸ਼ਹਿਰੀ ਵਿਕਾਸ ਅਥਾਰਟੀ",
+  "authority.gmada": "GMADA — ਗ੍ਰੇਟਰ ਮੋਹਾਲੀ ਖੇਤਰ ਵਿਕਾਸ ਅਥਾਰਟੀ",
+  "authority.glada": "GLADA — ਗ੍ਰੇਟਰ ਲੁਧਿਆਣਾ ਖੇਤਰ ਵਿਕਾਸ ਅਥਾਰਟੀ",
+  "authority.bda": "BDA — ਬਠਿੰਡਾ ਵਿਕਾਸ ਅਥਾਰਟੀ",
 
   // Application Detail
   "app_detail.title": "ਅਰਜ਼ੀ ਵੇਰਵੇ",
@@ -259,6 +265,25 @@ const pa: Record<string, string> = {
   "ndc.submit_dues_pending": "ਜਮ੍ਹਾਂ ਕਰੋ (ਬਕਾਇਆ ਲੰਬਿਤ)",
   "ndc.clear_dues": "ਜਮ੍ਹਾਂ ਕਰਨ ਲਈ ਸਾਰੀ ਬਕਾਇਆ ਰਾਸ਼ੀ ਚੁਕਾਓ",
   "ndc.ledger_title": "NDC ਭੁਗਤਾਨ ਖਾਤਾ-ਬਹੀ",
+
+  // Generic Fee Payment
+  "payment.title": "ਫੀਸ ਭੁਗਤਾਨ",
+  "payment.amount_due": "ਦੇਣਯੋਗ ਰਕਮ",
+  "payment.pay_now": "ਹੁਣੇ ਭੁਗਤਾਨ ਕਰੋ",
+  "payment.status": "ਭੁਗਤਾਨ ਸਥਿਤੀ",
+  "payment.status_pending": "ਭੁਗਤਾਨ ਲੰਬਿਤ",
+  "payment.status_completed": "ਭੁਗਤਾਨ ਪੂਰਾ",
+  "payment.status_failed": "ਭੁਗਤਾਨ ਅਸਫਲ",
+  "payment.fee_breakdown": "ਫੀਸ ਵੇਰਵਾ",
+  "payment.processing_fee": "ਪ੍ਰੋਸੈਸਿੰਗ ਫੀਸ",
+  "payment.total": "ਕੁੱਲ",
+  "payment.gateway_redirect": "ਤੁਹਾਨੂੰ ਭੁਗਤਾਨ ਗੇਟਵੇ ਤੇ ਭੇਜਿਆ ਜਾਵੇਗਾ",
+  "payment.offline_unavailable": "ਆਫਲਾਈਨ ਹੋਣ ਦੌਰਾਨ ਔਨਲਾਈਨ ਭੁਗਤਾਨ ਉਪਲਬਧ ਨਹੀਂ ਹੈ",
+  "payment.no_fees": "ਇਸ ਅਰਜ਼ੀ ਲਈ ਕੋਈ ਫੀਸ ਲੋੜੀਂਦੀ ਨਹੀਂ ਹੈ।",
+  "payment.initiating": "ਭੁਗਤਾਨ ਸ਼ੁਰੂ ਹੋ ਰਿਹਾ ਹੈ...",
+  "payment.paid_amount": "ਭੁਗਤਾਨ ਕੀਤਾ",
+  "payment.remaining": "ਬਾਕੀ",
+  "payment.demand_number": "ਮੰਗ ਨੰ.",
 
   // Document Locker
   "locker.title": "ਮੇਰਾ ਦਸਤਾਵੇਜ਼ ਲੌਕਰ",
@@ -616,6 +641,18 @@ const pa: Record<string, string> = {
   "common.download_certificate": "ਸਰਟੀਫਿਕੇਟ ਡਾਊਨਲੋਡ ਕਰੋ",
   "common.download_order": "ਆਰਡਰ ਡਾਊਨਲੋਡ ਕਰੋ",
 
+  // Receipt
+  "receipt.download": "ਰਸੀਦ ਡਾਊਨਲੋਡ ਕਰੋ",
+  "receipt.downloading": "ਬਣ ਰਹੀ ਹੈ...",
+  "receipt.title": "ਅਰਜ਼ੀ ਰਸੀਦ",
+  "receipt.arn": "ਅਰਜ਼ੀ ਹਵਾਲਾ ਨੰਬਰ",
+  "receipt.service": "ਸੇਵਾ",
+  "receipt.applicant": "ਅਰਜ਼ੀਕਾਰ",
+  "receipt.submitted_on": "ਜਮ੍ਹਾ ਕੀਤੀ ਮਿਤੀ",
+  "receipt.status": "ਸਥਿਤੀ",
+  "receipt.authority": "ਪੰਜਾਬ ਸ਼ਹਿਰੀ ਯੋਜਨਾਬੰਦੀ ਅਤੇ ਵਿਕਾਸ ਅਥਾਰਟੀ (ਪੁਡਾ)",
+  "receipt.disclaimer": "ਇਹ ਇੱਕ ਕੰਪਿਊਟਰ ਦੁਆਰਾ ਬਣਾਈ ਗਈ ਰਸੀਦ ਹੈ ਅਤੇ ਇਸ ਲਈ ਦਸਤਖ਼ਤ ਦੀ ਲੋੜ ਨਹੀਂ ਹੈ।",
+
   // Legacy keys
   app_title: "ਪੁਡਾ ਨਾਗਰਿਕ ਪੋਰਟਲ",
   login: "ਲੌਗਇਨ",
@@ -781,6 +818,26 @@ const pa: Record<string, string> = {
   "feedback.offline_doc_upload_readonly": "ਤੁਸੀਂ ਆਫ਼ਲਾਈਨ ਹੋ। ਰੀਡ-ਓਨਲੀ ਮੋਡ ਵਿੱਚ ਦਸਤਾਵੇਜ਼ ਅਪਲੋਡ ਉਪਲਬਧ ਨਹੀਂ ਹੈ।",
   "feedback.offline_doc_reuse": "ਤੁਸੀਂ ਆਫ਼ਲਾਈਨ ਹੋ। ਦਸਤਾਵੇਜ਼ ਦੁਬਾਰਾ ਵਰਤੋਂ ਉਪਲਬਧ ਨਹੀਂ ਹੈ।",
   "feedback.profile_completed": "ਪ੍ਰੋਫ਼ਾਈਲ ਸਫ਼ਲਤਾਪੂਰਵਕ ਪੂਰੀ ਹੋ ਗਈ!",
+
+  // Assisted Channels
+  "assisted.info": "ਤੁਸੀਂ PUDA ਸੁਵਿਧਾ ਕੇਂਦਰਾਂ ਜਾਂ ਸਾਂਝੇ ਸੇਵਾ ਕੇਂਦਰਾਂ (CSC) ਰਾਹੀਂ ਵੀ ਅਰਜ਼ੀ ਦੇ ਸਕਦੇ ਹੋ।",
+
+  // Application Withdrawal
+  "withdraw.button": "ਅਰਜ਼ੀ ਵਾਪਸ ਲਓ",
+  "withdraw.confirm_title": "ਅਰਜ਼ੀ ਵਾਪਸ ਲਓ?",
+  "withdraw.confirm_message": "ਕੀ ਤੁਸੀਂ ਯਕੀਨੀ ਹੋ ਕਿ ਤੁਸੀਂ ਇਹ ਅਰਜ਼ੀ ਵਾਪਸ ਲੈਣਾ ਚਾਹੁੰਦੇ ਹੋ? ਇਹ ਕਾਰਵਾਈ ਵਾਪਸ ਨਹੀਂ ਕੀਤੀ ਜਾ ਸਕਦੀ।",
+  "withdraw.success": "ਅਰਜ਼ੀ ਸਫਲਤਾਪੂਰਵਕ ਵਾਪਸ ਲਈ ਗਈ",
+  "withdraw.error": "ਅਰਜ਼ੀ ਵਾਪਸ ਲੈਣ ਵਿੱਚ ਅਸਫਲ",
+
+  // Citizen Inspection Visibility
+  "citizen_inspection.title": "ਨਿਰੀਖਣ ਸਥਿਤੀ",
+  "citizen_inspection.no_inspections": "ਕੋਈ ਨਿਰੀਖਣ ਨਿਰਧਾਰਤ ਨਹੀਂ",
+  "citizen_inspection.type": "ਕਿਸਮ",
+  "citizen_inspection.status": "ਸਥਿਤੀ",
+  "citizen_inspection.scheduled": "ਨਿਰਧਾਰਤ",
+  "citizen_inspection.in_progress": "ਪ੍ਰਗਤੀ ਵਿੱਚ",
+  "citizen_inspection.completed": "ਪੂਰਾ",
+  "citizen_inspection.outcome": "ਨਤੀਜਾ",
 
   // NL Assistant
   "assistant.open": "ਸਹਾਇਕ ਖੋਲੋ",

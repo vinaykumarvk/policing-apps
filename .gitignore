@@ -24,5 +24,16 @@ outputs/
 test-results/
 playwright-report/
 
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
 # Bundle reports
 frontend-bundle-report.json
+
+# Runtime evidence stores (never commit captured evidence)
+evidence-local/
+
+# Local credentials workbooks (dev secrets, test accounts)
+docs/deployed-apps-credentials.xlsx

@@ -1,0 +1,96 @@
+version: 1
+defaults:
+  phase_timeout_seconds: 7200
+
+phases:
+  - id: P0
+    name: Source Freeze, Secret Hygiene, and Import Map
+    prompt: docs/spec/pipeline/prompts/P0.md
+    exit_criteria: bash docs/spec/pipeline/checks/p0.sh
+    gate: human
+    depends_on: []
+
+  - id: P1
+    name: Target Monorepo Layout
+    prompt: docs/spec/pipeline/prompts/P1.md
+    exit_criteria: bash docs/spec/pipeline/checks/p1.sh
+    gate: human
+    depends_on: [P0]
+
+  - id: P2
+    name: Platform Auth Claim and Entitlement Contract
+    prompt: docs/spec/pipeline/prompts/P2.md
+    exit_criteria: bash docs/spec/pipeline/checks/p2.sh
+    gate: human
+    depends_on: [P0]
+
+  - id: P3
+    name: Data Classification, ABAC, Threat Model, and Decision Evidence
+    prompt: docs/spec/pipeline/prompts/P3.md
+    exit_criteria: bash docs/spec/pipeline/checks/p3.sh
+    gate: human
+    depends_on: [P2]
+
+  - id: P4
+    name: Pilot Users, Cases, Evidence, and Classification Fixtures
+    prompt: docs/spec/pipeline/prompts/P4.md
+    exit_criteria: bash docs/spec/pipeline/checks/p4.sh
+    gate: human
+    depends_on: [P2, P3]
+
+  - id: P5
+    name: Platform Service Packages
+    prompt: docs/spec/pipeline/prompts/P5.md
+    exit_criteria: bash docs/spec/pipeline/checks/p5.sh
+    gate: auto
+    depends_on: [P2, P3]
+
+  - id: P6
+    name: Platform API and App Registry
+    prompt: docs/spec/pipeline/prompts/P6.md
+    exit_criteria: bash docs/spec/pipeline/checks/p6.sh
+    gate: auto
+    depends_on: [P3, P5]
+
+  - id: P7
+    name: Platform Web Shell
+    prompt: docs/spec/pipeline/prompts/P7.md
+    exit_criteria: bash docs/spec/pipeline/checks/p7.sh
+    gate: human
+    depends_on: [P6]
+
+  - id: P8
+    name: Pilot Domain Auth Adapters
+    prompt: docs/spec/pipeline/prompts/P8.md
+    exit_criteria: bash docs/spec/pipeline/checks/p8.sh
+    gate: human
+    depends_on: [P5, P6]
+
+  - id: P9
+    name: Pilot Case and Evidence Projections
+    prompt: docs/spec/pipeline/prompts/P9.md
+    exit_criteria: bash docs/spec/pipeline/checks/p9.sh
+    gate: human
+    depends_on: [P4, P8]
+
+  - id: P10
+    name: Knowledge Runtime Decision and Retrieval Security
+    prompt: docs/spec/pipeline/prompts/P10.md
+    exit_criteria: bash docs/spec/pipeline/checks/p10.sh
+    gate: human
+    depends_on: [P3, P4]
+
+  - id: P11
+    name: Integrated Local Deployment
+    prompt: docs/spec/pipeline/prompts/P11.md
+    exit_criteria: bash docs/spec/pipeline/checks/p11.sh
+    gate: auto
+    depends_on: [P6, P7, P8, P9]
+
+  - id: P12
+    name: Governance, Cutover, and Release Gate
+    prompt: docs/spec/pipeline/prompts/P12.md
+    exit_criteria: bash docs/spec/pipeline/checks/p12.sh
+    gate: human
+    depends_on: [P0, P3, P8, P9, P11]
+

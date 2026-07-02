@@ -1,0 +1,556 @@
+{
+  "schema_version": "platform.auth_claim_fixtures.v1",
+  "claim_schema_version": "platform.claims.v1",
+  "policy_version": "platform.entitlements.v1",
+  "generated_at": "2026-07-02T00:15:00+05:30",
+  "compatibility": {
+    "typescript": "packages/authz/src/claims.ts",
+    "python": "tests/python/test_platform_claims.py"
+  },
+  "personas": [
+    {
+      "id": "desk-operator",
+      "label": "Desk operator",
+      "claim": {
+        "schema_version": "platform.claims.v1",
+        "claim_version": 1,
+        "source": "platform-idp",
+        "source_version": "idp-seed-v1",
+        "subject": {
+          "user_id": "user-desk-001",
+          "persona": "desk_operator",
+          "display_name": "Desk Operator",
+          "tenant_id": "punjab-police",
+          "org_id": "mohali-district"
+        },
+        "issued_at": "2026-07-01T18:30:00Z",
+        "expires_at": "2026-07-01T19:30:00Z",
+        "session_id": "sess-desk-001",
+        "modules": ["iqw"],
+        "domain_permissions": [
+          {
+            "domain": "iqw",
+            "permissions": ["complaint:create", "complaint:read", "task:queue-read"]
+          }
+        ],
+        "org": {
+          "tenant_id": "punjab-police",
+          "org_id": "mohali-district",
+          "unit_ids": ["desk-mohali"],
+          "scope": "unit"
+        },
+        "jurisdiction": {
+          "country": "IN",
+          "state": "PB",
+          "districts": ["SAS Nagar"],
+          "police_stations": ["Phase-8"],
+          "scope": "station"
+        },
+        "clearance": {
+          "level": "restricted",
+          "compartments": ["intake"]
+        },
+        "assignment": {
+          "case_ids": [],
+          "queue_ids": ["desk-mohali-intake"],
+          "evidence_ids": [],
+          "jurisdiction_wide": false,
+          "domain_wide": false
+        },
+        "purpose": {
+          "allowed": ["complaint_intake", "investigation_support"]
+        },
+        "mfa": {
+          "required": true,
+          "verified": true,
+          "methods": ["totp"],
+          "verified_at": "2026-07-01T18:28:00Z"
+        }
+      }
+    },
+    {
+      "id": "io",
+      "label": "Investigating Officer",
+      "claim": {
+        "schema_version": "platform.claims.v1",
+        "claim_version": 1,
+        "source": "platform-idp",
+        "source_version": "idp-seed-v1",
+        "subject": {
+          "user_id": "user-io-001",
+          "persona": "io",
+          "display_name": "Investigating Officer",
+          "tenant_id": "punjab-police",
+          "org_id": "mohali-district"
+        },
+        "issued_at": "2026-07-01T18:30:00Z",
+        "expires_at": "2026-07-01T19:30:00Z",
+        "session_id": "sess-io-001",
+        "modules": ["dopams", "iqw", "knowledge"],
+        "domain_permissions": [
+          {
+            "domain": "dopams",
+            "permissions": ["case:read", "case:update", "lead:read", "evidence:metadata-read"]
+          },
+          {
+            "domain": "iqw",
+            "permissions": ["complaint:read", "investigation:update"]
+          },
+          {
+            "domain": "knowledge",
+            "permissions": ["query:case-summary"]
+          }
+        ],
+        "org": {
+          "tenant_id": "punjab-police",
+          "org_id": "mohali-district",
+          "unit_ids": ["narcotics-cell-mohali"],
+          "scope": "unit"
+        },
+        "jurisdiction": {
+          "country": "IN",
+          "state": "PB",
+          "districts": ["SAS Nagar"],
+          "police_stations": ["Phase-8", "Sohana"],
+          "scope": "district"
+        },
+        "clearance": {
+          "level": "confidential",
+          "compartments": ["narcotics", "casework"]
+        },
+        "assignment": {
+          "case_ids": ["CASE-DOPAMS-001", "CASE-IQW-001"],
+          "queue_ids": ["io-active"],
+          "evidence_ids": ["EVID-DOPAMS-001"],
+          "jurisdiction_wide": false,
+          "domain_wide": false
+        },
+        "purpose": {
+          "allowed": ["investigation", "case_review"]
+        },
+        "mfa": {
+          "required": true,
+          "verified": true,
+          "methods": ["totp"],
+          "verified_at": "2026-07-01T18:27:00Z"
+        }
+      }
+    },
+    {
+      "id": "analyst",
+      "label": "Intelligence analyst",
+      "claim": {
+        "schema_version": "platform.claims.v1",
+        "claim_version": 1,
+        "source": "platform-idp",
+        "source_version": "idp-seed-v1",
+        "subject": {
+          "user_id": "user-analyst-001",
+          "persona": "analyst",
+          "display_name": "Intelligence Analyst",
+          "tenant_id": "punjab-police",
+          "org_id": "state-intelligence"
+        },
+        "issued_at": "2026-07-01T18:30:00Z",
+        "expires_at": "2026-07-01T19:30:00Z",
+        "session_id": "sess-analyst-001",
+        "modules": ["dopams", "social_media"],
+        "domain_permissions": [
+          {
+            "domain": "dopams",
+            "permissions": ["lead:read", "graph:read", "trend:read"]
+          },
+          {
+            "domain": "social_media",
+            "permissions": ["content:metadata-read", "trend:read"]
+          }
+        ],
+        "org": {
+          "tenant_id": "punjab-police",
+          "org_id": "state-intelligence",
+          "unit_ids": ["analysis-cell"],
+          "scope": "unit"
+        },
+        "jurisdiction": {
+          "country": "IN",
+          "state": "PB",
+          "districts": ["SAS Nagar", "Ludhiana"],
+          "police_stations": [],
+          "scope": "state"
+        },
+        "clearance": {
+          "level": "confidential",
+          "compartments": ["intelligence"]
+        },
+        "assignment": {
+          "case_ids": [],
+          "queue_ids": ["analysis-state-feed"],
+          "evidence_ids": [],
+          "jurisdiction_wide": true,
+          "domain_wide": false
+        },
+        "purpose": {
+          "allowed": ["intelligence_analysis", "case_review"]
+        },
+        "mfa": {
+          "required": true,
+          "verified": true,
+          "methods": ["totp"],
+          "verified_at": "2026-07-01T18:26:00Z"
+        }
+      }
+    },
+    {
+      "id": "forensic-analyst",
+      "label": "Forensic analyst",
+      "claim": {
+        "schema_version": "platform.claims.v1",
+        "claim_version": 1,
+        "source": "platform-idp",
+        "source_version": "idp-seed-v1",
+        "subject": {
+          "user_id": "user-forensic-001",
+          "persona": "forensic_analyst",
+          "display_name": "Forensic Analyst",
+          "tenant_id": "punjab-police",
+          "org_id": "forensic-lab"
+        },
+        "issued_at": "2026-07-01T18:30:00Z",
+        "expires_at": "2026-07-01T19:30:00Z",
+        "session_id": "sess-forensic-001",
+        "modules": ["forensic", "dopams"],
+        "domain_permissions": [
+          {
+            "domain": "forensic",
+            "permissions": ["case:read", "evidence:metadata-read", "report:write"]
+          },
+          {
+            "domain": "dopams",
+            "permissions": ["evidence:metadata-read"]
+          }
+        ],
+        "org": {
+          "tenant_id": "punjab-police",
+          "org_id": "forensic-lab",
+          "unit_ids": ["digital-forensics"],
+          "scope": "unit"
+        },
+        "jurisdiction": {
+          "country": "IN",
+          "state": "PB",
+          "districts": ["SAS Nagar"],
+          "police_stations": [],
+          "scope": "district"
+        },
+        "clearance": {
+          "level": "secret",
+          "compartments": ["digital_evidence", "casework"]
+        },
+        "assignment": {
+          "case_ids": ["CASE-DOPAMS-001"],
+          "queue_ids": ["forensic-review"],
+          "evidence_ids": ["EVID-DOPAMS-001", "EVID-IQW-001"],
+          "jurisdiction_wide": false,
+          "domain_wide": false
+        },
+        "purpose": {
+          "allowed": ["forensic_review", "evidence_review"]
+        },
+        "mfa": {
+          "required": true,
+          "verified": true,
+          "methods": ["hardware_key"],
+          "verified_at": "2026-07-01T18:24:00Z"
+        }
+      }
+    },
+    {
+      "id": "supervisor",
+      "label": "Supervisor",
+      "claim": {
+        "schema_version": "platform.claims.v1",
+        "claim_version": 1,
+        "source": "platform-idp",
+        "source_version": "idp-seed-v1",
+        "subject": {
+          "user_id": "user-supervisor-001",
+          "persona": "supervisor",
+          "display_name": "Supervisor",
+          "tenant_id": "punjab-police",
+          "org_id": "mohali-district"
+        },
+        "issued_at": "2026-07-01T18:30:00Z",
+        "expires_at": "2026-07-01T19:30:00Z",
+        "session_id": "sess-supervisor-001",
+        "modules": ["dopams", "iqw"],
+        "domain_permissions": [
+          {
+            "domain": "dopams",
+            "permissions": ["case:read", "case:approve", "task:assign", "evidence:metadata-read"]
+          },
+          {
+            "domain": "iqw",
+            "permissions": ["complaint:read", "investigation:approve", "task:assign"]
+          }
+        ],
+        "org": {
+          "tenant_id": "punjab-police",
+          "org_id": "mohali-district",
+          "unit_ids": ["district-supervision"],
+          "scope": "org"
+        },
+        "jurisdiction": {
+          "country": "IN",
+          "state": "PB",
+          "districts": ["SAS Nagar"],
+          "police_stations": [],
+          "scope": "district"
+        },
+        "clearance": {
+          "level": "secret",
+          "compartments": ["supervision", "casework"]
+        },
+        "assignment": {
+          "case_ids": [],
+          "queue_ids": ["district-review"],
+          "evidence_ids": [],
+          "jurisdiction_wide": true,
+          "domain_wide": false
+        },
+        "purpose": {
+          "allowed": ["supervision", "case_review"]
+        },
+        "mfa": {
+          "required": true,
+          "verified": true,
+          "methods": ["hardware_key"],
+          "verified_at": "2026-07-01T18:23:00Z"
+        }
+      }
+    },
+    {
+      "id": "legal-reviewer",
+      "label": "Legal reviewer",
+      "claim": {
+        "schema_version": "platform.claims.v1",
+        "claim_version": 1,
+        "source": "platform-idp",
+        "source_version": "idp-seed-v1",
+        "subject": {
+          "user_id": "user-legal-001",
+          "persona": "legal_reviewer",
+          "display_name": "Legal Reviewer",
+          "tenant_id": "punjab-police",
+          "org_id": "legal-cell"
+        },
+        "issued_at": "2026-07-01T18:30:00Z",
+        "expires_at": "2026-07-01T19:30:00Z",
+        "session_id": "sess-legal-001",
+        "modules": ["dopams", "forensic"],
+        "domain_permissions": [
+          {
+            "domain": "dopams",
+            "permissions": ["case:read", "legal:review", "evidence:metadata-read"]
+          },
+          {
+            "domain": "forensic",
+            "permissions": ["report:read", "legal:review"]
+          }
+        ],
+        "org": {
+          "tenant_id": "punjab-police",
+          "org_id": "legal-cell",
+          "unit_ids": ["prosecution-review"],
+          "scope": "unit"
+        },
+        "jurisdiction": {
+          "country": "IN",
+          "state": "PB",
+          "districts": ["SAS Nagar"],
+          "police_stations": [],
+          "scope": "district"
+        },
+        "clearance": {
+          "level": "secret",
+          "compartments": ["legal", "evidence"]
+        },
+        "assignment": {
+          "case_ids": ["CASE-DOPAMS-001"],
+          "queue_ids": ["legal-review"],
+          "evidence_ids": ["EVID-DOPAMS-001"],
+          "jurisdiction_wide": false,
+          "domain_wide": false
+        },
+        "purpose": {
+          "allowed": ["legal_review", "court_preparation"]
+        },
+        "mfa": {
+          "required": true,
+          "verified": true,
+          "methods": ["hardware_key"],
+          "verified_at": "2026-07-01T18:22:00Z"
+        }
+      }
+    },
+    {
+      "id": "admin",
+      "label": "Platform admin",
+      "claim": {
+        "schema_version": "platform.claims.v1",
+        "claim_version": 1,
+        "source": "platform-idp",
+        "source_version": "idp-seed-v1",
+        "subject": {
+          "user_id": "user-admin-001",
+          "persona": "admin",
+          "display_name": "Platform Admin",
+          "tenant_id": "punjab-police",
+          "org_id": "platform-ops"
+        },
+        "issued_at": "2026-07-01T18:30:00Z",
+        "expires_at": "2026-07-01T19:30:00Z",
+        "session_id": "sess-admin-001",
+        "modules": ["platform_admin"],
+        "domain_permissions": [
+          {
+            "domain": "platform",
+            "permissions": ["app_registry:manage", "entitlement_seed:read", "health:read"]
+          }
+        ],
+        "org": {
+          "tenant_id": "punjab-police",
+          "org_id": "platform-ops",
+          "unit_ids": ["platform-control-plane"],
+          "scope": "org"
+        },
+        "jurisdiction": {
+          "country": "IN",
+          "state": "PB",
+          "districts": [],
+          "police_stations": [],
+          "scope": "state"
+        },
+        "clearance": {
+          "level": "restricted",
+          "compartments": ["platform_ops"]
+        },
+        "assignment": {
+          "case_ids": [],
+          "queue_ids": ["platform-admin"],
+          "evidence_ids": [],
+          "jurisdiction_wide": false,
+          "domain_wide": true
+        },
+        "purpose": {
+          "allowed": ["platform_admin"]
+        },
+        "mfa": {
+          "required": true,
+          "verified": true,
+          "methods": ["hardware_key"],
+          "verified_at": "2026-07-01T18:21:00Z"
+        }
+      }
+    },
+    {
+      "id": "auditor",
+      "label": "Auditor",
+      "claim": {
+        "schema_version": "platform.claims.v1",
+        "claim_version": 1,
+        "source": "platform-idp",
+        "source_version": "idp-seed-v1",
+        "subject": {
+          "user_id": "user-auditor-001",
+          "persona": "auditor",
+          "display_name": "Auditor",
+          "tenant_id": "punjab-police",
+          "org_id": "audit-cell"
+        },
+        "issued_at": "2026-07-01T18:30:00Z",
+        "expires_at": "2026-07-01T19:30:00Z",
+        "session_id": "sess-auditor-001",
+        "modules": ["platform_admin"],
+        "domain_permissions": [
+          {
+            "domain": "platform",
+            "permissions": ["audit:read", "decision_evidence:read", "health:read"]
+          }
+        ],
+        "org": {
+          "tenant_id": "punjab-police",
+          "org_id": "audit-cell",
+          "unit_ids": ["audit-review"],
+          "scope": "org"
+        },
+        "jurisdiction": {
+          "country": "IN",
+          "state": "PB",
+          "districts": [],
+          "police_stations": [],
+          "scope": "state"
+        },
+        "clearance": {
+          "level": "confidential",
+          "compartments": ["audit"]
+        },
+        "assignment": {
+          "case_ids": [],
+          "queue_ids": ["audit-review"],
+          "evidence_ids": [],
+          "jurisdiction_wide": false,
+          "domain_wide": true
+        },
+        "purpose": {
+          "allowed": ["audit"]
+        },
+        "mfa": {
+          "required": true,
+          "verified": true,
+          "methods": ["hardware_key"],
+          "verified_at": "2026-07-01T18:20:00Z"
+        }
+      }
+    }
+  ],
+  "negative_claims": {
+    "expired": {
+      "from_persona": "io",
+      "mutation": {
+        "expires_at": "2026-07-01T18:31:00Z"
+      }
+    },
+    "unsupported_version": {
+      "from_persona": "io",
+      "mutation": {
+        "schema_version": "platform.claims.v99"
+      }
+    },
+    "missing_mfa": {
+      "from_persona": "io",
+      "mutation": {
+        "mfa": {
+          "required": true,
+          "verified": false,
+          "methods": [],
+          "verified_at": null
+        }
+      }
+    },
+    "ambiguous_domain": {
+      "from_persona": "io",
+      "mutation": {
+        "domain_permissions": [
+          {
+            "domain": "dopams",
+            "permissions": ["case:read"]
+          },
+          {
+            "domain": "dopams",
+            "permissions": ["case:update"]
+          }
+        ]
+      }
+    }
+  }
+}

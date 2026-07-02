@@ -1,0 +1,11 @@
+version: 1
+defaults:
+  phase_timeout_seconds: 3600
+
+phases:
+  - id: P16
+    name: Pilot Cutover Readiness and Approval Evidence
+    prompt: docs/spec/pipeline-p16/prompts/P16.md
+    exit_criteria: bash docs/spec/pipeline-p16/checks/p16.sh
+    gate: human
+    depends_on: []

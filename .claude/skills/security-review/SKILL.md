@@ -53,7 +53,25 @@ Risk scoring:
 
 `Risk Score = Impact (1-5) x Likelihood (1-5)`
 
+Risk Score to severity mapping: `16-25 = P0`, `9-15 = P1`, `4-8 = P2`, `1-3 = P3`.
+
 ---
+
+### False-Positive Triage
+
+When a search pattern matches a non-vulnerable usage, mark it `FP` with a one-line justification. Common false positives:
+
+- `password` in schema/type definitions (not hardcoded secrets)
+- `eval(` in comments or documentation
+- `exec(` in ORM/DB driver internals inside `node_modules`
+- Template literal SQL that is actually parameterized via tagged template (e.g., `sql\`SELECT ... WHERE id = ${id}\``)
+- Token validation code (reading tokens, not hardcoding them)
+
+When a finding requires tracing through multiple files (e.g., user input → handler → service → query), document the **call stack** showing data flow: `file1.ts:line → file2.ts:line → file3.ts:line (sink)`.
+
+### Phase Ordering
+
+Phases MUST run in numerical order (0 → 16). Earlier phases establish context that later phases depend on (e.g., Phase 1 attack surface informs Phase 4 injection analysis). Skipping phases is only permitted when the user explicitly requests a single phase via the `phase` argument.
 
 ## Phase 0: Preflight
 
@@ -178,6 +196,14 @@ Include a trust-boundary diagram (Mermaid or text) showing data flow and trust t
 - File paths sanitized: no `../` traversal.
 - Upload destinations use generated filenames (not user-supplied).
 - Static file serving restricted to intended directories.
+
+### G) Business Logic and Race Conditions
+
+- State machine transitions enforce guards (no skipping states via direct API calls).
+- Time-of-check/time-of-use (TOCTOU) vulnerabilities: check and action must be atomic (e.g., use DB transactions for check-then-update).
+- Workflow state transitions protected by optimistic concurrency (row version / etag).
+- Payment or approval flows cannot be bypassed by replaying or reordering API calls.
+- Concurrent operations on the same resource are handled safely (e.g., two officers approving the same task simultaneously).
 
 ## Phase 5: Data Protection and Privacy
 
@@ -449,8 +475,8 @@ Security Verdict:     [SECURE | AT-RISK | CRITICAL]
 
 Minimum counts:
 
-- Full-repo review: `10+` high-impact and `10+` medium-impact findings.
-- Scoped review: `5+` high-impact and `5+` medium-impact findings.
+- Full-repo review: `10+` P0/P1 and `10+` P2 findings.
+- Scoped review: `5+` P0/P1 and `5+` P2 findings.
 
 Each finding must include:
 
@@ -490,13 +516,48 @@ Effort:
 
 Each task must include exact file targets and verification steps.
 
+### Common Security Fix Patterns
+
+| Finding | Fix Pattern |
+|---------|-------------|
+| SQL injection (`query("... " + input)`) | Use parameterized query: `query("... $1", [input])` |
+| Missing auth on route | Add auth middleware: `{ preHandler: [requireAuth] }` |
+| Secret in source code | Move to `.env`, add to `.gitignore`, rotate the exposed secret |
+| `dangerouslySetInnerHTML` | Use DOMPurify: `dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }}` |
+| Missing CORS origin restriction | Set specific origins: `origin: ["https://app.example.com"]` |
+| Password in logs | Redact: `logger.info({ ...req.body, password: "[REDACTED]" })` |
+| Missing rate limiting | Add `@fastify/rate-limit` with `max: 100, timeWindow: "1 minute"` |
+| JWT in localStorage | Move to httpOnly cookie with `secure: true, sameSite: "strict"` |
+
+## Phase 15.1: Impact/Likelihood Calibration
+
+When scoring Risk = Impact x Likelihood, use these calibration examples:
+
+| Impact | Score | Example |
+|--------|-------|---------|
+| Catastrophic | 5 | Full database dump, admin account takeover, PII mass exposure |
+| Major | 4 | Single user account takeover, unauthorized data modification |
+| Moderate | 3 | Information disclosure (non-PII), privilege escalation to read-only |
+| Minor | 2 | Denial of service on non-critical endpoint, verbose error messages |
+| Negligible | 1 | Security header missing, cosmetic cookie attribute |
+
+| Likelihood | Score | Example |
+|------------|-------|---------|
+| Almost certain | 5 | Public endpoint, no authentication, trivial exploit |
+| Likely | 4 | Authenticated endpoint, but common attack pattern (SQLi in search) |
+| Possible | 3 | Requires specific conditions (race condition, unusual input format) |
+| Unlikely | 2 | Requires insider access or chained exploits |
+| Rare | 1 | Requires physical access or highly specific timing |
+
 ## Phase 16: Verification Commands
 
 Adapt commands to the discovered tech stack. Examples:
 
 ```bash
-# Secret scanning
-rg -n "password|secret|api_key|token|private_key" --glob '!*.lock' --glob '!node_modules' -i
+# Secret scanning (targeted patterns to reduce noise)
+rg -n "(password|secret|api[_-]?key|private[_-]?key)\s*[:=]" --glob '!*.lock' --glob '!node_modules' -i
+# Broader sweep for hardcoded credentials
+rg -n "password\s*[:=]\s*['\"][^'\"]+['\"]" --glob '*.{ts,js,py,json}' --glob '!*.lock'
 rg -n "BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY" .
 rg -n "AKIA[A-Z0-9]{16}" .  # AWS access keys
 

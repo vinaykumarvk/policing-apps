@@ -39,7 +39,7 @@ export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
          WHERE ($1::text IS NULL OR state_id = $1)
            AND ($2::text IS NULL OR severity = $2)
            AND ($3::text IS NULL OR alert_type = $3)
-           AND (unit_id = $4::uuid)
+           AND ($4::uuid IS NULL OR unit_id = $4::uuid)
          ORDER BY created_at DESC
          LIMIT $5 OFFSET $6`,
         [state_id || null, severity || null, alert_type || null, unitId, limit, offset],
@@ -56,9 +56,9 @@ export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
     try {
       const unitId = request.authUser?.unitId || null;
       const [stateRows, severityRows, typeRows] = await Promise.all([
-        query(`SELECT state_id AS value, COUNT(*)::int AS count FROM alert WHERE (unit_id = $1::uuid) GROUP BY state_id ORDER BY count DESC`, [unitId]),
-        query(`SELECT severity AS value, COUNT(*)::int AS count FROM alert WHERE (unit_id = $1::uuid) GROUP BY severity ORDER BY count DESC`, [unitId]),
-        query(`SELECT alert_type AS value, COUNT(*)::int AS count FROM alert WHERE (unit_id = $1::uuid) GROUP BY alert_type ORDER BY count DESC`, [unitId]),
+        query(`SELECT state_id AS value, COUNT(*)::int AS count FROM alert WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY state_id ORDER BY count DESC`, [unitId]),
+        query(`SELECT severity AS value, COUNT(*)::int AS count FROM alert WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY severity ORDER BY count DESC`, [unitId]),
+        query(`SELECT alert_type AS value, COUNT(*)::int AS count FROM alert WHERE ($1::uuid IS NULL OR unit_id = $1::uuid) GROUP BY alert_type ORDER BY count DESC`, [unitId]),
       ]);
       return { facets: { state_id: stateRows.rows, severity: severityRows.rows, alert_type: typeRows.rows } };
     } catch (err) {
@@ -77,7 +77,7 @@ export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
         `SELECT alert_id, alert_type, severity, title, description, source_system,
                 subject_id, case_id, state_id, row_version, assigned_to,
                 acknowledged_by, acknowledged_at, resolved_at, created_at, updated_at
-         FROM alert WHERE alert_id = $1 AND unit_id = $2::uuid`,
+         FROM alert WHERE alert_id = $1 AND ($2::uuid IS NULL OR unit_id = $2::uuid)`,
         [id, unitId],
       );
       if (result.rows.length === 0) {
@@ -356,7 +356,7 @@ export async function registerAlertRoutes(app: FastifyInstance): Promise<void> {
          FROM alert a
          LEFT JOIN classification_result cr ON cr.entity_type = 'dopams_alert' AND cr.entity_id = a.alert_id
          WHERE a.priority_queue = $1
-           AND (a.unit_id = $2::uuid)
+           AND ($2::uuid IS NULL OR a.unit_id = $2::uuid)
            AND a.state_id NOT IN ('DISMISSED', 'CLOSED', 'RESOLVED')
          ORDER BY cr.risk_score DESC NULLS LAST, a.created_at DESC
          LIMIT $3 OFFSET $4`,

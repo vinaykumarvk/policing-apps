@@ -8,6 +8,10 @@ export default {
   "nav.settings": "Settings",
   "nav.logout": "Logout",
   "nav.more": "More",
+  "nav.notifications": "Notifications",
+  "nav.unread_count": "{{count}} unread notification(s)",
+  "notification.sla_warning": "{{count}} application(s) approaching or past SLA deadline",
+  "notification.no_unread": "No unread notifications",
 
   // App bar
   "app.brand": "PUDA Officer Workbench",
@@ -32,6 +36,12 @@ export default {
   "login.user_id_placeholder": "e.g. officer1",
   "login.password_placeholder": "Enter password",
 
+  // Dashboard stats
+  "dashboard.total_pending": "Total Pending",
+  "dashboard.overdue": "Overdue",
+  "dashboard.due_soon": "Due in 24h",
+  "dashboard.on_track": "On Track",
+
   // Inbox
   "inbox.no_tasks": "No pending tasks",
   "inbox.no_tasks_desc": "Your inbox is empty. Tasks will appear here when applications need your review.",
@@ -42,6 +52,9 @@ export default {
   "inbox.required_role": "Required Role",
   "inbox.sla_due": "SLA Due",
   "inbox.overdue": "Overdue",
+  "inbox.due_soon": "Due Soon",
+  "inbox.on_track": "On Track",
+  "inbox.sort_overdue_first": "Overdue First",
   "inbox.arn_label": "ARN: {{arn}}",
 
   // Search
@@ -170,6 +183,29 @@ export default {
   "task.preview_unavailable": "Preview is not available for this file type.",
   "task.download_to_view": "Download to view",
 
+  // Inspections
+  "inspection.title": "Site Inspection",
+  "inspection.no_inspections": "No inspections scheduled for this application",
+  "inspection.type": "Inspection Type",
+  "inspection.status": "Status",
+  "inspection.scheduled_at": "Scheduled Date",
+  "inspection.assign_to_me": "Assign to Me",
+  "inspection.complete": "Complete Inspection",
+  "inspection.cancel_inspection": "Cancel Inspection",
+  "inspection.outcome": "Outcome",
+  "inspection.findings": "Findings Summary",
+  "inspection.remarks": "Outcome Remarks",
+  "inspection.outcome_pass": "Pass",
+  "inspection.outcome_fail": "Fail",
+  "inspection.outcome_reinspection": "Reinspection Required",
+  "inspection.outcome_na": "Not Applicable",
+  "inspection.status_scheduled": "Scheduled",
+  "inspection.status_in_progress": "In Progress",
+  "inspection.status_completed": "Completed",
+  "inspection.status_cancelled": "Cancelled",
+  "inspection.completed_on": "Completed On",
+  "inspection.assigned_to_you": "Assigned to you",
+
   // Actions
   "action.forward": "Forward",
   "action.query": "Raise Query",
@@ -243,12 +279,38 @@ export default {
   "feedback.offline_workflow": "You are offline. Workflow actions are disabled in read-only mode.",
   "feedback.query_message_required": "Query message is required before submitting a query.",
   "feedback.remarks_required_rejection": "Remarks are required when rejecting an application.",
+  "feedback.remarks_required": "Remarks are required for all workflow actions.",
   "feedback.action_completed": "Action {{action}} completed successfully.",
   "feedback.offline_complaints": "Offline mode is active. Complaint data is unavailable.",
   "feedback.failed_load_complaints": "Failed to load complaints",
   "feedback.failed_load_complaint": "Failed to load complaint",
   "feedback.failed_load_evidence": "Failed to load evidence file.",
   "feedback.assign_failed": "Task assignment failed. Another officer may have claimed this task.",
+  "feedback.inspection_assigned": "Inspection assigned to you",
+  "feedback.inspection_completed": "Inspection completed successfully",
+  "feedback.inspection_cancelled": "Inspection cancelled",
+  "feedback.inspection_error": "Failed to update inspection",
+
+  // Reason Codes
+  "task.reason_code": "Reason Code",
+  "task.select_reason": "Select reason...",
+  "reason.incomplete_docs": "Incomplete Documents",
+  "reason.policy_violation": "Policy Violation",
+  "reason.incorrect_info": "Incorrect Information",
+  "reason.missing_doc": "Missing Document",
+  "reason.clarification": "Clarification Needed",
+  "reason.additional_info": "Additional Information Required",
+  "reason.other": "Other",
+
+  // Batch Document Verification
+  "task.verify_all_docs": "Verify All Documents",
+  "feedback.all_docs_verified": "All documents verified",
+
+  // Internal Notes
+  "task.notes": "Internal Notes",
+  "task.add_note": "Add Note",
+  "task.note_placeholder": "Add an internal note...",
+  "feedback.note_added": "Note added successfully",
 
   // NL Assistant
   "assistant.open": "Open Assistant",

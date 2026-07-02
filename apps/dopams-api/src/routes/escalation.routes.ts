@@ -161,7 +161,7 @@ export async function registerEscalationRoutes(app: FastifyInstance): Promise<vo
     try {
       const { entityType } = request.query as { entityType?: string };
       const result = await query(
-        `SELECT * FROM sla_rule WHERE is_active = TRUE AND ($1::text IS NULL OR entity_type = $1) ORDER BY sla_minutes ASC`,
+        `SELECT * FROM sla_rule WHERE is_active = TRUE AND ($1::text IS NULL OR entity_type = $1) ORDER BY sla_minutes ASC LIMIT 200`,
         [entityType || null],
       );
       return { rules: result.rows };

@@ -1,10 +1,10 @@
 import { useMemo, useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "./AuthContext";
-import { Alert, Button, Card, Field, Input, Textarea, Breadcrumb, timeAgo } from "@puda/shared";
+import { Alert, Button, Card, Field, Input, Modal, Textarea, Breadcrumb, timeAgo } from "@puda/shared";
 import { getStatusBadgeClass, getStatusLabel, formatDateTime } from "@puda/shared/utils";
 import { Bilingual } from "./Bilingual";
-import { apiBaseUrl } from "./citizen-types";
+import { apiBaseUrl, FeeItem } from "./citizen-types";
 import DocumentUploadPanel from "./DocumentUploadPanel";
 import DeclarationFormPanel from "./DeclarationFormPanel";
 import "./application-detail.css";
@@ -128,6 +128,70 @@ export default function ApplicationDetail({
   const { authHeaders } = useAuth();
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [generatingReceipt, setGeneratingReceipt] = useState(false);
+
+  // Withdrawal state (C3)
+  const [withdrawConfirmOpen, setWithdrawConfirmOpen] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawFeedback, setWithdrawFeedback] = useState<{ variant: "success" | "error"; text: string } | null>(null);
+
+  // Inspection visibility state (C5)
+  const [citizenInspections, setCitizenInspections] = useState<Array<{
+    inspection_id: string;
+    inspection_type: string;
+    status: string;
+    scheduled_at?: string;
+    completed_at?: string;
+    outcome?: string;
+  }>>([]);
+
+  // Load inspections for citizen visibility (C5)
+  useEffect(() => {
+    if (!application?.arn || isOffline) return;
+    const loadInspections = async () => {
+      try {
+        const res = await fetch(
+          `${apiBaseUrl}/api/v1/inspections/for-application/${encodeURIComponent(application.arn)}`,
+          authHeaders()
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        setCitizenInspections(data.inspections || []);
+      } catch {
+        // silently fail — inspections are supplementary
+      }
+    };
+    void loadInspections();
+  }, [application?.arn, isOffline, authHeaders]);
+
+  // Handle application withdrawal (C3)
+  const handleWithdraw = async () => {
+    if (!application?.arn) return;
+    setWithdrawing(true);
+    setWithdrawFeedback(null);
+    try {
+      const res = await fetch(
+        `${apiBaseUrl}/api/v1/applications/${encodeURIComponent(application.arn)}`,
+        {
+          ...authHeaders(),
+          method: "DELETE",
+        }
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.message || body?.error || "Withdrawal failed");
+      }
+      setWithdrawFeedback({ variant: "success", text: t("withdraw.success") });
+      setWithdrawConfirmOpen(false);
+      // Navigate back after a short delay to show feedback
+      setTimeout(() => onBack(), 1500);
+    } catch {
+      setWithdrawFeedback({ variant: "error", text: t("withdraw.error") });
+      setWithdrawConfirmOpen(false);
+    } finally {
+      setWithdrawing(false);
+    }
+  };
 
   const handleDownload = async (url: string, filename: string) => {
     setDownloading(true);
@@ -151,6 +215,101 @@ export default function ApplicationDetail({
       setDownloadError(err instanceof Error ? err.message : "Download failed");
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const handleDownloadReceipt = () => {
+    setGeneratingReceipt(true);
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    try {
+      const serviceName = esc(serviceConfig?.displayName || application.service_key);
+      const applicantName = esc(
+        application.data_jsonb?.applicant?.name
+        || application.data_jsonb?.applicant?.applicantName
+        || application.data_jsonb?.applicantName
+        || "—"
+      );
+      const submittedDate = esc(application.submitted_at
+        ? new Date(application.submitted_at).toLocaleDateString("en-IN", {
+            day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
+          })
+        : new Date(application.created_at).toLocaleDateString("en-IN", {
+            day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
+          }));
+      const statusLabel = esc(getStatusLabel(application.state_id));
+
+      const receiptHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>${t("receipt.title")} — ${esc(application.arn)}</title>
+<style>
+  @media print {
+    body { margin: 0; }
+    .no-print { display: none !important; }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 2rem; color: #1a1a1a; background: #fff; }
+  .receipt { max-width: 700px; margin: 0 auto; border: 2px solid #1a365d; padding: 2rem; }
+  .receipt-header { text-align: center; border-bottom: 2px solid #1a365d; padding-bottom: 1rem; margin-bottom: 1.5rem; }
+  .receipt-header h1 { font-size: 1.1rem; color: #1a365d; margin-bottom: 0.25rem; }
+  .receipt-header h2 { font-size: 1.4rem; color: #1a365d; }
+  .receipt-body { margin-bottom: 1.5rem; }
+  .receipt-row { display: flex; padding: 0.6rem 0; border-bottom: 1px solid #e2e8f0; }
+  .receipt-label { font-weight: 600; width: 220px; flex-shrink: 0; color: #4a5568; }
+  .receipt-value { flex: 1; word-break: break-word; }
+  .receipt-footer { border-top: 2px solid #1a365d; padding-top: 1rem; text-align: center; }
+  .receipt-footer p { font-size: 0.85rem; color: #718096; margin-bottom: 0.5rem; }
+  .receipt-footer .generated-at { font-size: 0.75rem; color: #a0aec0; }
+  .print-btn { display: block; margin: 1.5rem auto 0; padding: 0.75rem 2rem; background: #1a365d; color: #fff; border: none; border-radius: 6px; font-size: 1rem; cursor: pointer; min-height: 2.75rem; }
+  .print-btn:hover { background: #2a4a7f; }
+  .print-btn:active { background: #0f2440; }
+</style>
+</head>
+<body>
+<div class="receipt">
+  <div class="receipt-header">
+    <h1>${t("receipt.authority")}</h1>
+    <h2>${t("receipt.title")}</h2>
+  </div>
+  <div class="receipt-body">
+    <div class="receipt-row">
+      <span class="receipt-label">${t("receipt.arn")}</span>
+      <span class="receipt-value"><strong>${esc(application.arn)}</strong></span>
+    </div>
+    <div class="receipt-row">
+      <span class="receipt-label">${t("receipt.service")}</span>
+      <span class="receipt-value">${serviceName}</span>
+    </div>
+    <div class="receipt-row">
+      <span class="receipt-label">${t("receipt.applicant")}</span>
+      <span class="receipt-value">${applicantName}</span>
+    </div>
+    <div class="receipt-row">
+      <span class="receipt-label">${t("receipt.submitted_on")}</span>
+      <span class="receipt-value">${submittedDate}</span>
+    </div>
+    <div class="receipt-row">
+      <span class="receipt-label">${t("receipt.status")}</span>
+      <span class="receipt-value">${statusLabel}</span>
+    </div>
+  </div>
+  <div class="receipt-footer">
+    <p>${t("receipt.disclaimer")}</p>
+    <span class="generated-at">Generated: ${new Date().toLocaleString("en-IN")}</span>
+  </div>
+</div>
+<button type="button" class="print-btn no-print" onclick="window.print()">Print / Save as PDF</button>
+</body>
+</html>`;
+
+      const receiptWindow = window.open("", "_blank");
+      if (receiptWindow) {
+        receiptWindow.document.write(receiptHtml);
+        receiptWindow.document.close();
+      }
+    } finally {
+      setGeneratingReceipt(false);
     }
   };
 
@@ -186,6 +345,25 @@ export default function ApplicationDetail({
   const [declarationDocTypeId, setDeclarationDocTypeId] = useState<string | null>(null);
   const [declarationSubmitting, setDeclarationSubmitting] = useState(false);
   const [declarationFeedback, setDeclarationFeedback] = useState<{ variant: "success" | "error"; text: string } | null>(null);
+
+  // Generic fee payment state (for non-NDC services with feeSchedule)
+  const [feeDemands, setFeeDemands] = useState<Array<{
+    demand_id: string;
+    demand_number: string | null;
+    total_amount: number;
+    paid_amount: number;
+    status: "PENDING" | "PARTIALLY_PAID" | "PAID" | "WAIVED" | "CANCELLED";
+    due_date: string | null;
+    lineItems?: Array<{
+      fee_head_code: string;
+      description: string | null;
+      amount: number;
+    }>;
+  }>>([]);
+  const [feeDemandsLoading, setFeeDemandsLoading] = useState(false);
+  const [feeDemandsError, setFeeDemandsError] = useState<string | null>(null);
+  const [paymentInitiating, setPaymentInitiating] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   useEffect(() => {
     setResponseData(formData);
@@ -237,6 +415,62 @@ export default function ApplicationDetail({
       cancelled = true;
     };
   }, [application.arn, application.service_key, isOffline, authHeaders]);
+
+  // Generic fee demands (for non-NDC services that have a feeSchedule in their config)
+  const hasFeeSchedule = application.service_key !== "no_due_certificate" &&
+    Array.isArray(serviceConfig?.feeSchedule?.default) &&
+    serviceConfig.feeSchedule.default.length > 0;
+
+  useEffect(() => {
+    if (!hasFeeSchedule) {
+      setFeeDemands([]);
+      setFeeDemandsError(null);
+      setFeeDemandsLoading(false);
+      return;
+    }
+    if (application.state_id === "DRAFT") {
+      // No demands exist for draft applications
+      setFeeDemands([]);
+      return;
+    }
+    if (isOffline) {
+      setFeeDemandsError(t("payment.offline_unavailable"));
+      setFeeDemandsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setFeeDemandsLoading(true);
+    setFeeDemandsError(null);
+
+    void (async () => {
+      try {
+        const res = await fetch(
+          `${apiBaseUrl}/api/v1/fees/demands/for-application/${application.arn}`,
+          authHeaders()
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(body?.message || body?.error || `API error ${res.status}`);
+        }
+        if (!cancelled) {
+          setFeeDemands(Array.isArray(body.demands) ? body.demands : Array.isArray(body) ? body : []);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setFeeDemands([]);
+          setFeeDemandsError(err instanceof Error ? err.message : "Failed to load fee demands");
+        }
+      } finally {
+        if (!cancelled) {
+          setFeeDemandsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [application.arn, application.state_id, hasFeeSchedule, isOffline, authHeaders, t]);
 
   // Build field map from form config for proper labels
   // NOTE: All hooks MUST be above any early returns to comply with Rules of Hooks
@@ -479,6 +713,48 @@ export default function ApplicationDetail({
     }
   };
 
+  // Generic payment initiation handler
+  const handleInitiatePayment = async (demandId: string) => {
+    if (isOffline) {
+      setPaymentError(t("payment.offline_unavailable"));
+      return;
+    }
+    setPaymentInitiating(demandId);
+    setPaymentError(null);
+    try {
+      const res = await fetch(
+        `${apiBaseUrl}/api/v1/payments`,
+        {
+          ...authHeaders(),
+          method: "POST",
+          body: JSON.stringify({
+            arn: application.arn,
+            demandId,
+            mode: "GATEWAY",
+            amount: feeDemands.find((d) => d.demand_id === demandId)?.total_amount || 0,
+          }),
+        }
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body?.message || body?.error || `API error ${res.status}`);
+      }
+      // Refresh demands to reflect new payment status
+      const refreshRes = await fetch(
+        `${apiBaseUrl}/api/v1/fees/demands/for-application/${application.arn}`,
+        authHeaders()
+      );
+      const refreshBody = await refreshRes.json().catch(() => ({}));
+      if (refreshRes.ok) {
+        setFeeDemands(Array.isArray(refreshBody.demands) ? refreshBody.demands : Array.isArray(refreshBody) ? refreshBody : []);
+      }
+    } catch (err) {
+      setPaymentError(err instanceof Error ? err.message : "Failed to initiate payment");
+    } finally {
+      setPaymentInitiating(null);
+    }
+  };
+
   // Declaration form helpers
   const activeDeclarationDocType = declarationDocTypeId
     ? docTypes.find((dt: any) => dt.docTypeId === declarationDocTypeId)
@@ -540,6 +816,18 @@ export default function ApplicationDetail({
               <span className="meta-value">{serviceConfig?.displayName || application.service_key}</span>
             </div>
           </div>
+          {application.state_id !== "DRAFT" && (
+            <button
+              type="button"
+              className="receipt-download-btn"
+              onClick={handleDownloadReceipt}
+              disabled={generatingReceipt}
+              aria-label={t("receipt.download")}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              {generatingReceipt ? t("receipt.downloading") : t("receipt.download")}
+            </button>
+          )}
         </div>
       </div>
       {feedback ? <Alert variant={feedback.variant} className="detail-feedback">{feedback.text}</Alert> : null}
@@ -597,6 +885,22 @@ export default function ApplicationDetail({
             <Button onClick={onSubmit} className="submit-button-large" fullWidth disabled={isOffline}>
               {t("app_detail.submit")}
             </Button>
+          )}
+          {application.state_id === "DRAFT" && (
+            <Button
+              onClick={() => setWithdrawConfirmOpen(true)}
+              className="withdraw-button"
+              variant="danger"
+              fullWidth
+              disabled={isOffline || withdrawing}
+            >
+              {t("withdraw.button")}
+            </Button>
+          )}
+          {withdrawFeedback && (
+            <Alert variant={withdrawFeedback.variant} className="withdraw-feedback">
+              {withdrawFeedback.text}
+            </Alert>
           )}
         </div>
       </div>
@@ -682,6 +986,48 @@ export default function ApplicationDetail({
         </div>
       )}
 
+      {/* Inspection Visibility for Citizens (C5) */}
+      {citizenInspections.length > 0 && (
+        <div className="detail-section inspection-section">
+          <h2 className="section-title"><Bilingual tKey="citizen_inspection.title" /></h2>
+          <div className="inspection-cards">
+            {citizenInspections.map((insp) => {
+              const statusKey =
+                insp.status === "SCHEDULED" ? "citizen_inspection.scheduled" :
+                insp.status === "IN_PROGRESS" ? "citizen_inspection.in_progress" :
+                insp.status === "COMPLETED" ? "citizen_inspection.completed" :
+                insp.status;
+              return (
+                <Card key={insp.inspection_id} className="inspection-card">
+                  <div className="inspection-card__row">
+                    <span className="inspection-card__label">{t("citizen_inspection.type")}</span>
+                    <span className="inspection-card__value">{insp.inspection_type?.replace(/_/g, " ") || "--"}</span>
+                  </div>
+                  <div className="inspection-card__row">
+                    <span className="inspection-card__label">{t("citizen_inspection.status")}</span>
+                    <span className={`inspection-card__value badge ${insp.status === "COMPLETED" ? "badge-approved" : "badge-pending"}`}>
+                      {t(statusKey, { defaultValue: insp.status })}
+                    </span>
+                  </div>
+                  {insp.scheduled_at && (
+                    <div className="inspection-card__row">
+                      <span className="inspection-card__label">{t("citizen_inspection.scheduled")}</span>
+                      <span className="inspection-card__value">{new Date(insp.scheduled_at).toLocaleDateString()}</span>
+                    </div>
+                  )}
+                  {insp.outcome && (
+                    <div className="inspection-card__row">
+                      <span className="inspection-card__label">{t("citizen_inspection.outcome")}</span>
+                      <span className="inspection-card__value">{insp.outcome.replace(/_/g, " ")}</span>
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {application.service_key === "no_due_certificate" && (ndcPaymentStatusLoading || ndcPaymentStatus) && (
         <div className="detail-section" id="ndc-payment-ledger">
           <h2 className="section-title"><Bilingual tKey="ndc.payment_status" /></h2>
@@ -731,6 +1077,7 @@ export default function ApplicationDetail({
               <div className="ndc-payment-actions">
                 {ndcPaymentStatus.certificateEligible ? (
                   <button
+                    type="button"
                     className="download-cert-link-large"
                     onClick={() => handleDownload(outputDownloadUrl, `NDC-${application.arn.replace(/\//g, "-")}.pdf`)}
                     disabled={downloading}
@@ -814,7 +1161,7 @@ export default function ApplicationDetail({
                       <span className="read-meta-value">{formatCurrency(due.balanceAmount)}</span>
                     </div>
                   </div>
-                  <div className="query-response-actions" style={{ marginTop: "0.5rem" }}>
+                  <div className="query-response-actions" style={{ marginTop: "var(--space-2)" }}>
                     <Button
                       variant="primary"
                       className="submit-button-large"
@@ -832,6 +1179,126 @@ export default function ApplicationDetail({
           </Button>
         </div>
       ) : null}
+
+      {/* Generic Fee Payment Section (non-NDC services with feeSchedule) */}
+      {hasFeeSchedule && application.state_id !== "DRAFT" && (
+        <div className="detail-section" id="fee-payment-section">
+          <h2 className="section-title"><Bilingual tKey="payment.title" /></h2>
+
+          {feeDemandsLoading ? (
+            <div style={{ display: "grid", gap: "var(--space-2)" }}>
+              <div className="ui-skeleton" style={{ height: "2.6rem" }} />
+              <div className="ui-skeleton" style={{ height: "6rem" }} />
+            </div>
+          ) : null}
+
+          {feeDemandsError ? <Alert variant="warning">{feeDemandsError}</Alert> : null}
+
+          {!feeDemandsLoading && !feeDemandsError && feeDemands.length === 0 && (
+            <>
+              {/* Show fee schedule from config when no demands exist yet */}
+              <div className="fee-breakdown-card">
+                <h3 className="fee-breakdown-title">{t("payment.fee_breakdown")}</h3>
+                <div className="fee-breakdown-lines">
+                  {(serviceConfig?.feeSchedule?.default || []).map((fee: FeeItem, idx: number) => (
+                    <div key={idx} className="fee-breakdown-row">
+                      <span className="fee-breakdown-label">{fee.description || fee.feeType}</span>
+                      <span className="fee-breakdown-amount">{formatCurrency(fee.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="fee-breakdown-row fee-breakdown-total">
+                  <span className="fee-breakdown-label">{t("payment.total")}</span>
+                  <strong className="fee-breakdown-amount">
+                    {formatCurrency(
+                      (serviceConfig?.feeSchedule?.default || []).reduce(
+                        (sum: number, fee: FeeItem) => sum + (fee.amount || 0), 0
+                      )
+                    )}
+                  </strong>
+                </div>
+              </div>
+              <Alert variant="info">{t("payment.status_pending")}</Alert>
+            </>
+          )}
+
+          {!feeDemandsLoading && feeDemands.length > 0 && (
+            <div className="fee-demands-list">
+              {feeDemands.map((demand) => {
+                const isPaid = demand.status === "PAID" || demand.status === "WAIVED";
+                const remaining = demand.total_amount - demand.paid_amount;
+                return (
+                  <Card key={demand.demand_id} className={`read-only-card fee-demand-card ${isPaid ? "fee-demand-paid" : ""}`}>
+                    <div className="read-card-header">
+                      <p className="read-card-title">
+                        {demand.demand_number || demand.demand_id.slice(0, 8)}
+                      </p>
+                      <span className={`doc-verification-badge ${isPaid ? "status-verified" : demand.status === "PARTIALLY_PAID" ? "status-query" : "status-pending"}`}>
+                        {isPaid
+                          ? t("payment.status_completed")
+                          : demand.status === "PARTIALLY_PAID"
+                            ? t("payment.status_pending")
+                            : t("payment.status_pending")
+                        }
+                      </span>
+                    </div>
+
+                    {/* Fee breakdown lines */}
+                    {demand.lineItems && demand.lineItems.length > 0 && (
+                      <div className="fee-breakdown-lines">
+                        {demand.lineItems.map((li, idx) => (
+                          <div key={idx} className="fee-breakdown-row">
+                            <span className="fee-breakdown-label">{li.description || li.fee_head_code}</span>
+                            <span className="fee-breakdown-amount">{formatCurrency(li.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="read-card-grid">
+                      <div className="read-meta-row">
+                        <span className="read-meta-key">{t("payment.total")}</span>
+                        <span className="read-meta-value">{formatCurrency(demand.total_amount)}</span>
+                      </div>
+                      {demand.paid_amount > 0 && (
+                        <div className="read-meta-row">
+                          <span className="read-meta-key">{t("payment.paid_amount")}</span>
+                          <span className="read-meta-value">{formatCurrency(demand.paid_amount)}</span>
+                        </div>
+                      )}
+                      {!isPaid && remaining > 0.01 && (
+                        <div className="read-meta-row">
+                          <span className="read-meta-key">{t("payment.remaining")}</span>
+                          <strong className="read-meta-value">{formatCurrency(remaining)}</strong>
+                        </div>
+                      )}
+                    </div>
+
+                    {!isPaid && remaining > 0.01 && (
+                      <div className="fee-demand-actions">
+                        <p className="timeline-note">{t("payment.gateway_redirect")}</p>
+                        <Button
+                          variant="primary"
+                          className="submit-button-large"
+                          onClick={() => void handleInitiatePayment(demand.demand_id)}
+                          disabled={isOffline || Boolean(paymentInitiating)}
+                        >
+                          {paymentInitiating === demand.demand_id
+                            ? t("payment.initiating")
+                            : `${t("payment.pay_now")} ${formatCurrency(remaining)}`
+                          }
+                        </Button>
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+
+          {paymentError ? <Alert variant="error">{paymentError}</Alert> : null}
+        </div>
+      )}
 
       {/* Application Data */}
       {groupedData.length > 0 && (
@@ -1101,8 +1568,9 @@ export default function ApplicationDetail({
         application.disposal_type === "REJECTED" ||
         (application.service_key === "no_due_certificate" && ndcPaymentStatus?.certificateEligible)) && (
         <div className="detail-section">
-          {downloadError && <p className="error-message" style={{ marginBottom: "0.5rem" }}>{downloadError}</p>}
+          {downloadError && <p className="error-message" style={{ marginBottom: "var(--space-2)" }}>{downloadError}</p>}
           <button
+            type="button"
             className="download-cert-link-large"
             onClick={() => handleDownload(
               outputDownloadUrl,
@@ -1132,6 +1600,29 @@ export default function ApplicationDetail({
           onCancel={() => setDeclarationDocTypeId(null)}
         />
       )}
+
+      {/* Withdrawal Confirmation Modal (C3) */}
+      <Modal
+        open={withdrawConfirmOpen}
+        onClose={() => setWithdrawConfirmOpen(false)}
+        title={t("withdraw.confirm_title")}
+        description={t("withdraw.confirm_message")}
+        actions={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setWithdrawConfirmOpen(false)}>
+              {t("cancel")}
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={() => void handleWithdraw()}
+              disabled={withdrawing}
+            >
+              {withdrawing ? t("common.loading") : t("withdraw.button")}
+            </Button>
+          </>
+        }
+      />
     </>
   );
 }

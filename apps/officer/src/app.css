@@ -417,12 +417,12 @@
 .search-button,
 .search-toggle-btn {
   background: var(--color-brand);
-  color: #fff;
+  color: var(--color-text-on-brand);
 }
 
 .export-button {
   background: var(--color-success);
-  color: #fff;
+  color: var(--color-text-on-brand);
 }
 
 .cancel-action {
@@ -596,7 +596,64 @@
   gap: var(--space-1);
 }
 
-@media (max-width: 32rem) {
+/* Workload dashboard stats */
+.workload-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+@media (max-width: 48rem) {
+  .workload-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.workload-stats__card {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  text-align: center;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e5e7eb);
+}
+
+.workload-stats__count {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.workload-stats__label {
+  display: block;
+  font-size: 0.8125rem;
+  margin-top: var(--space-1);
+  opacity: 0.8;
+}
+
+.workload-stats__card--overdue {
+  border-color: var(--color-error, #dc2626);
+}
+.workload-stats__card--overdue .workload-stats__count {
+  color: var(--color-error, #dc2626);
+}
+
+.workload-stats__card--due-soon {
+  border-color: var(--color-warning, #d97706);
+}
+.workload-stats__card--due-soon .workload-stats__count {
+  color: var(--color-warning, #d97706);
+}
+
+.workload-stats__card--on-track {
+  border-color: var(--color-success, #16a34a);
+}
+.workload-stats__card--on-track .workload-stats__count {
+  color: var(--color-success, #16a34a);
+}
+
+@media (max-width: 22.5rem) {
   .task-card {
     flex-direction: column;
     align-items: stretch;
@@ -614,4 +671,80 @@
     display: grid;
     grid-template-columns: 1fr;
   }
+}
+
+/* SLA escalation badges */
+.sla-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.5;
+  margin-left: var(--space-2);
+  vertical-align: middle;
+}
+.sla-badge--overdue {
+  background: var(--color-error, #dc2626);
+  color: var(--color-text-on-brand);
+}
+.sla-badge--due-soon {
+  background: var(--color-warning, #d97706);
+  color: var(--color-text-on-brand);
+}
+.sla-badge--on-track {
+  background: var(--color-success, #16a34a);
+  color: var(--color-text-on-brand);
+}
+
+/* Inbox sort bar */
+.inbox-sort-bar {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.inbox-sort-btn {
+  min-height: 2.75rem;
+}
+
+/* Notification bell & badge */
+.notification-bell {
+  position: relative;
+  background: none;
+  border: none;
+  cursor: pointer;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  font-size: 1.25rem;
+  color: var(--color-text);
+}
+
+.notification-bell:hover,
+.notification-bell:active {
+  background: var(--color-surface-muted);
+}
+
+.notification-badge {
+  position: absolute;
+  top: -0.25rem;
+  right: -0.25rem;
+  background: var(--color-error, #dc2626);
+  color: var(--color-text-on-brand);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.25rem;
+  line-height: 1;
+  pointer-events: none;
 }

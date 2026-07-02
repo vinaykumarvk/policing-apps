@@ -1,4 +1,4 @@
-import { createRemoteJWKSet, jwtVerify, type JWTVerifyResult } from "jose";
+import type { JWTVerifyResult } from "jose";
 import type { AuthPayload, QueryFn } from "../types";
 import type { OidcConfig } from "./types";
 import { logInfo, logError, logWarn } from "../logging/logger";
@@ -13,11 +13,22 @@ interface OidcDiscovery {
 
 interface OidcState {
   discovery: OidcDiscovery | null;
-  jwks: ReturnType<typeof createRemoteJWKSet> | null;
+  jwks: RemoteJWKSet | null;
   discoveredAt: number;
 }
 
 const DISCOVERY_TTL_MS = 3600_000; // 1 hour
+type JoseModule = typeof import("jose");
+type RemoteJWKSet = ReturnType<JoseModule["createRemoteJWKSet"]>;
+const dynamicImport = new Function("specifier", "return import(specifier)") as (
+  specifier: string,
+) => Promise<JoseModule>;
+let joseModulePromise: Promise<JoseModule> | null = null;
+
+function loadJose(): Promise<JoseModule> {
+  joseModulePromise ??= dynamicImport("jose");
+  return joseModulePromise;
+}
 
 export function createOidcAuth(config: OidcConfig, queryFn: QueryFn) {
   const {
@@ -61,7 +72,8 @@ export function createOidcAuth(config: OidcConfig, queryFn: QueryFn) {
     }
 
     state.discovery = discovery;
-    state.jwks = createRemoteJWKSet(new URL(discovery.jwks_uri));
+    const jose = await loadJose();
+    state.jwks = jose.createRemoteJWKSet(new URL(discovery.jwks_uri));
     state.discoveredAt = Date.now();
 
     return discovery;
@@ -79,12 +91,13 @@ export function createOidcAuth(config: OidcConfig, queryFn: QueryFn) {
       await discover();
       if (!state.jwks) return null;
 
-      const verifyOpts: Parameters<typeof jwtVerify>[2] = {
+      const verifyOpts: Parameters<JoseModule["jwtVerify"]>[2] = {
         issuer: issuerUrl,
         audience: clientId,
       };
 
-      const result: JWTVerifyResult = await jwtVerify(idToken, state.jwks, verifyOpts);
+      const jose = await loadJose();
+      const result: JWTVerifyResult = await jose.jwtVerify(idToken, state.jwks, verifyOpts);
 
       // Validate nonce if provided — prevents replay attacks
       if (expectedNonce) {

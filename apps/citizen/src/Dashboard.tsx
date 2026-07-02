@@ -957,6 +957,13 @@ export default function Dashboard({
         </div>
       )}
 
+      {/* Assisted Channel Info (C2) */}
+      <div className="section assisted-channel-section">
+        <Alert variant="info" className="assisted-channel-info">
+          {t("assisted.info")}
+        </Alert>
+      </div>
+
       {/* 7. Empty State (first-time users only) */}
       {!stats && applications.length === 0 && !hasPendingActions && (
         <div className="empty-state">

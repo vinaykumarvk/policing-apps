@@ -803,10 +803,15 @@ export async function registerSubjectRoutes(app: FastifyInstance): Promise<void>
   app.get("/api/v1/subjects/:id/transitions", {
     schema: { params: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
   }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const result = await query(`SELECT state_id FROM subject_profile WHERE subject_id = $1`, [id]);
-    if (result.rows.length === 0) return send404(reply, "SUBJECT_NOT_FOUND", "Subject not found");
-    return { transitions: getAvailableTransitions("dopams_subject", result.rows[0].state_id) };
+    try {
+      const { id } = request.params as { id: string };
+      const result = await query(`SELECT state_id FROM subject_profile WHERE subject_id = $1`, [id]);
+      if (result.rows.length === 0) return send404(reply, "SUBJECT_NOT_FOUND", "Subject not found");
+      return { transitions: getAvailableTransitions("dopams_subject", result.rows[0].state_id) };
+    } catch (err) {
+      request.log.error(err, "Failed to fetch subject transitions");
+      reply.code(500).send({ error: "INTERNAL_ERROR", message: "Failed to fetch subject transitions" });
+    }
   });
 
   app.post("/api/v1/subjects/:id/transition", {
@@ -816,17 +821,22 @@ export async function registerSubjectRoutes(app: FastifyInstance): Promise<void>
     },
   }, async (request, reply) => {
     if (!requireSubjectWrite(request, reply)) return;
-    const { id } = request.params as { id: string };
-    const { transitionId, remarks } = request.body as { transitionId: string; remarks?: string };
-    const { userId, roles } = request.authUser!;
+    try {
+      const { id } = request.params as { id: string };
+      const { transitionId, remarks } = request.body as { transitionId: string; remarks?: string };
+      const { userId, roles } = request.authUser!;
 
-    const result = await executeTransition(
-      id, "dopams_subject", transitionId, userId, "OFFICER", roles, remarks,
-    );
-    if (!result.success) {
-      if (result.error === "ENTITY_NOT_FOUND") return send404(reply, "SUBJECT_NOT_FOUND", "Subject not found");
-      return sendError(reply, 409, result.error || "TRANSITION_FAILED", "Subject transition failed");
+      const result = await executeTransition(
+        id, "dopams_subject", transitionId, userId, "OFFICER", roles, remarks,
+      );
+      if (!result.success) {
+        if (result.error === "ENTITY_NOT_FOUND") return send404(reply, "SUBJECT_NOT_FOUND", "Subject not found");
+        return sendError(reply, 409, result.error || "TRANSITION_FAILED", "Subject transition failed");
+      }
+      return { success: true, newStateId: result.newStateId };
+    } catch (err) {
+      request.log.error(err, "Failed to transition subject");
+      reply.code(500).send({ error: "INTERNAL_ERROR", message: "Failed to transition subject" });
     }
-    return { success: true, newStateId: result.newStateId };
   });
 }

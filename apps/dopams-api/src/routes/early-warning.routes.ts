@@ -1,6 +1,9 @@
 import { FastifyInstance } from "fastify";
 import { query } from "../db";
 import { sendError, send404 } from "../errors";
+import { createRoleGuard } from "@puda/api-core";
+
+const requireAnalyst = createRoleGuard(["INTELLIGENCE_ANALYST", "SUPERVISORY_OFFICER", "ADMINISTRATOR"]);
 
 export async function registerEarlyWarningRoutes(app: FastifyInstance): Promise<void> {
 
@@ -18,6 +21,7 @@ export async function registerEarlyWarningRoutes(app: FastifyInstance): Promise<
       },
     },
   }, async (request, reply) => {
+    if (!requireAnalyst(request, reply)) return;
     try {
       const { termType, termValue, hoursBack } = request.query as {
         termType?: string; termValue?: string; hoursBack?: number;
@@ -56,6 +60,7 @@ export async function registerEarlyWarningRoutes(app: FastifyInstance): Promise<
       },
     },
   }, async (request, reply) => {
+    if (!requireAnalyst(request, reply)) return;
     try {
       const { limit: rawLimit } = request.query as { limit?: number };
       const limit = Math.min(rawLimit ?? 100, 200);
@@ -109,11 +114,12 @@ export async function registerEarlyWarningRoutes(app: FastifyInstance): Promise<
       },
     },
   }, async (request, reply) => {
+    if (!requireAnalyst(request, reply)) return;
     try {
       const { status } = request.query as { status?: string };
       const filterStatus = status || "PENDING";
       const result = await query(
-        `SELECT * FROM nps_candidate WHERE status = $1 ORDER BY occurrence_count DESC`,
+        `SELECT * FROM nps_candidate WHERE status = $1 ORDER BY occurrence_count DESC LIMIT 500`,
         [filterStatus],
       );
       return { candidates: result.rows };

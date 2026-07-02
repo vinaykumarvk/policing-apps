@@ -136,6 +136,19 @@ Include a Mermaid diagram showing component relationships and data flow.
 - Image optimization: appropriate formats, sizes, lazy loading.
 - Render performance: no expensive computations in render path.
 
+Frontend performance verification:
+
+```bash
+# Build and check output sizes
+npm run build --workspace=<app-dir> 2>&1 | tail -20
+# Check for barrel re-exports that defeat tree-shaking
+rg -n "export \* from" --glob '*.ts' --glob '*.tsx' --glob '!node_modules'
+# Check for React.lazy / dynamic imports (code splitting evidence)
+rg -n "React\.lazy|import\(" --glob '*.tsx' | head -15
+# Check for large inline assets
+find <app-dir>/public -type f -size +100k 2>/dev/null
+```
+
 ### D) Scalability Patterns
 
 - Stateless services (no in-memory session state that breaks with multiple instances).
@@ -367,6 +380,18 @@ Non-blocking gates:
 3. **Scalability** — Stateless services, appropriate connection limits, queue-based async.
 4. **CI/CD completeness** — All recommended gates present and passing.
 
+### Gate-to-Phase Mapping
+
+| Gate | Primary Phase(s) | Key Evidence |
+|------|-----------------|--------------|
+| Build health | Phase 6A, 6B | Dockerfile builds, entrypoint alignment |
+| Architecture boundaries | Phase 2A, 2C, 2D | madge output, import analysis |
+| Reliability | Phase 4A-4E | Shutdown handlers, health checks, transactions |
+| Container correctness | Phase 6A-6C | Dockerfile audit, layer caching |
+| Environment completeness | Phase 8A-8C | Env var cross-reference |
+| Migration safety | Phase 9C | Idempotent migrations, backward compat |
+| Deployment pipeline | Phase 7A-7D | CI config, rollback capability |
+
 Verdict policy:
 
 - Any blocking gate `FAIL` => `NOT-READY`.
@@ -385,9 +410,22 @@ Non-Blocking Gates:    X/4 PASS, Y/4 PARTIAL, Z/4 FAIL
 Readiness Verdict:     [READY | CONDITIONAL | NOT-READY]
 ```
 
+## Phase 10.1: Common Fix Patterns
+
+| Finding | Fix | Rollback |
+|---------|-----|----------|
+| Missing health check | Add `GET /health` route returning `{ status: "ok" }` with DB ping | Revert the route file |
+| N+1 query in loop | Replace with single query using `WHERE id = ANY($1)` or JOIN | Revert query change |
+| Missing SIGTERM handler | Add `process.on("SIGTERM", async () => { await server.close(); })` | Revert signal handler |
+| Unbounded query | Add `LIMIT` clause and pagination parameters | Revert query change |
+| Non-root Docker user missing | Add `USER 1000:1000` after final `COPY` in Dockerfile | Remove the USER line |
+| Missing `.dockerignore` | Create file excluding `node_modules`, `.git`, `dist`, `.env`, `docs` | Delete the file |
+| Hardcoded localhost in prod code | Replace with `process.env.HOST \|\| "0.0.0.0"` | Revert to hardcoded value |
+| Missing env var documentation | Add to `.env.example` with placeholder value | Remove the line |
+
 ## Phase 11: Bugs and Foot-Guns
 
-Minimum counts:
+Minimum counts (high-impact = P0+P1, medium-impact = P2):
 
 - Full-repo review: `10+` high-impact and `10+` medium-impact findings.
 - Scoped review: `5+` high-impact and `5+` medium-impact findings.
@@ -439,6 +477,12 @@ Effort:
 
 Each task must include exact file targets and verification steps.
 
+For every fix recommendation, include rollback guidance:
+
+- **S-effort fixes** (config, single-line): Rollback = revert the line.
+- **M-effort fixes** (new middleware, migration): Rollback = revert file + verify no dependent changes.
+- **L-effort fixes** (architectural): Rollback = revert branch; specify which downstream changes depend on this fix.
+
 ## Phase 15: Verification Commands
 
 Adapt commands to the discovered tech stack. Examples:
@@ -454,14 +498,15 @@ npx tsc --noEmit 2>&1 | head -50
 # Dependency graph
 npm ls --all --depth=1 2>&1 | head -50
 
-# Circular dependency detection
-npx madge --circular --extensions ts src/ 2>/dev/null || echo "madge not available"
+# Circular dependency detection (pass specific app/package dir, not bare src/)
+npx madge --circular --extensions ts apps/api/src/ 2>/dev/null || echo "madge not available"
+# For monorepo: run per-app — npx madge --circular --extensions ts <app-dir>/src/
 
 # Docker build (if daemon available)
 docker build -f Dockerfile -t test-build . 2>&1 | tail -30
 
-# Port binding verification
-rg -n "listen\(|\.port|EXPOSE" --glob '*.ts' --glob '*.js' --glob 'Dockerfile*' --glob '*.yml'
+# Port binding verification (narrowed pattern to reduce false positives)
+rg -n "\.listen\(|PORT\s*[:=]|EXPOSE " --glob '*.ts' --glob '*.js' --glob 'Dockerfile*' --glob '*.yml'
 
 # Health endpoint verification
 rg -n "health|ready|liveness" --glob '*.ts' --glob '*.js' -i
@@ -473,6 +518,8 @@ rg -n "SIGTERM|SIGINT|graceful|shutdown" --glob '*.ts' --glob '*.js'
 rg -n "process\.env\.|os\.environ|env\(" --glob '*.ts' --glob '*.js' --glob '*.py'
 
 # N+1 query patterns
+# NOTE: Not all matches are true N+1 — loops over a small fixed set (e.g., config keys) are usually fine.
+# True N+1: loop iterates over user-data rows and issues a query per row. Verify the loop source.
 rg -n "for.*await.*query\(|\.forEach.*await.*find|\.map.*await" --glob '*.ts' --glob '*.js'
 
 # Transaction usage

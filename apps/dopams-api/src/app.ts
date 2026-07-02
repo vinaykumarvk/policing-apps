@@ -7,6 +7,7 @@ import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { registerAuthMiddleware, DEV_JWT_SECRET } from "./middleware/auth";
+import { registerDopamsPlatformAuthMiddleware } from "./middleware/platform-auth";
 import { registerAuditLogger } from "./middleware/audit-logger";
 import { setLogContext } from "./log-context";
 import { registerAuthRoutes } from "./routes/auth.routes";
@@ -94,7 +95,18 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
   await app.register(cors, {
     origin: allowedOrigins,
     credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization", "X-Idempotency-Key"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Idempotency-Key",
+      "X-Platform-Launch",
+      "X-Platform-Claims",
+      "X-Platform-Claims-Verified",
+      "X-Platform-Break-Glass",
+      "X-Platform-Break-Glass-Until",
+      "X-Platform-Break-Glass-Reason",
+      "X-Correlation-ID",
+    ],
   });
   await app.register(cookie);
 
@@ -189,6 +201,7 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
   });
 
   registerAuthMiddleware(app);
+  registerDopamsPlatformAuthMiddleware(app);
   registerAuditLogger(app);
 
   // Idempotency middleware for write endpoints

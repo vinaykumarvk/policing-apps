@@ -1,0 +1,400 @@
+version: "1.0"
+generated_at: "2026-07-02T00:06:17+05:30"
+source_plan: "docs/spec/policing-platform-integration-execution-plan.md"
+council_report: "doc/evaluations/policing-platform-integration-council-report-20260702-000617.md"
+selected_path: "full"
+strategy: "platform-shell-over-bounded-services"
+release_1_scope:
+  principle: "prove the platform control plane before broad domain exposure"
+  pilot_domains:
+    - "dopams-api"
+    - "iqw-api"
+  planned_not_active_until_gated:
+    - "social-media-api"
+    - "forensic-api"
+    - "knowledge-api"
+global_release_gates:
+  - id: "G-SEC-001"
+    rule: "No active domain route appears in the platform app registry until that domain enforces platform claims server-side."
+  - id: "G-SEC-002"
+    rule: "Every platform allow/deny decision records claims snapshot, policy version, source/projection version, redaction decision, service path, outcome, and correlation ID."
+  - id: "G-SEC-003"
+    rule: "Central evidence APIs do not return storage_uri by default."
+  - id: "G-SEC-004"
+    rule: "Knowledge query UI remains disabled until pre-retrieval scope filtering and citation filtering are proven."
+  - id: "G-OPS-001"
+    rule: "Cutover and run-state governance are documented before any production pilot."
+parallelizable_groups:
+  - id: "PG-1"
+    name: "Inventory plus control-plane contracts"
+    phases:
+      - "P0"
+      - "P2"
+      - "P3"
+    note: "Repo inventory, auth contract, and ABAC/threat model can proceed in parallel, but imports wait for secret hygiene."
+  - id: "PG-2"
+    name: "Shell/API scaffolding"
+    phases:
+      - "P6"
+      - "P7"
+    note: "API and UI shell can scaffold after contract drafts, but active route exposure waits for pilot domain auth gates."
+  - id: "PG-3"
+    name: "Projection design"
+    phases:
+      - "P8"
+      - "P9"
+    note: "Case and evidence schemas can be designed together; implementation waits for ABAC and pilot auth."
+  - id: "PG-4"
+    name: "Knowledge decision and deployment health"
+    phases:
+      - "P10"
+      - "P11"
+    note: "Knowledge runtime comparison and local health contracts can run while pilot adapters are built."
+phases:
+  - id: "P0"
+    category: "CONFLICT/migration"
+    name: "Source Freeze, Secret Hygiene, and Import Map"
+    requirements:
+      - "Freeze source repos: policing-apps, compliant-parser, RAG-app."
+      - "Confirm excluded/reference repos unless user changes scope."
+      - "Run secret scan and quarantine/rotate sensitive local files before import."
+      - "Create deterministic import allowlist with checksums."
+    dependencies: []
+    expected_files:
+      - "docs/spec/source-inventory.md"
+      - "docs/spec/secret-hygiene-report.md"
+      - "docs/spec/import-map.yaml"
+    generated_tests:
+      - "scripts/check-import-allowlist.mjs"
+      - "scripts/check-no-known-secret-paths.mjs"
+    review_criteria:
+      - "No known real secrets in selected import files."
+      - "Each source subtree has owner, target path, checksum, and import status."
+    rollback_retry_policy:
+      rollback: "Remove unmerged imported subtree; do not rewrite source histories."
+      retry: "Re-run scan after rotation/quarantine and update import checksums."
+
+  - id: "P1"
+    category: "CONFLICT/migration"
+    name: "Target Monorepo Layout"
+    requirements:
+      - "Define final repo structure without breaking existing app commands."
+      - "Map existing apps to target apps/domains/packages/deploy paths."
+      - "Define ownership and import rules for TypeScript and Python code."
+    dependencies:
+      - "P0"
+    expected_files:
+      - "docs/spec/repo-layout.md"
+      - "package.json"
+      - "docs/spec/import-map.yaml"
+    generated_tests:
+      - "npm run build:packages"
+      - "npm run typecheck"
+    review_criteria:
+      - "Existing app paths remain runnable or have documented replacements."
+      - "No package import crosses ownership boundaries without a shared package."
+    rollback_retry_policy:
+      rollback: "Restore previous workspace mappings; keep source apps unchanged."
+      retry: "Import one subtree at a time and rerun package/type checks."
+
+  - id: "P2"
+    category: "PARTIAL modifications"
+    name: "Platform Auth Claim and Entitlement Contract"
+    requirements:
+      - "Define canonical platform claims."
+      - "Define module, domain, org, jurisdiction, clearance, assignment, purpose, and MFA dimensions."
+      - "Create seed personas and versioned claim fixtures for TypeScript and Python tests."
+    dependencies:
+      - "P0"
+    expected_files:
+      - "docs/spec/auth-entitlements-contract.md"
+      - "docs/spec/auth-claim-fixtures.json"
+      - "packages/authz/src/claims.ts"
+      - "packages/authz/src/entitlements.ts"
+    generated_tests:
+      - "packages/authz/src/__tests__/claims.test.ts"
+      - "packages/authz/src/__tests__/entitlements.test.ts"
+      - "tests/python/test_platform_claims.py"
+    review_criteria:
+      - "Claims are versioned and backward-compatible."
+      - "Missing/stale claims deny by default."
+      - "Fixtures cover desk operator, IO, analyst, forensic analyst, supervisor, legal reviewer, admin, auditor."
+    rollback_retry_policy:
+      rollback: "Disable platform auth adapter use; leave domain-local auth active as bootstrap."
+      retry: "Revise claim version and regenerate fixtures."
+
+  - id: "P3"
+    category: "PARTIAL modifications"
+    name: "Data Classification, ABAC, Threat Model, and Decision Evidence"
+    requirements:
+      - "Define field-level classification and redaction policy for platform_case and platform_evidence."
+      - "Define ABAC policy inputs and deny-by-default behavior."
+      - "Threat-model routes, projections, evidence metadata, and knowledge retrieval."
+      - "Define immutable decision evidence schema for allow and deny."
+    dependencies:
+      - "P2"
+    expected_files:
+      - "docs/spec/access-control-threat-model.md"
+      - "docs/spec/data-classification-policy.md"
+      - "docs/spec/authorization-decision-evidence.md"
+      - "packages/authz/src/abac.ts"
+      - "packages/audit-ledger/src/decision-evidence.ts"
+    generated_tests:
+      - "packages/authz/src/__tests__/abac.negative.test.ts"
+      - "packages/audit-ledger/src/__tests__/decision-evidence.test.ts"
+    review_criteria:
+      - "Every pilot read path has a policy and decision-evidence contract."
+      - "Decision evidence includes claims snapshot, policy version, source/projection version, redaction decision, path, outcome, correlation ID."
+    rollback_retry_policy:
+      rollback: "Block app registry active routes and projections."
+      retry: "Patch policy matrix and rerun negative tests."
+
+  - id: "P4"
+    category: "MISSING data"
+    name: "Pilot Users, Cases, Evidence, and Classification Fixtures"
+    requirements:
+      - "Create pilot user/persona seed data."
+      - "Create one DOPAMS plus IQW linked case fixture."
+      - "Create pilot evidence metadata fixture with legal hold and classification variants."
+      - "Create denial fixtures for wrong module, wrong jurisdiction, stale projection, and legal hold conflict."
+    dependencies:
+      - "P2"
+      - "P3"
+    expected_files:
+      - "docs/spec/pilot-fixtures.md"
+      - "fixtures/platform/users.json"
+      - "fixtures/platform/cases.json"
+      - "fixtures/platform/evidence.json"
+      - "fixtures/platform/denials.json"
+    generated_tests:
+      - "packages/authz/src/__tests__/pilot-personas.test.ts"
+      - "apps/platform-api/src/__tests__/fixtures.test.ts"
+    review_criteria:
+      - "Fixtures exercise allow, deny, redaction, legal hold, stale state, and revocation."
+      - "No fixture contains real PII or real active case data."
+    rollback_retry_policy:
+      rollback: "Disable pilot fixture loading."
+      retry: "Regenerate fixtures from synthetic data only."
+
+  - id: "P5"
+    category: "service"
+    name: "Platform Service Packages"
+    requirements:
+      - "Create shared authz, audit-ledger, case-core, and evidence-core packages."
+      - "Keep packages independent from domain internals."
+      - "Expose typed contracts for platform API and adapters."
+    dependencies:
+      - "P2"
+      - "P3"
+    expected_files:
+      - "packages/authz/package.json"
+      - "packages/audit-ledger/package.json"
+      - "packages/case-core/package.json"
+      - "packages/evidence-core/package.json"
+    generated_tests:
+      - "npm --workspace packages/authz run test"
+      - "npm --workspace packages/audit-ledger run test"
+      - "npm --workspace packages/case-core run test"
+      - "npm --workspace packages/evidence-core run test"
+    review_criteria:
+      - "No TypeScript any/as any in new packages."
+      - "All package APIs have unit tests and explicit error behavior."
+    rollback_retry_policy:
+      rollback: "Remove package references from app workspaces."
+      retry: "Patch package contract and rerun package tests."
+
+  - id: "P6"
+    category: "API"
+    name: "Platform API and App Registry"
+    requirements:
+      - "Create apps/platform-api."
+      - "Expose /api/v1/platform/me, /apps, /entitlements/check, /health, /ready."
+      - "Represent app states as planned, pilot, available, blocked."
+      - "No active route unless domain has passed server-side platform-claim gate."
+    dependencies:
+      - "P3"
+      - "P5"
+    expected_files:
+      - "apps/platform-api/package.json"
+      - "apps/platform-api/src/app.ts"
+      - "apps/platform-api/src/routes/platform.routes.ts"
+      - "apps/platform-api/src/app-registry.ts"
+      - "apps/platform-api/src/migrations/001_platform_foundation.sql"
+    generated_tests:
+      - "apps/platform-api/src/__tests__/app-registry.test.ts"
+      - "apps/platform-api/src/__tests__/entitlements.test.ts"
+      - "apps/platform-api/src/__tests__/decision-evidence.test.ts"
+    review_criteria:
+      - "Blocked/planned modules never include active launch URLs."
+      - "Denied entitlement checks emit decision evidence."
+      - "Health aggregation reports degraded states with actionable reason codes."
+    rollback_retry_policy:
+      rollback: "Stop platform-api; existing domain apps remain independently routable."
+      retry: "Patch registry config and rerun platform API tests."
+
+  - id: "P7"
+    category: "UI"
+    name: "Platform Web Shell"
+    requirements:
+      - "Create apps/platform-web."
+      - "Render entitled modules and status labels from platform API."
+      - "Render pilot links only for gated DOPAMS and IQW routes."
+      - "Render planned modules without active links."
+    dependencies:
+      - "P6"
+    expected_files:
+      - "apps/platform-web/package.json"
+      - "apps/platform-web/src/App.tsx"
+      - "apps/platform-web/src/routes.tsx"
+      - "apps/platform-web/src/components/AppLauncher.tsx"
+      - "apps/platform-web/src/components/DecisionAuditPanel.tsx"
+    generated_tests:
+      - "apps/platform-web/src/__tests__/app-launcher.test.tsx"
+      - "e2e/tests/platform-app-registry.spec.ts"
+    review_criteria:
+      - "UI never uses local hardcoded entitlements."
+      - "Unavailable modules are visually distinct from available modules."
+      - "No visible text instructs users how the app works beyond necessary labels."
+    rollback_retry_policy:
+      rollback: "Serve existing domain UIs directly."
+      retry: "Patch shell routes/components and rerun UI/E2E tests."
+
+  - id: "P8"
+    category: "service"
+    name: "Pilot Domain Auth Adapters"
+    requirements:
+      - "Adapt DOPAMS to verify platform claims server-side."
+      - "Add IQW/FastAPI platform claim validation or gateway middleware."
+      - "Keep local auth as audited, time-boxed bootstrap/break-glass only."
+      - "Add revocation, wrong module, wrong jurisdiction, wrong clearance, and stale claim tests."
+    dependencies:
+      - "P5"
+      - "P6"
+    expected_files:
+      - "apps/dopams-api/src/middleware/platform-auth.ts"
+      - "docs/spec/iqw-platform-auth-adapter.md"
+      - "domains/iqw-api/src/middleware/platform_auth.py"
+    generated_tests:
+      - "apps/dopams-api/src/__tests__/platform-auth.test.ts"
+      - "tests/python/test_iqw_platform_auth.py"
+    review_criteria:
+      - "DOPAMS and IQW reject unauthorized platform claims."
+      - "Local auth cannot bypass platform decision evidence for platform-launched routes."
+    rollback_retry_policy:
+      rollback: "Mark DOPAMS/IQW modules blocked in app registry."
+      retry: "Patch adapters and rerun cross-runtime auth tests."
+
+  - id: "P9"
+    category: "service"
+    name: "Pilot Case and Evidence Projections"
+    requirements:
+      - "Create platform_case/platform_case_link migrations."
+      - "Create platform_evidence/platform_evidence_link migrations."
+      - "Project pilot DOPAMS and IQW case/evidence metadata only."
+      - "Handle source version, projection version, TTL, deletion/retention, legal hold conflict, and redaction."
+    dependencies:
+      - "P4"
+      - "P8"
+    expected_files:
+      - "apps/platform-api/src/migrations/002_platform_case_projection.sql"
+      - "apps/platform-api/src/migrations/003_platform_evidence_projection.sql"
+      - "apps/platform-api/src/services/case-projection.ts"
+      - "apps/platform-api/src/services/evidence-projection.ts"
+      - "apps/platform-api/src/routes/case360.routes.ts"
+    generated_tests:
+      - "apps/platform-api/src/__tests__/case-projection.test.ts"
+      - "apps/platform-api/src/__tests__/evidence-projection.test.ts"
+      - "apps/platform-api/src/__tests__/case360.authz.test.ts"
+    review_criteria:
+      - "No central evidence response returns storage_uri by default."
+      - "Stale/missing/deleted source records deny or degrade deterministically."
+      - "Every read records decision evidence."
+    rollback_retry_policy:
+      rollback: "Disable projection consumers; domain records remain authoritative."
+      retry: "Rebuild projection from source fixtures and rerun projection tests."
+
+  - id: "P10"
+    category: "service"
+    name: "Knowledge Runtime Decision and Retrieval Security"
+    requirements:
+      - "Compare RAG-app and KIS against governance, retrieval, snapshots, citations, PII, deployment, and tests."
+      - "Select one target runtime."
+      - "Prove pre-retrieval scope filtering and citation filtering before platform query UI."
+      - "Define service-to-service ingestion event schema."
+    dependencies:
+      - "P3"
+      - "P4"
+    expected_files:
+      - "docs/spec/knowledge-runtime-decision.md"
+      - "docs/spec/knowledge-ingestion-event.schema.json"
+      - "docs/spec/knowledge-retrieval-security.md"
+    generated_tests:
+      - "apps/platform-api/src/__tests__/knowledge-scope-contract.test.ts"
+      - "knowledge-runtime retrieval scope tests in selected runtime"
+    review_criteria:
+      - "One long-term knowledge runtime is selected."
+      - "Scoped retrieval is applied before vector/graph search."
+      - "Citations are filtered before response and audited."
+    rollback_retry_policy:
+      rollback: "Keep knowledge route disabled; leave RAG/KIS standalone."
+      retry: "Repeat comparison with missing criteria and update decision memo."
+
+  - id: "P11"
+    category: "integration"
+    name: "Integrated Local Deployment"
+    requirements:
+      - "Add integrated local profile for platform-web, platform-api, DOPAMS, IQW, Postgres/pgvector, object storage, Redis/queue."
+      - "Expose reverse proxy paths only for pilot-gated services."
+      - "Represent non-pilot services with health stubs or planned/blocked registry state."
+      - "Document local profile limitations versus production security."
+    dependencies:
+      - "P6"
+      - "P7"
+      - "P8"
+      - "P9"
+    expected_files:
+      - "deploy/docker-compose/policing-platform.yml"
+      - "deploy/nginx/policing-platform.local.conf"
+      - "scripts/smoke-platform-local.sh"
+    generated_tests:
+      - "scripts/smoke-platform-local.sh"
+      - "e2e/tests/platform-pilot-flow.spec.ts"
+    review_criteria:
+      - "One command starts local pilot platform."
+      - "DOPAMS and IQW routes pass smoke tests."
+      - "Blocked modules are not routable."
+    rollback_retry_policy:
+      rollback: "Route directly to existing domain apps."
+      retry: "Restart profile after fixing service health or proxy config."
+
+  - id: "P12"
+    category: "integration"
+    name: "Governance, Cutover, and Release Gate"
+    requirements:
+      - "Document operational cutover and rollback."
+      - "Define active investigation transition policy, audit continuity, legal hold continuity, emergency revocation, incident response, access reviews, stale projection remediation."
+      - "Run release gate checks."
+    dependencies:
+      - "P0"
+      - "P3"
+      - "P8"
+      - "P9"
+      - "P11"
+    expected_files:
+      - "docs/spec/release-gate.md"
+      - "docs/spec/cutover-governance-runbook.md"
+      - "docs/spec/run-state-governance.md"
+      - "docs/spec/traceability-matrix.md"
+    generated_tests:
+      - "npm run typecheck"
+      - "npm --workspace apps/platform-api run test"
+      - "npm --workspace apps/platform-web run test"
+      - "scripts/smoke-platform-local.sh"
+      - "secret scan command recorded in secret-hygiene-report"
+    review_criteria:
+      - "Release cannot pass if unauthorized app/case/evidence access is possible."
+      - "Every pilot allow/deny access is explainable from decision evidence."
+      - "Rollback preserves original domain apps and audit trails."
+    rollback_retry_policy:
+      rollback: "Abort platform pilot; retain existing app URLs/auth; preserve platform audit artifacts for review."
+      retry: "Fix failed gate, update evidence, rerun gate from clean state."

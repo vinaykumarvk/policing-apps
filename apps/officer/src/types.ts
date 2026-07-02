@@ -13,17 +13,37 @@ export type Task = {
   authority_id?: string;
 };
 
+export type AppDocument = {
+  doc_id: string;
+  file_name: string;
+  file_url?: string;
+  mime_type?: string;
+  verification_status?: string;
+  verified_by?: string;
+  verified_at?: string;
+};
+
+export type Inspection = {
+  inspection_id: string;
+  status: string;
+  officer_user_id?: string;
+  scheduled_at?: string;
+  completed_at?: string;
+  remarks?: string;
+  findings?: string;
+};
+
 export type Application = {
   arn: string;
   service_key: string;
   state_id: string;
-  data_jsonb: any;
+  data_jsonb: Record<string, unknown>;
   sla_due_at?: string;
   created_at?: string;
-  documents: any[];
-  queries: any[];
-  tasks: any[];
-  timeline: any[];
+  documents: AppDocument[];
+  queries: Array<Record<string, unknown>>;
+  tasks: Array<Record<string, unknown>>;
+  timeline: Array<Record<string, unknown>>;
   disposal_type?: string;
 };
 
@@ -45,4 +65,4 @@ export type OfficerAuth = {
   user: OfficerUser;
 };
 
-export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
+export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";

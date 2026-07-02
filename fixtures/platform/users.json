@@ -1,0 +1,79 @@
+{
+  "schema_version": "platform.pilot_users.v1",
+  "claim_schema_version": "platform.claims.v1",
+  "source_claim_fixture": "docs/spec/auth-claim-fixtures.json",
+  "generated_at": "2026-07-02T00:45:00+05:30",
+  "synthetic_data": true,
+  "safeguards": {
+    "real_pii": false,
+    "real_officers": false,
+    "real_complainants": false,
+    "real_suspects": false,
+    "active_case_data": false,
+    "notes": "Role labels and stable synthetic ids only. Claims are inherited from the P2 synthetic fixture file."
+  },
+  "personas": [
+    {
+      "pilot_persona_id": "pilot-desk-operator",
+      "claim_persona_id": "desk-operator",
+      "user_id": "user-desk-001",
+      "display_label": "Synthetic Desk Operator",
+      "tenant_id": "punjab-police",
+      "org_id": "mohali-district",
+      "modules": ["iqw"],
+      "pilot_flows": ["allow_iqw_case_redacted"],
+      "control_plane_coverage": ["allow", "redaction", "iqw"]
+    },
+    {
+      "pilot_persona_id": "pilot-investigating-officer",
+      "claim_persona_id": "io",
+      "user_id": "user-io-001",
+      "display_label": "Synthetic Investigating Officer",
+      "tenant_id": "punjab-police",
+      "org_id": "mohali-district",
+      "modules": ["dopams", "iqw"],
+      "pilot_flows": [
+        "allow_dopams_case_read",
+        "deny_wrong_jurisdiction",
+        "deny_stale_projection",
+        "deny_legal_hold_investigation",
+        "deny_storage_uri_redaction",
+        "deny_revocation_incompatible_claim_source"
+      ],
+      "control_plane_coverage": ["allow", "deny", "stale", "legal_hold", "revocation", "wrong_jurisdiction"]
+    },
+    {
+      "pilot_persona_id": "pilot-legal-reviewer",
+      "claim_persona_id": "legal-reviewer",
+      "user_id": "user-legal-001",
+      "display_label": "Synthetic Legal Reviewer",
+      "tenant_id": "punjab-police",
+      "org_id": "legal-cell",
+      "modules": ["dopams", "forensic"],
+      "pilot_flows": ["allow_legal_hold_evidence_review"],
+      "control_plane_coverage": ["allow", "legal_hold", "redaction"]
+    },
+    {
+      "pilot_persona_id": "pilot-platform-admin",
+      "claim_persona_id": "admin",
+      "user_id": "user-admin-001",
+      "display_label": "Synthetic Platform Admin",
+      "tenant_id": "punjab-police",
+      "org_id": "platform-ops",
+      "modules": ["platform_admin"],
+      "pilot_flows": ["deny_wrong_module_admin_to_dopams"],
+      "control_plane_coverage": ["deny", "wrong_module"]
+    },
+    {
+      "pilot_persona_id": "pilot-auditor",
+      "claim_persona_id": "auditor",
+      "user_id": "user-auditor-001",
+      "display_label": "Synthetic Auditor",
+      "tenant_id": "punjab-police",
+      "org_id": "audit-cell",
+      "modules": ["platform_admin"],
+      "pilot_flows": ["decision_evidence_review_reference"],
+      "control_plane_coverage": ["decision_evidence", "audit"]
+    }
+  ]
+}

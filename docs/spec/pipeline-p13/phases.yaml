@@ -1,0 +1,12 @@
+version: 1
+defaults:
+  phase_timeout_seconds: 7200
+
+phases:
+  - id: P13
+    name: Forensic Platform Adapter and Pilot Launch
+    prompt: docs/spec/pipeline-p13/prompts/P13.md
+    exit_criteria: bash docs/spec/pipeline-p13/checks/p13.sh
+    gate: human
+    depends_on: []
+

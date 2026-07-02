@@ -1,0 +1,585 @@
+name: policing-platform-pilot
+
+services:
+  node-deps:
+    image: node:22-alpine
+    working_dir: /workspace
+    command:
+      - sh
+      - -lc
+      - |
+        npm ci --include-workspace-root
+        npm --workspace packages/authz run build
+    volumes:
+      - ../..:/workspace
+      - platform_node_modules:/workspace/node_modules
+    networks:
+      - pilot-private
+    restart: "no"
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: policing_platform
+      POSTGRES_USER: policing
+      POSTGRES_PASSWORD: policing-local-only
+    volumes:
+      - platform_pgvector_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U policing -d policing_platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - pilot-private
+
+  redis-queue:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - platform_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - pilot-private
+
+  object-storage:
+    image: minio/minio:latest
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: platform-local
+      MINIO_ROOT_PASSWORD: platform-local-only
+    volumes:
+      - platform_object_data:/data
+    networks:
+      - pilot-private
+
+  platform-api:
+    image: node:22-alpine
+    working_dir: /workspace
+    environment:
+      PORT: "8080"
+      PLATFORM_LOCAL_NOW: "2026-07-01T18:45:00Z"
+      DATABASE_URL: postgres://policing:policing-local-only@postgres:5432/policing_platform
+      REDIS_URL: redis://redis-queue:6379/0
+      OBJECT_STORAGE_ENDPOINT: http://object-storage:9000
+    command:
+      - sh
+      - -lc
+      - |
+        cat > /tmp/platform-api-local.ts <<'TS'
+        import { createServer } from "node:http";
+        import { createPlatformApp } from "./apps/platform-api/src/app";
+
+        const app = createPlatformApp({
+          now: () => new Date(process.env.PLATFORM_LOCAL_NOW ?? "2026-07-01T18:45:00Z"),
+        });
+        const port = Number(process.env.PORT ?? 8080);
+
+        createServer(async (req, res) => {
+          try {
+            const chunks: Buffer[] = [];
+            for await (const chunk of req) {
+              chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+            }
+            const method = req.method ?? "GET";
+            const body = method === "GET" || method === "HEAD" ? undefined : Buffer.concat(chunks);
+            const protocol = req.headers["x-forwarded-proto"] ?? "http";
+            const host = req.headers.host ?? "platform-api:" + port;
+            const request = new Request(String(protocol) + "://" + host + (req.url ?? "/"), {
+              method,
+              headers: req.headers as HeadersInit,
+              body,
+            });
+            const response = await app.fetch(request);
+            res.statusCode = response.status;
+            response.headers.forEach((value, key) => res.setHeader(key, value));
+            const responseBody = Buffer.from(await response.arrayBuffer());
+            res.end(responseBody);
+          } catch {
+            res.statusCode = 500;
+            res.setHeader("content-type", "application/json");
+            res.end(JSON.stringify({ error: { code: "LOCAL_PLATFORM_API_FAILED" } }));
+          }
+        }).listen(port, "0.0.0.0", () => {
+          console.log("platform-api local wrapper listening on " + port);
+        });
+        TS
+        npx tsx /tmp/platform-api-local.ts
+    volumes:
+      - ../..:/workspace
+      - platform_node_modules:/workspace/node_modules
+    depends_on:
+      node-deps:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
+      object-storage:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:8080/api/v1/platform/health').then(r=>{if(!r.ok)throw r.status}).catch(()=>process.exit(1))\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    networks:
+      - pilot-private
+
+  platform-web:
+    image: node:22-alpine
+    working_dir: /workspace
+    environment:
+      VITE_PLATFORM_API_BASE_URL: ""
+      CHOKIDAR_USEPOLLING: "true"
+    command:
+      - sh
+      - -lc
+      - npm --workspace apps/platform-web run dev -- --host 0.0.0.0 --port 5176
+    volumes:
+      - ../..:/workspace
+      - platform_node_modules:/workspace/node_modules
+    depends_on:
+      node-deps:
+        condition: service_completed_successfully
+      platform-api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:5176/').then(r=>{if(!r.ok)throw r.status}).catch(()=>process.exit(1))\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    networks:
+      - pilot-private
+
+  dopams-api:
+    image: node:22-alpine
+    working_dir: /workspace
+    environment:
+      PORT: "8080"
+      PLATFORM_LOCAL_NOW: "2026-07-01T18:45:00Z"
+      DOPAMS_DATABASE_URL: postgres://policing:policing-local-only@postgres:5432/policing_platform
+    command:
+      - sh
+      - -lc
+      - |
+        cat > /tmp/dopams-platform-gate.ts <<'TS'
+        import { createServer } from "node:http";
+        import { evaluateDopamsPlatformAuth } from "./apps/dopams-api/src/middleware/platform-auth";
+
+        const port = Number(process.env.PORT ?? 8080);
+        const now = () => new Date(process.env.PLATFORM_LOCAL_NOW ?? "2026-07-01T18:45:00Z");
+
+        createServer(async (req, res) => {
+          const claimsHeader = Array.isArray(req.headers["x-platform-claims"])
+            ? req.headers["x-platform-claims"][0]
+            : req.headers["x-platform-claims"];
+          let claims: unknown = undefined;
+          let claimsParseError: string | undefined;
+          if (claimsHeader) {
+            try {
+              claims = JSON.parse(claimsHeader);
+            } catch {
+              claimsParseError = "x-platform-claims must be valid JSON";
+            }
+          }
+          const decision = evaluateDopamsPlatformAuth(
+            {
+              claims,
+              claimsParseError,
+              serverVerified: req.headers["x-platform-claims-verified"] === "true",
+              servicePath: req.url ?? "/domains/dopams",
+              correlationId:
+                String(req.headers["x-correlation-id"] ?? req.headers["x-request-id"] ?? "dopams-local-smoke"),
+            },
+            { now },
+          );
+          res.statusCode = decision.allowed ? 200 : 403;
+          res.setHeader("content-type", "application/json");
+          res.end(
+            JSON.stringify({
+              service: "dopams-api",
+              profile: "platform-pilot-local",
+              gate_evidence_ref: decision.evidence.gate_evidence_ref,
+              platform_auth: decision.evidence,
+            }),
+          );
+        }).listen(port, "0.0.0.0", () => {
+          console.log("dopams-api platform gate harness listening on " + port);
+        });
+        TS
+        npx tsx /tmp/dopams-platform-gate.ts
+    volumes:
+      - ../..:/workspace
+      - platform_node_modules:/workspace/node_modules
+    depends_on:
+      node-deps:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:8080/health').then(r=>{if(r.status!==403)throw r.status}).catch(()=>process.exit(1))\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    networks:
+      - pilot-private
+
+  forensic-api:
+    image: node:22-alpine
+    working_dir: /workspace
+    environment:
+      PORT: "8080"
+      PLATFORM_LOCAL_NOW: "2026-07-01T18:45:00Z"
+      FORENSIC_DATABASE_URL: postgres://policing:policing-local-only@postgres:5432/policing_platform
+    command:
+      - sh
+      - -lc
+      - |
+        cat > /tmp/forensic-platform-gate.ts <<'TS'
+        import { createServer } from "node:http";
+        import { evaluateForensicPlatformAuth } from "./apps/forensic-api/src/middleware/platform-auth";
+
+        const port = Number(process.env.PORT ?? 8080);
+        const now = () => new Date(process.env.PLATFORM_LOCAL_NOW ?? "2026-07-01T18:45:00Z");
+
+        createServer(async (req, res) => {
+          const claimsHeader = Array.isArray(req.headers["x-platform-claims"])
+            ? req.headers["x-platform-claims"][0]
+            : req.headers["x-platform-claims"];
+          let claims: unknown = undefined;
+          let claimsParseError: string | undefined;
+          if (claimsHeader) {
+            try {
+              claims = JSON.parse(claimsHeader);
+            } catch {
+              claimsParseError = "x-platform-claims must be valid JSON";
+            }
+          }
+          const decision = evaluateForensicPlatformAuth(
+            {
+              claims,
+              claimsParseError,
+              serverVerified: req.headers["x-platform-claims-verified"] === "true",
+              servicePath: req.url ?? "/domains/forensic",
+              correlationId:
+                String(req.headers["x-correlation-id"] ?? req.headers["x-request-id"] ?? "forensic-local-smoke"),
+            },
+            { now },
+          );
+          res.statusCode = decision.allowed ? 200 : 403;
+          res.setHeader("content-type", "application/json");
+          res.end(
+            JSON.stringify({
+              service: "forensic-api",
+              profile: "platform-pilot-local",
+              gate_evidence_ref: decision.evidence.gate_evidence_ref,
+              platform_auth: decision.evidence,
+            }),
+          );
+        }).listen(port, "0.0.0.0", () => {
+          console.log("forensic-api platform gate harness listening on " + port);
+        });
+        TS
+        npx tsx /tmp/forensic-platform-gate.ts
+    volumes:
+      - ../..:/workspace
+      - platform_node_modules:/workspace/node_modules
+    depends_on:
+      node-deps:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:8080/health').then(r=>{if(r.status!==403)throw r.status}).catch(()=>process.exit(1))\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    networks:
+      - pilot-private
+
+  social-media-api:
+    image: node:22-alpine
+    working_dir: /workspace
+    environment:
+      PORT: "8080"
+      PLATFORM_LOCAL_NOW: "2026-07-01T18:45:00Z"
+    command:
+      - sh
+      - -lc
+      - |
+        cat > /tmp/social-media-platform-gate.ts <<'TS'
+        import { createServer } from "node:http";
+        import { evaluateSocialMediaPlatformAuth } from "./apps/social-media-api/src/middleware/platform-auth";
+
+        const port = Number(process.env.PORT ?? 8080);
+        const now = () => new Date(process.env.PLATFORM_LOCAL_NOW ?? "2026-07-01T18:45:00Z");
+
+        createServer(async (req, res) => {
+          const claimsHeader = Array.isArray(req.headers["x-platform-claims"])
+            ? req.headers["x-platform-claims"][0]
+            : req.headers["x-platform-claims"];
+          let claims: unknown = undefined;
+          let claimsParseError: string | undefined;
+          if (claimsHeader) {
+            try {
+              claims = JSON.parse(claimsHeader);
+            } catch {
+              claimsParseError = "x-platform-claims must be valid JSON";
+            }
+          }
+          const decision = evaluateSocialMediaPlatformAuth(
+            {
+              claims,
+              claimsParseError,
+              serverVerified: req.headers["x-platform-claims-verified"] === "true",
+              servicePath: req.url ?? "/domains/social-media",
+              correlationId:
+                String(req.headers["x-correlation-id"] ?? req.headers["x-request-id"] ?? "social-media-local-smoke"),
+            },
+            { now },
+          );
+          res.statusCode = decision.allowed ? 200 : 403;
+          res.setHeader("content-type", "application/json");
+          res.end(
+            JSON.stringify({
+              service: "social-media-api",
+              profile: "platform-pilot-local",
+              gate_evidence_ref: decision.evidence.gate_evidence_ref,
+              platform_auth: decision.evidence,
+            }),
+          );
+        }).listen(port, "0.0.0.0", () => {
+          console.log("social-media-api platform gate harness listening on " + port);
+        });
+        TS
+        npx tsx /tmp/social-media-platform-gate.ts
+    volumes:
+      - ../..:/workspace
+      - platform_node_modules:/workspace/node_modules
+    depends_on:
+      node-deps:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:8080/health').then(r=>{if(r.status!==403)throw r.status}).catch(()=>process.exit(1))\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    networks:
+      - pilot-private
+
+  knowledge-api:
+    image: node:22-alpine
+    working_dir: /workspace
+    environment:
+      PORT: "8080"
+      PLATFORM_LOCAL_NOW: "2026-07-01T18:45:00Z"
+    command:
+      - sh
+      - -lc
+      - |
+        cat > /tmp/knowledge-platform-gate.ts <<'TS'
+        import { createServer } from "node:http";
+        import { evaluateKnowledgePlatformAuth } from "./domains/knowledge/api/src/platform-auth";
+
+        const port = Number(process.env.PORT ?? 8080);
+        const now = () => new Date(process.env.PLATFORM_LOCAL_NOW ?? "2026-07-01T18:45:00Z");
+
+        createServer(async (req, res) => {
+          const claimsHeader = Array.isArray(req.headers["x-platform-claims"])
+            ? req.headers["x-platform-claims"][0]
+            : req.headers["x-platform-claims"];
+          let claims: unknown = undefined;
+          let claimsParseError: string | undefined;
+          if (claimsHeader) {
+            try {
+              claims = JSON.parse(claimsHeader);
+            } catch {
+              claimsParseError = "x-platform-claims must be valid JSON";
+            }
+          }
+          const decision = evaluateKnowledgePlatformAuth(
+            {
+              claims,
+              claimsParseError,
+              serverVerified: req.headers["x-platform-claims-verified"] === "true",
+              servicePath: req.url ?? "/domains/knowledge",
+              correlationId:
+                String(req.headers["x-correlation-id"] ?? req.headers["x-request-id"] ?? "knowledge-local-smoke"),
+            },
+            { now },
+          );
+          res.statusCode = decision.allowed ? 200 : 403;
+          res.setHeader("content-type", "application/json");
+          res.end(
+            JSON.stringify({
+              service: "knowledge-api",
+              profile: "platform-pilot-local",
+              gate_evidence_ref: decision.evidence.gate_evidence_ref,
+              platform_auth: decision.evidence,
+            }),
+          );
+        }).listen(port, "0.0.0.0", () => {
+          console.log("knowledge-api platform gate harness listening on " + port);
+        });
+        TS
+        npx tsx /tmp/knowledge-platform-gate.ts
+    volumes:
+      - ../..:/workspace
+      - platform_node_modules:/workspace/node_modules
+    depends_on:
+      node-deps:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:8080/health').then(r=>{if(r.status!==403)throw r.status}).catch(()=>process.exit(1))\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    networks:
+      - pilot-private
+
+  iqw-api:
+    image: python:3.12-alpine
+    working_dir: /workspace
+    environment:
+      PORT: "8080"
+      PLATFORM_LOCAL_NOW: "2026-07-01T18:45:00+00:00"
+    command:
+      - sh
+      - -lc
+      - |
+        python - <<'PY'
+        import json
+        import os
+        import sys
+        from datetime import datetime, timezone
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+
+        sys.path.insert(0, "/workspace/domains/iqw-api/src/middleware")
+        from platform_auth import evaluate_iqw_platform_auth
+
+        local_now = datetime.fromisoformat(os.getenv("PLATFORM_LOCAL_NOW", "2026-07-01T18:45:00+00:00"))
+        if local_now.tzinfo is None:
+          local_now = local_now.replace(tzinfo=timezone.utc)
+
+        class Handler(BaseHTTPRequestHandler):
+          def do_GET(self):
+            raw_claims = self.headers.get("x-platform-claims")
+            claims = None
+            parse_error = None
+            if raw_claims:
+              try:
+                claims = json.loads(raw_claims)
+              except json.JSONDecodeError:
+                parse_error = "x-platform-claims must be valid JSON"
+            decision = evaluate_iqw_platform_auth(
+              claims=claims,
+              claims_parse_error=parse_error,
+              server_verified=self.headers.get("x-platform-claims-verified") == "true",
+              now=local_now,
+              service_path=self.path,
+              correlation_id=self.headers.get("x-correlation-id") or self.headers.get("x-request-id") or "iqw-local-smoke",
+            )
+            body = json.dumps({
+              "service": "iqw-api",
+              "profile": "platform-pilot-local",
+              "gate_evidence_ref": decision["evidence"]["gate_evidence_ref"],
+              "platform_auth": decision["evidence"],
+            }).encode("utf-8")
+            self.send_response(200 if decision["allowed"] else 403)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+          def log_message(self, _format, *_args):
+            return
+
+        port = int(os.getenv("PORT", "8080"))
+        HTTPServer(("0.0.0.0", port), Handler).serve_forever()
+        PY
+    volumes:
+      - ../..:/workspace:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python - <<'PY'\nimport urllib.error, urllib.request\ntry:\n  urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)\n  raise SystemExit(1)\nexcept urllib.error.HTTPError as exc:\n  raise SystemExit(0 if exc.code == 403 else 1)\nPY",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    networks:
+      - pilot-private
+
+  platform-proxy:
+    image: nginx:1.27-alpine
+    ports:
+      - "${POLICING_PLATFORM_PORT:-8088}:8080"
+    volumes:
+      - ../nginx/policing-platform.local.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      platform-web:
+        condition: service_healthy
+      platform-api:
+        condition: service_healthy
+      dopams-api:
+        condition: service_healthy
+      forensic-api:
+        condition: service_healthy
+      social-media-api:
+        condition: service_healthy
+      knowledge-api:
+        condition: service_healthy
+      iqw-api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --quiet --tries=1 --spider http://127.0.0.1:8080/health || exit 1",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    networks:
+      - pilot-private
+      - pilot-public
+
+networks:
+  pilot-public:
+  pilot-private:
+    internal: true
+
+volumes:
+  platform_node_modules:
+  platform_pgvector_data:
+  platform_redis_data:
+  platform_object_data:

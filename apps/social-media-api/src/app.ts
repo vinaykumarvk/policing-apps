@@ -7,6 +7,7 @@ import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { registerAuthMiddleware } from "./middleware/auth";
+import { registerSocialMediaPlatformAuthMiddleware } from "./middleware/platform-auth";
 import { registerAuditLogger } from "./middleware/audit-logger";
 import { setLogContext } from "./log-context";
 import { registerAuthRoutes } from "./routes/auth.routes";
@@ -171,6 +172,7 @@ export async function buildApp(logger = true): Promise<FastifyInstance> {
   });
 
   registerAuthMiddleware(app);
+  registerSocialMediaPlatformAuthMiddleware(app);
   registerAuditLogger(app);
 
   // Idempotency middleware for write endpoints (FR-15 AC-03)

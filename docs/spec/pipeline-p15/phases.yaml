@@ -1,0 +1,11 @@
+version: 1
+defaults:
+  phase_timeout_seconds: 7200
+
+phases:
+  - id: P15
+    name: Knowledge Platform Adapter and Pilot Launch
+    prompt: docs/spec/pipeline-p15/prompts/P15.md
+    exit_criteria: bash docs/spec/pipeline-p15/checks/p15.sh
+    gate: human
+    depends_on: []

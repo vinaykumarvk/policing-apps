@@ -175,6 +175,24 @@ Preferred scoring:
 
 `Risk Score = Impact (1-5) x Frequency (1-5)`
 
+Risk Score to severity mapping: `16-25 = P0`, `9-15 = P1`, `4-8 = P2`, `1-3 = P3`.
+
+### Violation-to-Severity Quick Reference
+
+| Violation | Severity | Rationale |
+|-----------|----------|-----------|
+| Missing `aria-label` on icon-only button | P1 | Screen reader users cannot identify the control |
+| `:hover` without `:active` | P2 | Touch users see no feedback on tap |
+| Hardcoded `px` breakpoint | P2 | Fragmented responsive behavior |
+| `100vh` instead of `dvh` | P1 | Content hidden behind mobile browser chrome |
+| Interactive element < 44px | P1 | WCAG 2.5.5 failure, mis-taps on mobile |
+| Missing safe-area inset on sticky element | P1 | Content obscured on notched devices |
+| Hardcoded color bypassing token | P2 | Theme/dark-mode breakage |
+| `label={t(...)}` in citizen app | P1 | Bilingual compliance violation |
+| Missing i18n key in locale file | P1 | Untranslated text shown to users |
+| Form input font-size < 1rem on mobile | P2 | Triggers iOS Safari auto-zoom |
+| Horizontal overflow at 320px | P1 | Content unreachable on small phones |
+
 ## Mandatory Evidence Artifacts
 
 Collect these artifacts unless blocked:
@@ -381,6 +399,19 @@ Components that render boolean values as badges (e.g., "Yes"/"No") MUST use i18n
 - Ensure breakpoints align with design tokens.
 - Flag ad-hoc breakpoints that fragment behavior.
 
+CSS specificity diagnostic:
+
+```bash
+# Find ad-hoc breakpoints not using design tokens
+rg -n '@media[^{]*[0-9]+px' --glob '*.css'
+
+# Find !important overrides (potential specificity wars)
+rg -n '!important' --glob '*.css' --glob '!design-system.css' | head -20
+
+# Find inline styles that bypass the design system
+rg -n 'style={{' --glob '*.tsx' | grep -v 'var(--' | head -20
+```
+
 ### C) Layout Adaptation
 
 - Grid collapse and content order on small screens.
@@ -398,9 +429,9 @@ Components that render boolean values as badges (e.g., "Yes"/"No") MUST use i18n
 
 ### A) Color and Contrast
 
-- Text/background contrast in light and dark themes.
+- Text/background contrast: WCAG 2.1 AA requires 4.5:1 for normal text, 3:1 for large text (18px+ or 14px+ bold).
 - Contrast in muted, placeholder, disabled, and badge states.
-- Non-color fallback for status-only cues.
+- Non-color fallback for status-only cues (icon, text label, or pattern in addition to color).
 
 ### B) Keyboard and Focus
 
@@ -425,6 +456,28 @@ Components that render boolean values as badges (e.g., "Yes"/"No") MUST use i18n
 
 - Interactive targets meet 44px minimum.
 - Adjacent controls have adequate spacing.
+
+### F) Accessibility Verification Commands
+
+Run these checks and record results:
+
+```bash
+# Missing aria-label on icon-only buttons
+rg -n '<button[^>]*>' --glob '*.tsx' -A 1 | grep -v 'aria-label'
+
+# Interactive elements missing accessible names
+rg -n 'role="button"|role="link"' --glob '*.tsx' | grep -v 'aria-label\|aria-labelledby'
+
+# Images missing alt text
+rg -n '<img ' --glob '*.tsx' | grep -v 'alt='
+
+# Contrast — extract color pairs for manual verification
+rg -n 'color:.*var\(--color-' --glob '*.css' | head -30
+
+# Focus visibility — ensure :focus-visible is defined for interactive elements
+rg -n ':focus-visible' --glob '*.css' | wc -l
+rg -n 'button\|\.btn\|a\[href\]' --glob '*.css' -l | head -10
+```
 
 ## Phase 5: Interaction, States, and UX Safety
 
@@ -475,10 +528,11 @@ Validate these recently implemented flows:
 ### B) Policing App Trilingual Compliance (dopams-ui, forensic-ui, social-media-ui)
 
 - All user-visible text must use `t()` i18n keys.
-- Ensure keys exist across all 3 locale files: `en.ts`, `hi.ts`, `te.ts`.
+- Ensure keys exist across all 4 locale files: `en.ts`, `hi.ts`, `te.ts`, `pa.ts`.
 - Login screen keys: `login.remember_me`, `login.forgot_password`, `login.back_to_login`, `login.forgot_instructions`, `login.email_or_username`, `login.email_or_username_placeholder`, `login.send_reset_link`, `login.reset_link_sent`, `login.failed`, `login.footer_text`.
 - Verify that Hindi locale files have actual Hindi translations (not English copies).
 - Verify that Telugu locale files have actual Telugu translations.
+- Verify that Punjabi locale files (`pa.ts`) have actual Punjabi translations.
 
 ### C) Layout Resilience for Longer Strings
 
@@ -495,9 +549,19 @@ Validate these recently implemented flows:
 
 ### A) Build and Bundle
 
-- Bundle sizes and growth hotspots.
+- Bundle sizes and growth hotspots (flag bundles > 250KB gzipped).
 - Route-level splitting and lazy loading coverage.
 - Tree-shaking risks from broad shared exports.
+
+Performance verification:
+```bash
+# Build and check output sizes
+npm run build --workspace=<app-dir> 2>&1 | tail -20
+# Check for lazy loading / code splitting
+rg -n "React\.lazy|import\(" <app-dir>/src --glob '*.tsx' | head -10
+# Check for barrel re-exports defeating tree-shaking
+rg -n "export \* from" <app-dir>/src --glob '*.ts' --glob '*.tsx'
+```
 
 ### B) Render Efficiency
 
@@ -507,9 +571,10 @@ Validate these recently implemented flows:
 
 ### C) Perceived Performance
 
-- Skeleton strategy quality on data-heavy screens.
-- Layout stability and visible feedback responsiveness.
+- Skeleton strategy quality on data-heavy screens: skeleton should match content height, use pulse animation, and disappear on data load.
+- Layout stability and visible feedback responsiveness (target CLS < 0.1).
 - Progress communication for long-running operations.
+- Web Vitals targets: LCP < 2.5s, FID < 100ms, CLS < 0.1.
 
 ## Phase 8: QA Gates and Release Verdict
 
@@ -526,8 +591,8 @@ Blocking gates:
 7. Progressive disclosure
 8. State resilience
 9. Graceful degradation/offline handling
-10. UI determinism
-11. Behavioral trust
+10. UI determinism (same input always produces same visible output)
+11. Behavioral trust (user can predict what an action will do before performing it)
 
 Non-blocking gates:
 
@@ -552,6 +617,20 @@ Release Decision:   [GO | NO-GO]
 ```
 
 ## Phase 9: Bugs and Foot-Guns
+
+### Common Fix Patterns
+
+| Violation | Fix |
+|-----------|-----|
+| `label={t("key")}` | Replace with `label={<Bilingual tKey="key" />}` |
+| `100vh` in CSS | Replace with `100dvh` |
+| Hardcoded `#fff` color | Replace with `var(--color-surface)` or appropriate token |
+| `@media (max-width: 768px)` | Replace with `@media (max-width: 48rem)` |
+| `<div onClick={...}>` | Replace with `<button type="button" onClick={...}>` |
+| Missing `aria-label` on icon button | Add `aria-label={t("common.action_name")}` |
+| Interactive element < 44px | Add `min-height: 2.75rem` (or `3rem` on mobile for primary actions) |
+| `:hover` without `:active` | Add matching `:active` state (e.g., `opacity: 0.8` or `transform: scale(0.98)`) |
+| Hardcoded `"Yes"/"No"` | Replace with `t("common.yes")/t("common.no")` |
 
 Minimum counts:
 
@@ -671,10 +750,10 @@ rg -n 'gridTemplateColumns.*1fr 1fr' apps/*/src/views --glob '*.tsx'
 rg -n '"Yes"|"No"' apps/*/src/views --glob '*.tsx'
 
 # i18n completeness checks
-# Verify all 3 locale files exist per app
-ls apps/dopams-ui/src/locales/{en,hi,te}.ts
-ls apps/forensic-ui/src/locales/{en,hi,te}.ts
-ls apps/social-media-ui/src/locales/{en,hi,te}.ts
+# Verify all 4 locale files exist per app
+ls apps/dopams-ui/src/locales/{en,hi,te,pa}.ts
+ls apps/forensic-ui/src/locales/{en,hi,te,pa}.ts
+ls apps/social-media-ui/src/locales/{en,hi,te,pa}.ts
 # Verify login keys exist in all locales
 rg -n 'login\.remember_me|login\.forgot_password|login\.footer_text' apps/dopams-ui/src/locales apps/forensic-ui/src/locales apps/social-media-ui/src/locales --glob '*.ts'
 

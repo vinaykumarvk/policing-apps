@@ -1,0 +1,115 @@
+{
+  "schema_version": "platform.pilot_cutover_approval.v1",
+  "phase": "P16",
+  "approval_status": "pending_human_approval",
+  "generated_at": "2026-07-02T13:45:00+05:30",
+  "release_scope": {
+    "platform": "policing-platform",
+    "pilot_routes": [
+      {
+        "id": "dopams",
+        "route": "/domains/dopams",
+        "gate_evidence_ref": "P8-dopams-platform-auth-adapter"
+      },
+      {
+        "id": "iqw",
+        "route": "/domains/iqw",
+        "gate_evidence_ref": "P8-iqw-platform-auth-adapter"
+      },
+      {
+        "id": "forensic",
+        "route": "/domains/forensic",
+        "gate_evidence_ref": "P13-forensic-platform-auth-adapter"
+      },
+      {
+        "id": "social-media",
+        "route": "/domains/social-media",
+        "gate_evidence_ref": "P14-social-media-platform-auth-adapter"
+      },
+      {
+        "id": "knowledge",
+        "route": "/domains/knowledge",
+        "gate_evidence_ref": "P15-knowledge-platform-auth-adapter"
+      }
+    ],
+    "not_approved_for": [
+      "production deployment",
+      "real corpus ingestion",
+      "real case or evidence data onboarding",
+      "production identity-provider cutover",
+      "production credential use"
+    ]
+  },
+  "required_gates": [
+    {
+      "id": "P15",
+      "command": "bash docs/spec/pipeline-p15/checks/p15.sh",
+      "required_before": "P16 readiness evidence"
+    },
+    {
+      "id": "P16",
+      "command": "bash docs/spec/pipeline-p16/checks/p16.sh",
+      "required_before": "human production pilot approval"
+    }
+  ],
+  "required_approvals": [
+    {
+      "role": "platform_release_owner",
+      "label": "Platform release owner",
+      "status": "pending",
+      "required_evidence": ["P15 gate output", "P16 gate output", "release window"]
+    },
+    {
+      "role": "security_risk_owner",
+      "label": "Security and risk owner",
+      "status": "pending",
+      "required_evidence": ["G-SEC-001", "G-SEC-002", "G-SEC-003", "G-SEC-004"]
+    },
+    {
+      "role": "dopams_domain_owner",
+      "label": "DOPAMS domain owner",
+      "status": "pending",
+      "required_evidence": ["/domains/dopams", "P8-dopams-platform-auth-adapter"]
+    },
+    {
+      "role": "iqw_domain_owner",
+      "label": "IQW domain owner",
+      "status": "pending",
+      "required_evidence": ["/domains/iqw", "P8-iqw-platform-auth-adapter"]
+    },
+    {
+      "role": "forensic_domain_owner",
+      "label": "Forensic domain owner",
+      "status": "pending",
+      "required_evidence": ["/domains/forensic", "P13-forensic-platform-auth-adapter"]
+    },
+    {
+      "role": "social_media_domain_owner",
+      "label": "Social Media domain owner",
+      "status": "pending",
+      "required_evidence": ["/domains/social-media", "P14-social-media-platform-auth-adapter"]
+    },
+    {
+      "role": "knowledge_rag_owner",
+      "label": "Knowledge/RAG domain owner",
+      "status": "pending",
+      "required_evidence": ["/domains/knowledge", "P15-knowledge-platform-auth-adapter"]
+    },
+    {
+      "role": "legal_audit_owner",
+      "label": "Legal and audit owner",
+      "status": "pending",
+      "required_evidence": ["legal hold continuity", "audit reconstruction"]
+    },
+    {
+      "role": "operations_owner",
+      "label": "Operations owner",
+      "status": "pending",
+      "required_evidence": ["rollback rehearsal", "emergency revocation roster"]
+    }
+  ],
+  "human_gate": {
+    "pipeline_approval_token": "docs/spec/pipeline-p16/approvals/P16.approved",
+    "meaning": "Reviewer has accepted readiness evidence for the next governance step only; this file does not itself approve production cutover."
+  }
+}

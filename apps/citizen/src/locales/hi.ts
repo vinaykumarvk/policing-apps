@@ -175,6 +175,12 @@ const hi: Record<string, string> = {
   "create.submit_dues_pending": "जमा करें (बकाया लंबित)",
   "create.submit_get_cert": "जमा करें और प्रमाणपत्र प्राप्त करें",
   "create.create_application": "आवेदन बनाएं",
+  "create.authority": "प्राधिकरण / विकास निकाय",
+  "create.select_authority": "प्राधिकरण चुनें...",
+  "authority.puda": "PUDA — पंजाब शहरी विकास प्राधिकरण",
+  "authority.gmada": "GMADA — ग्रेटर मोहाली क्षेत्र विकास प्राधिकरण",
+  "authority.glada": "GLADA — ग्रेटर लुधियाना क्षेत्र विकास प्राधिकरण",
+  "authority.bda": "BDA — बठिंडा विकास प्राधिकरण",
 
   // Application Detail
   "app_detail.title": "आवेदन विवरण",
@@ -259,6 +265,25 @@ const hi: Record<string, string> = {
   "ndc.submit_dues_pending": "जमा करें (बकाया लंबित)",
   "ndc.clear_dues": "जमा करने के लिए सभी बकाया राशि चुकाएं",
   "ndc.ledger_title": "NDC भुगतान खाता-बही",
+
+  // Generic Fee Payment
+  "payment.title": "शुल्क भुगतान",
+  "payment.amount_due": "देय राशि",
+  "payment.pay_now": "अभी भुगतान करें",
+  "payment.status": "भुगतान स्थिति",
+  "payment.status_pending": "भुगतान लंबित",
+  "payment.status_completed": "भुगतान पूर्ण",
+  "payment.status_failed": "भुगतान विफल",
+  "payment.fee_breakdown": "शुल्क विवरण",
+  "payment.processing_fee": "प्रसंस्करण शुल्क",
+  "payment.total": "कुल",
+  "payment.gateway_redirect": "आपको भुगतान गेटवे पर भेजा जाएगा",
+  "payment.offline_unavailable": "ऑफलाइन रहते हुए ऑनलाइन भुगतान उपलब्ध नहीं है",
+  "payment.no_fees": "इस आवेदन के लिए कोई शुल्क आवश्यक नहीं है।",
+  "payment.initiating": "भुगतान शुरू हो रहा है...",
+  "payment.paid_amount": "भुगतान किया",
+  "payment.remaining": "शेष",
+  "payment.demand_number": "मांग संख्या",
 
   // Document Locker
   "locker.title": "मेरा दस्तावेज़ लॉकर",
@@ -616,6 +641,18 @@ const hi: Record<string, string> = {
   "common.download_certificate": "प्रमाणपत्र डाउनलोड करें",
   "common.download_order": "आदेश डाउनलोड करें",
 
+  // Receipt
+  "receipt.download": "रसीद डाउनलोड करें",
+  "receipt.downloading": "बन रही है...",
+  "receipt.title": "आवेदन रसीद",
+  "receipt.arn": "आवेदन संदर्भ संख्या",
+  "receipt.service": "सेवा",
+  "receipt.applicant": "आवेदक",
+  "receipt.submitted_on": "जमा की तारीख",
+  "receipt.status": "स्थिति",
+  "receipt.authority": "पंजाब शहरी नियोजन एवं विकास प्राधिकरण (पूडा)",
+  "receipt.disclaimer": "यह एक कंप्यूटर जनित रसीद है और इसमें हस्ताक्षर की आवश्यकता नहीं है।",
+
   // Legacy keys
   app_title: "पूडा नागरिक पोर्टल",
   login: "लॉगिन",
@@ -781,6 +818,26 @@ const hi: Record<string, string> = {
   "feedback.offline_doc_upload_readonly": "आप ऑफ़लाइन हैं। रीड-ओनली मोड में दस्तावेज़ अपलोड अनुपलब्ध है।",
   "feedback.offline_doc_reuse": "आप ऑफ़लाइन हैं। दस्तावेज़ पुनः उपयोग अनुपलब्ध है।",
   "feedback.profile_completed": "प्रोफ़ाइल सफलतापूर्वक पूरी हो गई!",
+
+  // Assisted Channels
+  "assisted.info": "आप PUDA सुविधा केंद्रों या सामान्य सेवा केंद्रों (CSC) के माध्यम से भी आवेदन कर सकते हैं।",
+
+  // Application Withdrawal
+  "withdraw.button": "आवेदन वापस लें",
+  "withdraw.confirm_title": "आवेदन वापस लें?",
+  "withdraw.confirm_message": "क्या आप वाकई इस आवेदन को वापस लेना चाहते हैं? यह कार्रवाई पूर्ववत नहीं की जा सकती।",
+  "withdraw.success": "आवेदन सफलतापूर्वक वापस लिया गया",
+  "withdraw.error": "आवेदन वापस लेने में विफल",
+
+  // Citizen Inspection Visibility
+  "citizen_inspection.title": "निरीक्षण स्थिति",
+  "citizen_inspection.no_inspections": "कोई निरीक्षण निर्धारित नहीं",
+  "citizen_inspection.type": "प्रकार",
+  "citizen_inspection.status": "स्थिति",
+  "citizen_inspection.scheduled": "निर्धारित",
+  "citizen_inspection.in_progress": "प्रगति में",
+  "citizen_inspection.completed": "पूर्ण",
+  "citizen_inspection.outcome": "परिणाम",
 
   // NL Assistant
   "assistant.open": "सहायक खोलें",
