@@ -121,10 +121,21 @@ describe("platform API pilot fixture contract", () => {
     });
   });
 
-  it("keeps fixture scope bounded to DOPAMS and IQW pilot projections", () => {
-    expect(typedCases.cases.map((entry) => entry.source_system).sort()).toEqual(["dopams", "iqw"]);
-    expect(typedCases.cases.map((entry) => entry.case_id).sort()).toEqual(["CASE-DOPAMS-001", "CASE-IQW-001"]);
-    expect(typedEvidence.evidence.map((entry) => entry.case_id).sort()).toEqual(["CASE-DOPAMS-001", "CASE-IQW-001"]);
+  it("keeps fixture scope bounded to DOPAMS and IQW pilot projections per state", () => {
+    expect([...new Set(typedCases.cases.map((entry) => entry.source_system))].sort()).toEqual([
+      "dopams",
+      "iqw",
+    ]);
+    const expectedCaseIds = [
+      "CASE-DOPAMS-001",
+      "CASE-DOPAMS-KL-001",
+      "CASE-DOPAMS-TG-001",
+      "CASE-IQW-001",
+      "CASE-IQW-KL-001",
+      "CASE-IQW-TG-001",
+    ];
+    expect(typedCases.cases.map((entry) => entry.case_id).sort()).toEqual(expectedCaseIds);
+    expect(typedEvidence.evidence.map((entry) => entry.case_id).sort()).toEqual(expectedCaseIds);
     expect(typedUsers.personas.flatMap((entry) => entry.pilot_flows)).toEqual(
       expect.arrayContaining(["allow_dopams_case_read", "allow_iqw_case_redacted"]),
     );

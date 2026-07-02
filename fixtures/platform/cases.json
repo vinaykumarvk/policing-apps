@@ -14,7 +14,9 @@
       "source_system": "dopams",
       "source_record_id": "SYN-DOPAMS-CASE-001",
       "case_number": "SYN-DOPAMS-2026-0001",
-      "linked_case_ids": ["CASE-IQW-001"],
+      "linked_case_ids": [
+        "CASE-IQW-001"
+      ],
       "title": "Synthetic DOPAMS pilot case",
       "summary": "Synthetic cross-domain pilot matter used only for platform authorization tests.",
       "status": "active",
@@ -53,7 +55,9 @@
       },
       "default_redaction_decision": {
         "profile": "case-summary-v1",
-        "fields_redacted": ["subject_identifiers"],
+        "fields_redacted": [
+          "subject_identifiers"
+        ],
         "storage_uri_exposed": false,
         "reason": "case_summary_subjects_redacted"
       }
@@ -63,7 +67,9 @@
       "source_system": "iqw",
       "source_record_id": "SYN-IQW-COMPLAINT-001",
       "case_number": "SYN-IQW-2026-0001",
-      "linked_case_ids": ["CASE-DOPAMS-001"],
+      "linked_case_ids": [
+        "CASE-DOPAMS-001"
+      ],
       "title": "Synthetic IQW linked intake",
       "summary": "Synthetic intake projection linked to the DOPAMS pilot case.",
       "status": "active",
@@ -102,7 +108,230 @@
       },
       "default_redaction_decision": {
         "profile": "case-summary-v1",
-        "fields_redacted": ["title", "summary", "lead_investigator_id", "subject_identifiers"],
+        "fields_redacted": [
+          "title",
+          "summary",
+          "lead_investigator_id",
+          "subject_identifiers"
+        ],
+        "storage_uri_exposed": false,
+        "reason": "intake_redacted_summary"
+      }
+    },
+    {
+      "case_id": "CASE-DOPAMS-KL-001",
+      "source_system": "dopams",
+      "source_record_id": "SYN-DOPAMS-CASE-KL-001",
+      "case_number": "SYN-DOPAMS-KL-2026-0001",
+      "linked_case_ids": [
+        "CASE-IQW-KL-001"
+      ],
+      "title": "Synthetic DOPAMS pilot case (Kerala)",
+      "summary": "Synthetic cross-domain pilot matter used only for platform authorization tests.",
+      "status": "active",
+      "source_status": "active",
+      "resource_classification": "confidential",
+      "legal_hold_status": "none",
+      "source_version": "dopams-case-v1",
+      "projection_version": "platform-case-v1",
+      "projected_at": "2026-07-01T18:44:30Z",
+      "org_id": "ernakulam-district",
+      "unit_id": "narcotics-cell-kochi",
+      "jurisdiction": {
+        "country": "IN",
+        "state": "KL",
+        "district": "Ernakulam",
+        "police_station": "Fort Kochi"
+      },
+      "assignment": {
+        "case_id": "CASE-DOPAMS-KL-001"
+      },
+      "field_classification": {
+        "case_id": "restricted",
+        "source_system": "restricted",
+        "source_record_id": "restricted",
+        "case_number": "restricted",
+        "title": "confidential",
+        "summary": "confidential",
+        "status": "restricted",
+        "jurisdiction": "restricted",
+        "assigned_unit_id": "restricted",
+        "lead_investigator_id": "confidential",
+        "subject_identifiers": "secret",
+        "legal_hold_status": "confidential",
+        "source_version": "restricted",
+        "projection_version": "restricted"
+      },
+      "default_redaction_decision": {
+        "profile": "case-summary-v1",
+        "fields_redacted": [
+          "subject_identifiers"
+        ],
+        "storage_uri_exposed": false,
+        "reason": "case_summary_subjects_redacted"
+      }
+    },
+    {
+      "case_id": "CASE-IQW-KL-001",
+      "source_system": "iqw",
+      "source_record_id": "SYN-IQW-COMPLAINT-001",
+      "case_number": "SYN-IQW-KL-2026-0001",
+      "linked_case_ids": [
+        "CASE-DOPAMS-KL-001"
+      ],
+      "title": "Synthetic IQW linked intake",
+      "summary": "Synthetic intake projection linked to the DOPAMS pilot case.",
+      "status": "active",
+      "source_status": "active",
+      "resource_classification": "restricted",
+      "legal_hold_status": "none",
+      "source_version": "iqw-case-v1",
+      "projection_version": "platform-case-v1",
+      "projected_at": "2026-07-01T18:44:30Z",
+      "org_id": "ernakulam-district",
+      "unit_id": "desk-kochi",
+      "jurisdiction": {
+        "country": "IN",
+        "state": "KL",
+        "district": "Ernakulam",
+        "police_station": "Fort Kochi"
+      },
+      "assignment": {
+        "queue_id": "desk-kochi-intake"
+      },
+      "field_classification": {
+        "case_id": "restricted",
+        "source_system": "restricted",
+        "source_record_id": "restricted",
+        "case_number": "restricted",
+        "title": "confidential",
+        "summary": "confidential",
+        "status": "restricted",
+        "jurisdiction": "restricted",
+        "assigned_unit_id": "restricted",
+        "lead_investigator_id": "confidential",
+        "subject_identifiers": "secret",
+        "legal_hold_status": "confidential",
+        "source_version": "restricted",
+        "projection_version": "restricted"
+      },
+      "default_redaction_decision": {
+        "profile": "case-summary-v1",
+        "fields_redacted": [
+          "title",
+          "summary",
+          "lead_investigator_id",
+          "subject_identifiers"
+        ],
+        "storage_uri_exposed": false,
+        "reason": "intake_redacted_summary"
+      }
+    },
+    {
+      "case_id": "CASE-DOPAMS-TG-001",
+      "source_system": "dopams",
+      "source_record_id": "SYN-DOPAMS-CASE-TG-001",
+      "case_number": "SYN-DOPAMS-TG-2026-0001",
+      "linked_case_ids": [
+        "CASE-IQW-TG-001"
+      ],
+      "title": "Synthetic DOPAMS pilot case (Telangana)",
+      "summary": "Synthetic cross-domain pilot matter used only for platform authorization tests.",
+      "status": "active",
+      "source_status": "active",
+      "resource_classification": "confidential",
+      "legal_hold_status": "none",
+      "source_version": "dopams-case-v1",
+      "projection_version": "platform-case-v1",
+      "projected_at": "2026-07-01T18:44:30Z",
+      "org_id": "hyderabad-district",
+      "unit_id": "eagle-cell-hyderabad",
+      "jurisdiction": {
+        "country": "IN",
+        "state": "TG",
+        "district": "Hyderabad",
+        "police_station": "Banjara Hills"
+      },
+      "assignment": {
+        "case_id": "CASE-DOPAMS-TG-001"
+      },
+      "field_classification": {
+        "case_id": "restricted",
+        "source_system": "restricted",
+        "source_record_id": "restricted",
+        "case_number": "restricted",
+        "title": "confidential",
+        "summary": "confidential",
+        "status": "restricted",
+        "jurisdiction": "restricted",
+        "assigned_unit_id": "restricted",
+        "lead_investigator_id": "confidential",
+        "subject_identifiers": "secret",
+        "legal_hold_status": "confidential",
+        "source_version": "restricted",
+        "projection_version": "restricted"
+      },
+      "default_redaction_decision": {
+        "profile": "case-summary-v1",
+        "fields_redacted": [
+          "subject_identifiers"
+        ],
+        "storage_uri_exposed": false,
+        "reason": "case_summary_subjects_redacted"
+      }
+    },
+    {
+      "case_id": "CASE-IQW-TG-001",
+      "source_system": "iqw",
+      "source_record_id": "SYN-IQW-COMPLAINT-001",
+      "case_number": "SYN-IQW-TG-2026-0001",
+      "linked_case_ids": [
+        "CASE-DOPAMS-TG-001"
+      ],
+      "title": "Synthetic IQW linked intake",
+      "summary": "Synthetic intake projection linked to the DOPAMS pilot case.",
+      "status": "active",
+      "source_status": "active",
+      "resource_classification": "restricted",
+      "legal_hold_status": "none",
+      "source_version": "iqw-case-v1",
+      "projection_version": "platform-case-v1",
+      "projected_at": "2026-07-01T18:44:30Z",
+      "org_id": "hyderabad-district",
+      "unit_id": "desk-hyderabad",
+      "jurisdiction": {
+        "country": "IN",
+        "state": "TG",
+        "district": "Hyderabad",
+        "police_station": "Banjara Hills"
+      },
+      "assignment": {
+        "queue_id": "desk-hyderabad-intake"
+      },
+      "field_classification": {
+        "case_id": "restricted",
+        "source_system": "restricted",
+        "source_record_id": "restricted",
+        "case_number": "restricted",
+        "title": "confidential",
+        "summary": "confidential",
+        "status": "restricted",
+        "jurisdiction": "restricted",
+        "assigned_unit_id": "restricted",
+        "lead_investigator_id": "confidential",
+        "subject_identifiers": "secret",
+        "legal_hold_status": "confidential",
+        "source_version": "restricted",
+        "projection_version": "restricted"
+      },
+      "default_redaction_decision": {
+        "profile": "case-summary-v1",
+        "fields_redacted": [
+          "title",
+          "summary",
+          "lead_investigator_id",
+          "subject_identifiers"
+        ],
         "storage_uri_exposed": false,
         "reason": "intake_redacted_summary"
       }
@@ -113,6 +342,22 @@
       "link_id": "LINK-DOPAMS-IQW-001",
       "left_case_id": "CASE-DOPAMS-001",
       "right_case_id": "CASE-IQW-001",
+      "link_type": "pilot_cross_domain",
+      "source_version": "platform-link-v1",
+      "projection_version": "platform-case-link-v1"
+    },
+    {
+      "link_id": "LINK-DOPAMS-IQW-001",
+      "left_case_id": "CASE-DOPAMS-KL-001",
+      "right_case_id": "CASE-IQW-KL-001",
+      "link_type": "pilot_cross_domain",
+      "source_version": "platform-link-v1",
+      "projection_version": "platform-case-link-v1"
+    },
+    {
+      "link_id": "LINK-DOPAMS-IQW-001",
+      "left_case_id": "CASE-DOPAMS-TG-001",
+      "right_case_id": "CASE-IQW-TG-001",
       "link_type": "pilot_cross_domain",
       "source_version": "platform-link-v1",
       "projection_version": "platform-case-link-v1"

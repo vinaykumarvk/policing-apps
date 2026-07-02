@@ -4,6 +4,8 @@ import { createPlatformApp } from "./app";
 import { createAuthGateway, type AuthGateway } from "./auth/gateway";
 import { createPgEvidenceStore } from "./auth/pg-evidence-store";
 import { createPgIdentityStore } from "./auth/pg-identity-store";
+import { createCaseProjectionService } from "./services/case-projection";
+import { createEvidenceProjectionService } from "./services/evidence-projection";
 
 const port = Number(process.env.PORT ?? 8080);
 const fixedNow = process.env.PLATFORM_FIXED_NOW
@@ -34,10 +36,23 @@ if (process.env.DATABASE_URL && process.env.PLATFORM_SESSION_SECRET) {
   }
 }
 
+// Fixture-backed pilot projections carry a fixed projected_at; against the
+// real clock they trip the STALE_PROJECTION guard. For demo deployments an
+// explicit TTL override keeps the synthetic projections readable.
+const projectionTtlSeconds = Number(process.env.PLATFORM_PROJECTION_TTL_SECONDS ?? "");
+const projectionOverrides =
+  Number.isFinite(projectionTtlSeconds) && projectionTtlSeconds > 0
+    ? {
+        caseProjectionService: createCaseProjectionService({ projectionTtlSeconds }),
+        evidenceProjectionService: createEvidenceProjectionService({ projectionTtlSeconds }),
+      }
+    : {};
+
 const app = createPlatformApp({
   ...fixedNow,
   // G-SEC-002: persist every platform allow/deny decision to the ledger.
   ...(evidenceStore ? { evidenceSink: evidenceStore } : {}),
+  ...projectionOverrides,
 });
 
 createServer(async (req, res) => {

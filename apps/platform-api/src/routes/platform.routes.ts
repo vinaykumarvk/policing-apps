@@ -14,6 +14,7 @@ import {
 import {
   PLATFORM_REGISTRY_VERSION,
   appView,
+  entitlementRequestForTenant,
   type PlatformAppDefinition,
   type PlatformAppView,
   validateAppRegistry,
@@ -289,15 +290,28 @@ function appsResponse(auth: AuthenticatedClaims, url: URL, context: PlatformRout
   };
 }
 
+function callerTenantId(claimInput: unknown): string | null {
+  if (typeof claimInput !== "object" || claimInput === null) {
+    return null;
+  }
+  const subject = (claimInput as { subject?: unknown }).subject;
+  if (typeof subject !== "object" || subject === null) {
+    return null;
+  }
+  const tenantId = (subject as { tenant_id?: unknown }).tenant_id;
+  return typeof tenantId === "string" ? tenantId : null;
+}
+
 function appResponse(
   claimInput: unknown,
   app: PlatformAppDefinition,
   context: PlatformRouteContext,
 ): PlatformAppView & { entitlement: object } {
-  const entitlement = app.entitlement_request
+  const request = entitlementRequestForTenant(app, callerTenantId(claimInput));
+  const entitlement = request
     ? evaluateEntitlement(
         claimInput,
-        { ...app.entitlement_request, serverVerified: true },
+        { ...request, serverVerified: true },
         {
           now: context.now(),
           expectedSourceVersion: context.expectedSourceVersion,

@@ -172,3 +172,24 @@ Per user request for easy testing/demo:
   Rollback before real data:
   `gcloud run services update platform-api --remove-env-vars PLATFORM_DEMO_ALLOW_PASSWORD_ONLY,PLATFORM_DEMO_ADMIN_PASSWORD --region asia-southeast1 --project policing-apps`
   and disable the `admin` user from the Users panel.
+
+---
+
+## Addendum 5: state-wise tenancy (multi-state demo)
+
+- **State profiles** (kerala-police, telangana-police) added to role templates —
+  8 new state templates alongside unchanged Punjab ones. Registry apps gained
+  per-tenant entitlement contexts (`entitlement_requests_by_tenant`) selected by the
+  caller's tenant, falling back to the Punjab default.
+- **Fixtures additive**: CASE-DOPAMS-KL/TG-001, CASE-IQW-KL/TG-001 + matching evidence;
+  nothing removed.
+- **Demo admins**: admin (Punjab), admin-kerala, admin-telangana — all password123 in
+  demo mode, each with their state pilot profile + user:manage.
+- **STALE_PROJECTION fix**: fixture projections carry fixed projected_at; added
+  PLATFORM_PROJECTION_TTL_SECONDS override (set to 1y for demo) so synthetic
+  projections stay readable against the real clock.
+- Verified live (platform-api-00007-qph): each admin reads ONLY their state's Case-360
+  (200 own / 403 cross-state in all six combinations); registry ALLOW per state. 67 tests.
+- **Malayalam OCR samples**: fixtures/complaints/malayalam/ — three fictitious typed
+  complaints (PDF + PNG + ground truth), generated via scripts/generate_malayalam_complaints.py,
+  for the IQW/Document AI OCR pipeline.

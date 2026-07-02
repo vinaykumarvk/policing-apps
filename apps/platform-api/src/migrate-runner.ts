@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { generateTotpSecret, hashPassword } from "./auth/crypto";
+import { findRoleTemplate } from "./auth/role-templates";
 
 function migrationsDir(): string {
   // Compiled layout: dist/apps/platform-api/src/migrate-runner.js with SQL at
@@ -65,16 +66,47 @@ async function main(): Promise<void> {
 
 async function ensureDemoAdmin(pool: Pool): Promise<void> {
   // DEMO MODE ONLY: creates a well-known "admin" account with the password
-  // from PLATFORM_DEMO_ADMIN_PASSWORD (pilot-operator profile + user:manage).
-  // Remove the env var and disable the account before handling real data.
+  // from PLATFORM_DEMO_ADMIN_PASSWORD (state pilot profile + user:manage).
+  // One admin per state: admin (Punjab), admin-kerala, admin-telangana.
+  // Remove the env var and disable the accounts before handling real data.
   const password = process.env.PLATFORM_DEMO_ADMIN_PASSWORD;
   if (!password) {
     return;
   }
-  const existing = await pool.query("SELECT 1 FROM platform.platform_user WHERE username = 'admin'");
+  const demoAdmins: Array<{ username: string; displayName: string; templateId: string }> = [
+    { username: "admin", displayName: "Demo Administrator (Punjab)", templateId: "pilot_operator" },
+    {
+      username: "admin-kerala",
+      displayName: "Demo Administrator (Kerala)",
+      templateId: "kerala_pilot_operator",
+    },
+    {
+      username: "admin-telangana",
+      displayName: "Demo Administrator (Telangana)",
+      templateId: "telangana_pilot_operator",
+    },
+  ];
+  for (const demoAdmin of demoAdmins) {
+    await ensureDemoAdminUser(pool, demoAdmin, password);
+  }
+}
+
+async function ensureDemoAdminUser(
+  pool: Pool,
+  demoAdmin: { username: string; displayName: string; templateId: string },
+  password: string,
+): Promise<void> {
+  const existing = await pool.query("SELECT 1 FROM platform.platform_user WHERE username = $1", [
+    demoAdmin.username,
+  ]);
   if (existing.rowCount) {
     return;
   }
+  const template = findRoleTemplate(demoAdmin.templateId);
+  if (!template) {
+    throw new Error(`demo admin template missing: ${demoAdmin.templateId}`);
+  }
+  const knowledgeCaseId = template.assignment.case_ids[0];
   const userId = `user-${randomUUID()}`;
   const client = await pool.connect();
   try {
@@ -84,37 +116,33 @@ async function ensureDemoAdmin(pool: Pool): Promise<void> {
          (user_id, username, password_hash, totp_secret, display_name, persona,
           tenant_id, org_id, unit_ids, org_scope, jurisdiction, clearance,
           assignment, purpose_allowed, status)
-       VALUES ($1, 'admin', $2, $3, 'Demo Administrator', 'platform_admin',
-               'punjab-police', 'mohali-district',
-               ARRAY['narcotics-cell-mohali','desk-mohali','platform-administration'],
-               'unit', $4, $5, $6, $7, 'active')`,
+       VALUES ($1, $2, $3, $4, $5, 'platform_admin', $6, $7, $8, $9, $10, $11, $12, $13, 'active')`,
       [
         userId,
+        demoAdmin.username,
         hashPassword(password),
         // TOTP secret is stored (column is NOT NULL) but unused in demo mode.
         generateTotpSecret(),
-        JSON.stringify({
-          country: "IN",
-          state: "PB",
-          districts: ["SAS Nagar"],
-          police_stations: ["Phase-8"],
-          scope: "station",
-        }),
+        demoAdmin.displayName,
+        template.tenantId,
+        template.orgId,
+        [...template.unitIds, "platform-administration"],
+        template.orgScope,
+        JSON.stringify(template.jurisdiction),
         JSON.stringify({ level: "secret", compartments: ["platform_admin", "casework", "intelligence"] }),
-        JSON.stringify({
-          case_ids: ["CASE-DOPAMS-001"],
-          queue_ids: ["desk-mohali-intake"],
-          evidence_ids: ["EVID-DOPAMS-001"],
-          jurisdiction_wide: false,
-          domain_wide: false,
-        }),
-        ["investigation", "complaint_intake", "case_review", "intelligence_analysis"],
+        JSON.stringify(template.assignment),
+        [...new Set([...template.purposeAllowed, "case_review", "intelligence_analysis"])],
       ],
     );
     const entitlements: Array<[string, string, string[]]> = [
       ["platform_admin", "platform", ["registry:read", "health:read", "user:manage"]],
-      ["dopams", "dopams", ["case:read", "evidence:metadata-read"]],
-      ["iqw", "iqw", ["complaint:read", "task:queue-read"]],
+      ...template.entitlements.map(
+        (entitlement): [string, string, string[]] => [
+          entitlement.module,
+          entitlement.domain,
+          [...entitlement.permissions],
+        ],
+      ),
       ["knowledge", "knowledge", ["query:case-summary"]],
     ];
     for (const [module, domain, permissions] of entitlements) {
@@ -125,7 +153,9 @@ async function ensureDemoAdmin(pool: Pool): Promise<void> {
       );
     }
     await client.query("COMMIT");
-    console.log("migrate-runner: created demo admin user");
+    console.log(
+      `migrate-runner: created demo admin user ${demoAdmin.username} (case ${knowledgeCaseId ?? "n/a"})`,
+    );
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;

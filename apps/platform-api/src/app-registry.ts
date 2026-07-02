@@ -1,4 +1,5 @@
 import type { EntitlementRequest } from "../../../packages/authz/src";
+import { STATE_PROFILES, type StateProfile } from "./auth/role-templates";
 
 export type PlatformAppState = "planned" | "pilot" | "available" | "blocked";
 
@@ -26,6 +27,11 @@ export interface PlatformAppDefinition {
   status_reason_code: string;
   platform_claim_gate: PlatformClaimGate;
   entitlement_request?: LaunchEntitlementRequest;
+  /**
+   * Optional per-tenant pilot contexts (multi-state). Evaluation picks the
+   * caller's tenant entry, falling back to entitlement_request (Punjab pilot).
+   */
+  entitlement_requests_by_tenant?: Readonly<Record<string, LaunchEntitlementRequest>>;
 }
 
 export interface PlatformAppView {
@@ -269,12 +275,91 @@ const DEFAULT_PLATFORM_APPS: readonly PlatformAppDefinition[] = [
   },
 ];
 
+function stateEntitlementRequest(
+  app: PlatformAppDefinition,
+  profile: StateProfile,
+): LaunchEntitlementRequest | null {
+  const base = app.entitlement_request;
+  if (!base) {
+    return null;
+  }
+  const jurisdiction = {
+    country: "IN",
+    state: profile.stateCode,
+    district: profile.district,
+    ...(base.jurisdiction.police_station ? { police_station: profile.policeStation } : {}),
+  };
+  switch (app.domain) {
+    case "dopams":
+      return {
+        ...base,
+        org_id: profile.districtOrg,
+        unit_id: profile.narcoticsUnit,
+        jurisdiction,
+        assignment: { case_id: profile.caseId },
+      };
+    case "iqw":
+      return {
+        ...base,
+        org_id: profile.districtOrg,
+        unit_id: profile.deskUnit,
+        jurisdiction,
+        assignment: { queue_id: profile.intakeQueue },
+      };
+    case "social_media":
+      return { ...base, org_id: profile.intelligenceOrg, jurisdiction };
+    case "knowledge":
+      return {
+        ...base,
+        org_id: profile.districtOrg,
+        unit_id: profile.narcoticsUnit,
+        jurisdiction,
+        assignment: { case_id: profile.caseId },
+      };
+    case "forensic":
+      return {
+        ...base,
+        org_id: profile.forensicOrg,
+        jurisdiction,
+        assignment: { evidence_id: profile.evidenceId },
+      };
+    default:
+      return null;
+  }
+}
+
+function withTenantRequests(app: PlatformAppDefinition): PlatformAppDefinition {
+  if (!app.entitlement_request || app.entitlement_requests_by_tenant) {
+    return app;
+  }
+  const byTenant: Record<string, LaunchEntitlementRequest> = {};
+  for (const profile of STATE_PROFILES) {
+    const request = stateEntitlementRequest(app, profile);
+    if (request) {
+      byTenant[profile.tenantId] = request;
+    }
+  }
+  return Object.keys(byTenant).length > 0
+    ? { ...app, entitlement_requests_by_tenant: byTenant }
+    : app;
+}
+
+export function entitlementRequestForTenant(
+  app: PlatformAppDefinition,
+  tenantId: string | null,
+): LaunchEntitlementRequest | undefined {
+  if (tenantId && app.entitlement_requests_by_tenant?.[tenantId]) {
+    return app.entitlement_requests_by_tenant[tenantId];
+  }
+  return app.entitlement_request;
+}
+
 export function defaultPlatformApps(): PlatformAppDefinition[] {
-  return DEFAULT_PLATFORM_APPS.map(copyAppDefinition);
+  return DEFAULT_PLATFORM_APPS.map(withTenantRequests).map(copyAppDefinition);
 }
 
 export function createPlatformAppRegistry(
-  apps: readonly PlatformAppDefinition[] = DEFAULT_PLATFORM_APPS,
+  apps: readonly PlatformAppDefinition[] = DEFAULT_PLATFORM_APPS.map(withTenantRequests),
 ): PlatformAppDefinition[] {
   const copied = apps.map(copyAppDefinition);
   const issues = validateAppRegistry(copied);
@@ -384,16 +469,28 @@ function launchBlockReason(app: PlatformAppDefinition, entitlementAllowed: boole
   return "LAUNCH_BLOCKED";
 }
 
+function copyEntitlementRequest(request: LaunchEntitlementRequest): LaunchEntitlementRequest {
+  return {
+    ...request,
+    jurisdiction: { ...request.jurisdiction },
+    assignment: request.assignment ? { ...request.assignment } : undefined,
+  };
+}
+
 function copyAppDefinition(app: PlatformAppDefinition): PlatformAppDefinition {
   return {
     ...app,
     platform_claim_gate: { ...app.platform_claim_gate },
     entitlement_request: app.entitlement_request
-      ? {
-          ...app.entitlement_request,
-          jurisdiction: { ...app.entitlement_request.jurisdiction },
-          assignment: app.entitlement_request.assignment ? { ...app.entitlement_request.assignment } : undefined,
-        }
+      ? copyEntitlementRequest(app.entitlement_request)
+      : undefined,
+    entitlement_requests_by_tenant: app.entitlement_requests_by_tenant
+      ? Object.fromEntries(
+          Object.entries(app.entitlement_requests_by_tenant).map(([tenant, request]) => [
+            tenant,
+            copyEntitlementRequest(request),
+          ]),
+        )
       : undefined,
   };
 }
