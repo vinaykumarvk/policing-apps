@@ -26,6 +26,12 @@ export interface AuthGatewayOptions {
   secureCookies?: boolean;
   evidenceSink?: AdminEvidenceSink;
   evidenceReader?: AdminEvidenceReader;
+  /**
+   * DEMO MODE ONLY: permits login without a TOTP code. Sessions created this
+   * way are recorded with mfa.methods ["password"] in every claim and ledger
+   * record. Must never be enabled where real data is reachable.
+   */
+  allowPasswordOnly?: boolean;
 }
 
 export interface AuthGateway {
@@ -69,6 +75,7 @@ export function createAuthGateway(options: AuthGatewayOptions): AuthGateway {
       entitlements,
       sessionId: session.sessionId,
       mfaVerifiedAt: current.toISOString(),
+      authMethod: session.authMethod,
       now: current,
     });
   };
@@ -105,6 +112,9 @@ export function createAuthGateway(options: AuthGatewayOptions): AuthGateway {
       return null;
     }
 
+    if (request.method === "GET" && url.pathname === "/api/v1/platform/auth/config") {
+      return json(200, { password_only_login: options.allowPasswordOnly === true });
+    }
     if (request.method === "POST" && url.pathname === "/api/v1/platform/auth/login") {
       return login(request);
     }
@@ -138,7 +148,8 @@ export function createAuthGateway(options: AuthGatewayOptions): AuthGateway {
     const username = typeof body.username === "string" ? body.username.trim() : "";
     const password = typeof body.password === "string" ? body.password : "";
     const totp = typeof body.totp === "string" ? body.totp.trim() : "";
-    if (!username || !password || !totp) {
+    const passwordOnly = options.allowPasswordOnly === true && totp === "";
+    if (!username || !password || (!totp && !passwordOnly)) {
       return json(400, { error: { code: "LOGIN_FIELDS_REQUIRED" } });
     }
 
@@ -150,7 +161,7 @@ export function createAuthGateway(options: AuthGatewayOptions): AuthGateway {
 
     const user = await options.store.getUserByUsername(username);
     const passwordOk = user ? verifyPassword(password, user.passwordHash) : false;
-    const totpOk = user ? verifyTotp(user.totpSecret, totp, nowMs) : false;
+    const totpOk = passwordOnly ? true : user ? verifyTotp(user.totpSecret, totp, nowMs) : false;
     if (!user || user.status !== "active" || !passwordOk || !totpOk) {
       const next: FailureState = {
         count: (failure?.count ?? 0) + 1,
@@ -165,7 +176,13 @@ export function createAuthGateway(options: AuthGatewayOptions): AuthGateway {
     }
 
     failures.delete(username);
-    const token = createSessionToken(user.userId, options.sessionSecret, nowMs, SESSION_TTL_SECONDS);
+    const token = createSessionToken(
+      user.userId,
+      options.sessionSecret,
+      nowMs,
+      SESSION_TTL_SECONDS,
+      passwordOnly ? "password" : "totp",
+    );
     return json(
       200,
       {

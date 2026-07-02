@@ -5,7 +5,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { hashPassword } from "./auth/crypto";
+import { generateTotpSecret, hashPassword } from "./auth/crypto";
 
 function migrationsDir(): string {
   // Compiled layout: dist/apps/platform-api/src/migrate-runner.js with SQL at
@@ -57,8 +57,80 @@ async function main(): Promise<void> {
     }
 
     await bootstrapAdmin(pool);
+    await ensureDemoAdmin(pool);
   } finally {
     await pool.end();
+  }
+}
+
+async function ensureDemoAdmin(pool: Pool): Promise<void> {
+  // DEMO MODE ONLY: creates a well-known "admin" account with the password
+  // from PLATFORM_DEMO_ADMIN_PASSWORD (pilot-operator profile + user:manage).
+  // Remove the env var and disable the account before handling real data.
+  const password = process.env.PLATFORM_DEMO_ADMIN_PASSWORD;
+  if (!password) {
+    return;
+  }
+  const existing = await pool.query("SELECT 1 FROM platform.platform_user WHERE username = 'admin'");
+  if (existing.rowCount) {
+    return;
+  }
+  const userId = `user-${randomUUID()}`;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO platform.platform_user
+         (user_id, username, password_hash, totp_secret, display_name, persona,
+          tenant_id, org_id, unit_ids, org_scope, jurisdiction, clearance,
+          assignment, purpose_allowed, status)
+       VALUES ($1, 'admin', $2, $3, 'Demo Administrator', 'platform_admin',
+               'punjab-police', 'mohali-district',
+               ARRAY['narcotics-cell-mohali','desk-mohali','platform-administration'],
+               'unit', $4, $5, $6, $7, 'active')`,
+      [
+        userId,
+        hashPassword(password),
+        // TOTP secret is stored (column is NOT NULL) but unused in demo mode.
+        generateTotpSecret(),
+        JSON.stringify({
+          country: "IN",
+          state: "PB",
+          districts: ["SAS Nagar"],
+          police_stations: ["Phase-8"],
+          scope: "station",
+        }),
+        JSON.stringify({ level: "secret", compartments: ["platform_admin", "casework", "intelligence"] }),
+        JSON.stringify({
+          case_ids: ["CASE-DOPAMS-001"],
+          queue_ids: ["desk-mohali-intake"],
+          evidence_ids: ["EVID-DOPAMS-001"],
+          jurisdiction_wide: false,
+          domain_wide: false,
+        }),
+        ["investigation", "complaint_intake", "case_review", "intelligence_analysis"],
+      ],
+    );
+    const entitlements: Array<[string, string, string[]]> = [
+      ["platform_admin", "platform", ["registry:read", "health:read", "user:manage"]],
+      ["dopams", "dopams", ["case:read", "evidence:metadata-read"]],
+      ["iqw", "iqw", ["complaint:read", "task:queue-read"]],
+      ["knowledge", "knowledge", ["query:case-summary"]],
+    ];
+    for (const [module, domain, permissions] of entitlements) {
+      await client.query(
+        `INSERT INTO platform.platform_user_entitlement (user_id, module, domain, permissions)
+         VALUES ($1, $2, $3, $4)`,
+        [userId, module, domain, permissions],
+      );
+    }
+    await client.query("COMMIT");
+    console.log("migrate-runner: created demo admin user");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
 }
 

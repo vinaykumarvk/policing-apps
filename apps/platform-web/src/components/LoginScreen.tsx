@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
-import { platformLogin, type PlatformSessionUser } from "../platform-api";
+import { useEffect, useState, type FormEvent } from "react";
+import { fetchAuthConfig, platformLogin, type PlatformSessionUser } from "../platform-api";
 
 const ERROR_MESSAGES: Record<string, string> = {
   LOGIN_FAILED: "Invalid username, password, or authenticator code.",
@@ -17,6 +17,13 @@ export function LoginScreen({
   const [totp, setTotp] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [passwordOnly, setPasswordOnly] = useState(false);
+
+  useEffect(() => {
+    fetchAuthConfig()
+      .then((config) => setPasswordOnly(config.password_only_login))
+      .catch(() => setPasswordOnly(false));
+  }, []);
 
   const handleSubmit = async (event: FormEvent): Promise<void> => {
     event.preventDefault();
@@ -56,18 +63,22 @@ export function LoginScreen({
           onChange={(event) => setPassword(event.target.value)}
           required
         />
-        <label htmlFor="login-totp">Authenticator code</label>
-        <input
-          id="login-totp"
-          name="totp"
-          inputMode="numeric"
-          pattern="\d{6}"
-          maxLength={6}
-          autoComplete="one-time-code"
-          value={totp}
-          onChange={(event) => setTotp(event.target.value)}
-          required
-        />
+        {passwordOnly ? null : (
+          <>
+            <label htmlFor="login-totp">Authenticator code</label>
+            <input
+              id="login-totp"
+              name="totp"
+              inputMode="numeric"
+              pattern="\d{6}"
+              maxLength={6}
+              autoComplete="one-time-code"
+              value={totp}
+              onChange={(event) => setTotp(event.target.value)}
+              required
+            />
+          </>
+        )}
         {error ? (
           <p className="login-error" role="alert">
             {error}

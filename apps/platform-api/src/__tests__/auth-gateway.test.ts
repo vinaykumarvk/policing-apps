@@ -197,6 +197,45 @@ describe("auth gateway", () => {
     expect(validatePlatformClaims(claims, { now: NOW }).valid).toBe(true);
   });
 
+  it("demo mode: password-only login works and claims record the password method", async () => {
+    const store = createInMemoryIdentityStore([TEST_USER], { [TEST_USER.userId]: TEST_ENTITLEMENTS });
+    const demoGateway = createAuthGateway({
+      store,
+      sessionSecret: SECRET,
+      now: () => NOW,
+      secureCookies: false,
+      allowPasswordOnly: true,
+    });
+    const login = await demoGateway.handleAuthRoute(
+      loginRequest({ username: "inspector", password: "correct horse battery staple" }),
+    );
+    expect(login?.status).toBe(200);
+    const cookie = (login?.headers.get("set-cookie") ?? "").split(";")[0];
+    const headers = await demoGateway.claimsHeadersFor(
+      new Request("http://platform/api/v1/platform/apps", { headers: { cookie } }),
+    );
+    const claims = JSON.parse(headers!["x-platform-claims"]);
+    expect(claims.mfa.methods).toEqual(["password"]);
+    expect(validatePlatformClaims(claims, { now: NOW }).valid).toBe(true);
+
+    const config = await demoGateway.handleAuthRoute(
+      new Request("http://platform/api/v1/platform/auth/config"),
+    );
+    expect(await config?.json()).toEqual({ password_only_login: true });
+  });
+
+  it("demo mode off: login without TOTP is rejected and config reports it", async () => {
+    const strictGateway = makeGateway();
+    const missingTotp = await strictGateway.handleAuthRoute(
+      loginRequest({ username: "inspector", password: "correct horse battery staple" }),
+    );
+    expect(missingTotp?.status).toBe(400);
+    const config = await strictGateway.handleAuthRoute(
+      new Request("http://platform/api/v1/platform/auth/config"),
+    );
+    expect(await config?.json()).toEqual({ password_only_login: false });
+  });
+
   it("returns no claims without a session and clears the cookie on logout", async () => {
     const gateway = makeGateway();
     expect(

@@ -93,6 +93,16 @@ export interface PlatformSessionResponse {
   user?: PlatformSessionUser;
 }
 
+export async function fetchAuthConfig(
+  options: PlatformApiClientOptions = {},
+): Promise<{ password_only_login: boolean }> {
+  const baseUrl = normalizeBaseUrl(options.baseUrl ?? platformApiBaseUrl());
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  return getJson<{ password_only_login: boolean }>(fetchImpl, `${baseUrl}/api/v1/platform/auth/config`, {
+    accept: "application/json",
+  });
+}
+
 export async function fetchPlatformSession(
   options: PlatformApiClientOptions = {},
 ): Promise<PlatformSessionResponse> {

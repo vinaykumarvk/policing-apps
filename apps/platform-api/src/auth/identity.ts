@@ -67,6 +67,8 @@ export interface MintClaimsInput {
   entitlements: readonly UserEntitlement[];
   sessionId: string;
   mfaVerifiedAt: string;
+  /** How the session authenticated; recorded verbatim in mfa.methods. */
+  authMethod?: "totp" | "password";
   now: Date;
   ttlSeconds?: number;
 }
@@ -110,7 +112,7 @@ export function mintPlatformClaims(input: MintClaimsInput): PlatformClaims {
     mfa: {
       required: true,
       verified: true,
-      methods: ["totp"],
+      methods: [input.authMethod ?? "totp"],
       verified_at: input.mfaVerifiedAt,
     },
   };

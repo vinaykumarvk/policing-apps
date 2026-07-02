@@ -152,3 +152,23 @@ deployed, locked, as the target-state topology awaiting a real claims issuer.
   source_version compatibility rule, ingress header stripping, user:manage admin
   surface) and the implemented decision-evidence boundary, with an amendment history.
 - Deployed as platform-api-00004-b9j. 59 platform-api tests green.
+
+---
+
+## Addendum 4: demo mode (password-only login)
+
+Per user request for easy testing/demo:
+
+- `PLATFORM_DEMO_ALLOW_PASSWORD_ONLY=true` on platform-api permits login without a
+  TOTP code; such sessions are honestly recorded with `mfa.methods: ["password"]` in
+  every minted claim and ledger record. Startup logs a DEMO MODE warning. Contract
+  amended to v1.2.
+- `PLATFORM_DEMO_ADMIN_PASSWORD` bootstraps a well-known `admin` account
+  (pilot-operator profile + user:manage). Login screen hides the authenticator field
+  when `GET /auth/config` reports password-only mode.
+- Deployed: platform-api-00005-cx8, platform-web-00004-ggt. Verified: admin/password123
+  logs in without authenticator; dopams/iqw/knowledge ALLOW; Users panel available.
+- **RISK (accepted for demo)**: trivially guessable credentials on a public URL.
+  Rollback before real data:
+  `gcloud run services update platform-api --remove-env-vars PLATFORM_DEMO_ALLOW_PASSWORD_ONLY,PLATFORM_DEMO_ADMIN_PASSWORD --region asia-southeast1 --project policing-apps`
+  and disable the `admin` user from the Users panel.

@@ -18,13 +18,20 @@ let evidenceStore: ReturnType<typeof createPgEvidenceStore> | null = null;
 if (process.env.DATABASE_URL && process.env.PLATFORM_SESSION_SECRET) {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5 });
   evidenceStore = createPgEvidenceStore(pool);
+  const allowPasswordOnly = process.env.PLATFORM_DEMO_ALLOW_PASSWORD_ONLY === "true";
   gateway = createAuthGateway({
     store: createPgIdentityStore(pool),
     sessionSecret: process.env.PLATFORM_SESSION_SECRET,
     evidenceSink: evidenceStore,
     evidenceReader: evidenceStore,
+    allowPasswordOnly,
   });
   console.log("platform-api: claims issuer enabled (decision-evidence ledger on)");
+  if (allowPasswordOnly) {
+    console.warn(
+      "platform-api: DEMO MODE — password-only login enabled; sessions minted with mfa.methods=[password]. Unset PLATFORM_DEMO_ALLOW_PASSWORD_ONLY before handling real data.",
+    );
+  }
 }
 
 const app = createPlatformApp({

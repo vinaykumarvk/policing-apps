@@ -1,6 +1,6 @@
 # Platform Auth Claims and Entitlements Contract
 
-Version: 1.1  
+Version: 1.2  
 Phase: P2 - Platform Auth Claim and Entitlement Contract (amended post-P16: platform IdP claims source)  
 Traceability: R-SEC-001, R-SEC-002
 
@@ -10,6 +10,7 @@ Traceability: R-SEC-001, R-SEC-002
 |---------|------|--------|
 | 1.0 | P2 | Initial contract: claim shape, deny-by-default rules, entitlement dimensions. |
 | 1.1 | 2026-07-02 | Added "Platform IdP Claims Source" section describing the production claims issuer (session login, per-request minting, TOTP MFA) and the decision-evidence ledger implementation status. |
+| 1.2 | 2026-07-02 | Documented demo mode (`PLATFORM_DEMO_ALLOW_PASSWORD_ONLY`): password-only login permitted when explicitly enabled; sessions are honestly recorded with `mfa.methods: ["password"]` in claims and ledger evidence. **Demo mode must be disabled (env unset, demo account disabled) before any production pilot or real data.** |
 
 ## Purpose
 
@@ -94,7 +95,7 @@ The production claims issuer is the platform API itself (`source: "platform-idp"
 - Users authenticate with username + password (scrypt-hashed) + TOTP code (RFC 6238, mandatory). Failed logins lock the username after 5 attempts for 5 minutes.
 - A successful login issues an HttpOnly, HMAC-SHA256-signed session cookie (8-hour expiry). The session carries only the user id and session id — never claims.
 - Claims are minted **fresh on every request** from the Postgres user store (`platform.platform_user`, `platform.platform_user_entitlement`), so revocation (user disable) takes effect on the next request and claims never outlive the 15-minute staleness window.
-- Minted claims always set `mfa: { required: true, verified: true, methods: ["totp"], verified_at: <mint time> }` — TOTP was verified at session creation and the session is the MFA continuity boundary.
+- Minted claims set `mfa: { required: true, verified: true, methods: [<session auth method>], verified_at: <mint time> }` — the method is `"totp"` for standard logins. When demo mode (`PLATFORM_DEMO_ALLOW_PASSWORD_ONLY=true`) is explicitly enabled, password-only logins are permitted and honestly recorded as `methods: ["password"]` in every claim and ledger record; demo mode is prohibited outside demo/test deployments.
 - `source_version` remains `idp-seed-v1` for compatibility with deployed domain-adapter validators. Rotating it requires a coordinated `expectedSourceVersion` update across platform-api and all domain adapters, and a row in the Amendment History.
 - Every minted claim is validated with `validatePlatformClaims` before use; a claim that fails validation is never attached to a request.
 

@@ -103,10 +103,14 @@ export function verifyTotp(secretBase32: string, code: string, epochMs: number):
 
 // --- Session tokens (HMAC-SHA256 signed, stateless) ---
 
+export type SessionAuthMethod = "totp" | "password";
+
 export interface SessionToken {
   userId: string;
   sessionId: string;
   expiresAtMs: number;
+  /** How the session was authenticated — carried into minted mfa.methods. */
+  authMethod: SessionAuthMethod;
 }
 
 function signPayload(payload: string, secret: string): string {
@@ -118,12 +122,13 @@ export function createSessionToken(
   secret: string,
   nowMs: number,
   ttlSeconds: number,
+  authMethod: SessionAuthMethod = "totp",
 ): string {
   const sessionId = `sess-${randomBytes(12).toString("hex")}`;
   const expiresAtMs = nowMs + ttlSeconds * 1000;
-  const payload = Buffer.from(JSON.stringify({ u: userId, s: sessionId, e: expiresAtMs })).toString(
-    "base64url",
-  );
+  const payload = Buffer.from(
+    JSON.stringify({ u: userId, s: sessionId, e: expiresAtMs, m: authMethod }),
+  ).toString("base64url");
   return `${payload}.${signPayload(payload, secret)}`;
 }
 
@@ -140,7 +145,7 @@ export function verifySessionToken(token: string, secret: string, nowMs: number)
   if (a.length !== b.length || !timingSafeEqual(a, b)) {
     return null;
   }
-  let parsed: { u?: unknown; s?: unknown; e?: unknown };
+  let parsed: { u?: unknown; s?: unknown; e?: unknown; m?: unknown };
   try {
     parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
   } catch {
@@ -149,8 +154,11 @@ export function verifySessionToken(token: string, secret: string, nowMs: number)
   if (typeof parsed.u !== "string" || typeof parsed.s !== "string" || typeof parsed.e !== "number") {
     return null;
   }
+  if (parsed.m !== "totp" && parsed.m !== "password") {
+    return null;
+  }
   if (parsed.e <= nowMs) {
     return null;
   }
-  return { userId: parsed.u, sessionId: parsed.s, expiresAtMs: parsed.e };
+  return { userId: parsed.u, sessionId: parsed.s, expiresAtMs: parsed.e, authMethod: parsed.m };
 }
