@@ -213,3 +213,11 @@ Per user request for easy testing/demo:
   similarity vs ground truth 95.1% / 90.2% / 94.0% (PNG path 98.3%); all key facts
   (names, phone numbers, vehicle KL-07-AX-1234, locations) extracted; document_format
   POLICE_COMPLAINT; English complaint briefs and who/what/how field extraction correct.
+
+---
+
+## Addendum 7: custom domain
+
+- Remapped `police-case-history.adssoftek.com` (previously → police-cases-kb, which
+  remains reachable at puda-kbase.adssoftek.com) to **platform-web**. DNS CNAME to
+  ghs.googlehosted.com was already in place; Google-managed certificate re-provisioned.
