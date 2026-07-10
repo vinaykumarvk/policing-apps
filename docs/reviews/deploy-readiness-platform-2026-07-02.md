@@ -259,3 +259,61 @@ Per user request for easy testing/demo:
 - Not yet SSO-enabled: forensic, social-media, knowledge (same pattern applies;
   their UIs keep local logins for now). Subject-level user mapping in DOPAMS is
   demo-grade (fallback to admin) — per-user provisioning is the production path.
+
+---
+
+## Addendum 10: seamless SSO for all SPA launches + platform shell redesign (2026-07-10)
+
+Commits `26c8db9`..`bbdec73`. Seven services rebuilt (Cloud Build, all SUCCESS:
+3352eda5 / a70b727c / d71502ab / bcf466d0 / f52bb7ad / cf8ad16b / cbcfd4c9) and
+deployed, each serving 100% of traffic:
+
+| Service | Rollback target | New revision |
+|---|---|---|
+| platform-api | platform-api-00009-26m | platform-api-00010-79j |
+| platform-web | platform-web-00006-cpd | platform-web-00007-57x |
+| forensic-api | forensic-api-00017-wjw | forensic-api-00018-smq |
+| social-media-api | social-media-api-00022-49f | social-media-api-00023-zrl |
+| forensic-ui | forensic-ui-00003-ckq | forensic-ui-00004-nlh |
+| social-media-ui | social-media-ui-00006-bm2 | social-media-ui-00007-jzz |
+| dopams-ui | dopams-ui-00014-g5l | dopams-ui-00015-m86 |
+
+Changes shipped:
+
+- **SSO identity fix**: launch tokens now carry the platform username in `u`
+  (previously the opaque `user-<uuid>`, so every exchange fell to the
+  destination's admin fallback). Benefits DOPAMS/IQW too.
+- **Forensic + Social Media SSO exchange endpoints** (`POST
+  /api/v1/auth/platform-sso`, mirrored from DOPAMS; pre-auth via api-core
+  public routes). Both services now mount `PLATFORM_SSO_SECRET`
+  (platform-sso-secret) and `PLATFORM_SSO_FALLBACK_USER=admin`.
+- **SSO interstitial** in dopams-ui / forensic-ui / social-media-ui: a
+  "Signing you in…" gate during the `?sso=` exchange and an explicit failure
+  state with a path to local login (no more login-screen flash / silent failure).
+- **Platform shell redesign** (login + dashboard) onto the family design
+  system with Kerala Police identity; launch tiles open in a new tab.
+- **Scoped landing identities** inserted into the prod domain DBs
+  (argon2id, demo password): forensic.analyst → forensic (the forensic DB
+  previously had NO matching or fallback user, so its exchange 403'd),
+  intel.analyst → social_media, dopams.operator → dopams. Platform-side
+  scoped demo users are ensured by migrate-runner at startup.
+
+Verified live (evidence, 2026-07-10):
+
+- Health `{"status":"ok"}` on platform-api / forensic-api / social-media-api;
+  HTTP 200 on all four custom domains; redesigned shell CSS confirmed serving
+  on police-case-history.adssoftek.com; new UI bundles on the domain apps.
+- Full SSO protocol per app: platform login → `/domains/<slug>` 302 with
+  audience-bound token (`u` = username) → exchange 200 as the correct local
+  user with the correct role (forensic.analyst/FORENSIC_ANALYST,
+  intel.analyst/INTELLIGENCE_ANALYST, dopams.operator/DISTRICT_OPERATOR);
+  tampered tokens 401 on all three.
+- Migrations: platform migrate-runner ran at startup (scoped users present);
+  the two amended social-media migration files are inert (already recorded in
+  `_migrations` by filename).
+- Error logs: 0 errors across all seven services since deploy.
+
+Not in scope: IQW `/sso?token=` consumes the same token format from its own
+repo (police-complaints) — its subject mapping still falls back to its local
+admin until that repo adopts the username field; the Knowledge app still has
+no SSO endpoint (plain redirect by design).
