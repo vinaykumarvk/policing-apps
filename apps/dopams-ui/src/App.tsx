@@ -10,6 +10,7 @@ import {
 } from "@puda/shared";
 import { useAuth } from "./useAuth";
 import Login from "./Login";
+import SsoGate from "./SsoGate";
 import { useTheme } from "./theme";
 import { clearCachedState } from "./cache";
 import { apiBaseUrl } from "./types";
@@ -127,7 +128,7 @@ function SvgIcon({ d }: { d: string }) {
 }
 
 export default function App() {
-  const { auth, login, logout, authHeaders, roles } = useAuth();
+  const { auth, login, logout, authHeaders, roles, ssoStatus, clearSsoStatus } = useAuth();
   const { theme, setTheme } = useTheme("dopams_theme");
   const { showToast } = useToast();
   const { t } = useTranslation();
@@ -456,6 +457,7 @@ export default function App() {
   };
 
   // --- Login gate ---
+  if (!auth && ssoStatus) return <SsoGate status={ssoStatus} onContinueToLogin={clearSsoStatus} />;
   if (!auth) return <Login onLogin={login} />;
 
   const userName = auth.user.full_name || auth.user.username;

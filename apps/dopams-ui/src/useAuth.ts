@@ -15,6 +15,13 @@ function getStoredAuth(): AuthState | null {
 
 export function useAuth() {
   const [auth, setAuth] = useState<AuthState | null>(getStoredAuth);
+  const [ssoStatus, setSsoStatus] = useState<"exchanging" | "failed" | null>(() => {
+    try {
+      return new URLSearchParams(window.location.search).has("sso") ? "exchanging" : null;
+    } catch {
+      return null;
+    }
+  });
 
   // Platform SSO: when launched from the policing platform with ?sso=<token>,
   // exchange the launch token for a local session before showing the login.
@@ -37,9 +44,11 @@ export function useAuth() {
         setAuth(newAuth);
         localStorage.setItem(STORAGE_USER, JSON.stringify(data.user));
         localStorage.setItem(STORAGE_TOKEN, data.token);
+        setSsoStatus(null);
       })
       .catch((err) => {
         console.warn("Platform SSO failed:", err instanceof Error ? err.message : "unknown");
+        setSsoStatus("failed");
       });
   }, []);
 
@@ -99,7 +108,9 @@ export function useAuth() {
       .catch((err) => { console.warn("Session verify failed:", err instanceof Error ? err.message : "unknown"); });
   }, []);
 
+  const clearSsoStatus = useCallback(() => setSsoStatus(null), []);
+
   const roles: string[] = auth?.user.roles || [];
 
-  return { auth, login, logout, authHeaders, roles };
+  return { auth, login, logout, authHeaders, roles, ssoStatus, clearSsoStatus };
 }
