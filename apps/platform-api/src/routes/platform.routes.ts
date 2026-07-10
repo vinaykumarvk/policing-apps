@@ -51,6 +51,7 @@ export interface PlatformRouteContext {
   evidenceProjectionService: EvidenceProjectionService;
   now: () => Date;
   expectedSourceVersion?: string;
+  demoAllowAllLaunches?: boolean;
 }
 
 interface AuthenticatedClaims {
@@ -318,7 +319,9 @@ function appResponse(
         },
       )
     : null;
-  const entitlementAllowed = entitlement?.allowed === true;
+  const launchCapable = app.state !== "planned" && app.state !== "blocked";
+  const entitlementAllowed =
+    entitlement?.allowed === true || (context.demoAllowAllLaunches === true && launchCapable);
   const view = appView(app, entitlementAllowed);
   return {
     ...view,

@@ -59,8 +59,89 @@ async function main(): Promise<void> {
 
     await bootstrapAdmin(pool);
     await ensureDemoAdmin(pool);
+    await ensureDemoScopedUsers(pool);
   } finally {
     await pool.end();
+  }
+}
+
+// DEMO MODE ONLY: one properly-scoped user per domain persona, built verbatim
+// from the role templates so each PASSES the real (un-overridden) per-app launch
+// entitlement check. Because the ABAC org check is an exact match, no single user
+// can launch every app — this is the correct security model: a forensic analyst
+// launches Forensic, an intelligence analyst launches Social Media, etc.
+async function ensureDemoScopedUsers(pool: Pool): Promise<void> {
+  const password = process.env.PLATFORM_DEMO_ADMIN_PASSWORD;
+  if (!password) {
+    return;
+  }
+  const scoped: Array<{ username: string; templateId: string }> = [
+    { username: "dopams.operator", templateId: "pilot_operator" },
+    { username: "forensic.analyst", templateId: "forensic_analyst" },
+    { username: "intel.analyst", templateId: "intelligence_analyst" },
+    { username: "io.officer", templateId: "investigating_officer" },
+  ];
+  for (const entry of scoped) {
+    await ensureScopedUser(pool, entry, password);
+  }
+}
+
+async function ensureScopedUser(
+  pool: Pool,
+  entry: { username: string; templateId: string },
+  password: string,
+): Promise<void> {
+  const existing = await pool.query("SELECT 1 FROM platform.platform_user WHERE username = $1", [
+    entry.username,
+  ]);
+  if (existing.rowCount) {
+    return;
+  }
+  const template = findRoleTemplate(entry.templateId);
+  if (!template) {
+    throw new Error(`scoped demo template missing: ${entry.templateId}`);
+  }
+  const userId = `user-${randomUUID()}`;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO platform.platform_user
+         (user_id, username, password_hash, totp_secret, display_name, persona,
+          tenant_id, org_id, unit_ids, org_scope, jurisdiction, clearance,
+          assignment, purpose_allowed, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'active')`,
+      [
+        userId,
+        entry.username,
+        hashPassword(password),
+        generateTotpSecret(),
+        template.label,
+        template.persona,
+        template.tenantId,
+        template.orgId,
+        [...template.unitIds],
+        template.orgScope,
+        JSON.stringify(template.jurisdiction),
+        JSON.stringify(template.clearance),
+        JSON.stringify(template.assignment),
+        [...template.purposeAllowed],
+      ],
+    );
+    for (const entitlement of template.entitlements) {
+      await client.query(
+        `INSERT INTO platform.platform_user_entitlement (user_id, module, domain, permissions)
+         VALUES ($1, $2, $3, $4)`,
+        [userId, entitlement.module, entitlement.domain, [...entitlement.permissions]],
+      );
+    }
+    await client.query("COMMIT");
+    console.log(`migrate-runner: created scoped demo user ${entry.username} (${entry.templateId})`);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
 }
 

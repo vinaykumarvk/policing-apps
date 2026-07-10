@@ -27,6 +27,8 @@ export interface PlatformApiOptions {
   evidenceProjectionService?: EvidenceProjectionService;
   now?: () => Date;
   expectedSourceVersion?: string;
+  /** DEMO MODE ONLY: mark every launch-capable app as launchable in /apps too. */
+  demoAllowAllLaunches?: boolean;
 }
 
 export interface DecisionEvidenceLog extends DecisionEvidenceSink {
@@ -64,6 +66,7 @@ export function createPlatformApp(options: PlatformApiOptions = {}): PlatformApi
       evidenceProjectionService,
       now,
       expectedSourceVersion,
+      demoAllowAllLaunches: options.demoAllowAllLaunches ?? false,
     });
 
   return {

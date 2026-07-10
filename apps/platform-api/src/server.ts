@@ -35,8 +35,10 @@ if (process.env.DATABASE_URL && process.env.PLATFORM_SESSION_SECRET) {
     evidenceSink: evidenceStore,
     evidenceReader: evidenceStore,
     allowPasswordOnly,
+    demoTotpCode: process.env.PLATFORM_DEMO_TOTP_CODE,
     launchTargets,
     ssoSecret: process.env.PLATFORM_SSO_SECRET,
+    demoAllowAllLaunches: process.env.PLATFORM_DEMO_ALLOW_ALL_LAUNCHES === "true",
   });
   console.log("platform-api: claims issuer enabled (decision-evidence ledger on)");
   if (allowPasswordOnly) {
@@ -63,6 +65,7 @@ const app = createPlatformApp({
   // G-SEC-002: persist every platform allow/deny decision to the ledger.
   ...(evidenceStore ? { evidenceSink: evidenceStore } : {}),
   ...projectionOverrides,
+  demoAllowAllLaunches: process.env.PLATFORM_DEMO_ALLOW_ALL_LAUNCHES === "true",
 });
 
 createServer(async (req, res) => {
