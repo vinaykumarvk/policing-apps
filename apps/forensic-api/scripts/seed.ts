@@ -16,8 +16,8 @@ async function seed() {
   ];
   for (const u of units) {
     await query(
-      `INSERT INTO organization_unit (unit_id, name, code, is_active)
-       VALUES (gen_random_uuid(), $1, $2, true)
+      `INSERT INTO organization_unit (unit_id, name, code)
+       VALUES (gen_random_uuid(), $1, $2)
        ON CONFLICT (code) DO NOTHING`,
       [u.name, u.code],
     );
@@ -28,10 +28,10 @@ async function seed() {
   const roles = ["FORENSIC_ANALYST", "SUPERVISOR", "ADMINISTRATOR", "LEGAL_ADVISOR"];
   for (const rk of roles) {
     await query(
-      `INSERT INTO role (role_id, role_key, description)
-       VALUES (gen_random_uuid(), $1, $1)
+      `INSERT INTO role (role_id, role_key, display_name, description)
+       VALUES (gen_random_uuid(), $1, $2, $3)
        ON CONFLICT (role_key) DO NOTHING`,
-      [rk],
+      [rk, rk, rk],
     );
   }
   console.log("[SEED] Roles ensured");
@@ -46,6 +46,17 @@ async function seed() {
     { username: "examiner1", password: "password", fullName: "Examiner One", userType: "OFFICER", roleMappings: ["FORENSIC_ANALYST"] },
     { username: "supervisor1", password: "password", fullName: "Supervisor One", userType: "OFFICER", roleMappings: ["SUPERVISOR"] },
   ];
+
+  // Platform SSO landing identity: matches the platform persona username so
+  // /api/v1/auth/platform-sso resolves the real user instead of the admin
+  // fallback. Shares the demo password of the seed users above.
+  users.push({
+    username: "forensic.analyst",
+    password: users[0].password,
+    fullName: "Forensic Analyst",
+    userType: "OFFICER",
+    roleMappings: ["FORENSIC_ANALYST"],
+  });
 
   for (const u of users) {
     const hash = await hashPassword(u.password);

@@ -28,8 +28,10 @@ export const DEFAULT_LAUNCH_TARGETS: Readonly<Record<string, string>> = {
 
 /** How each destination app receives its SSO launch token. */
 const SSO_REDIRECT_BUILDERS: Readonly<Record<string, (target: string, token: string) => string>> = {
-  // dopams-ui is a SPA: it exchanges ?sso= for a local JWT via its API.
+  // SPA apps exchange ?sso= for a local JWT via their API (/api/v1/auth/platform-sso).
   dopams: (target, token) => `${target}/?sso=${encodeURIComponent(token)}`,
+  forensic: (target, token) => `${target}/?sso=${encodeURIComponent(token)}`,
+  "social-media": (target, token) => `${target}/?sso=${encodeURIComponent(token)}`,
   // IQW establishes its server-side session directly on /sso and redirects.
   iqw: (target, token) => `${target}/sso?token=${encodeURIComponent(token)}`,
 };
@@ -37,7 +39,7 @@ const SSO_REDIRECT_BUILDERS: Readonly<Record<string, (target: string, token: str
 export const SSO_TOKEN_TTL_SECONDS = 60;
 
 export interface SsoTokenPayload {
-  u: string; // username
+  u: string; // username (falls back to the opaque platform user_id when unknown)
   d: string; // display name
   p: string; // persona
   t: string; // tenant id
@@ -50,9 +52,13 @@ export function createSsoLaunchToken(
   audience: string,
   secret: string,
   nowMs: number,
+  username?: string,
 ): string {
+  // Destination apps resolve their local account by username; the opaque
+  // user_id ("user-<uuid>") never matches one, which silently demotes every
+  // launch to the destination's fallback account.
   const payload: SsoTokenPayload = {
-    u: claims.subject.user_id,
+    u: username ?? claims.subject.user_id,
     d: claims.subject.display_name,
     p: claims.subject.persona,
     t: claims.subject.tenant_id,
@@ -71,6 +77,12 @@ export interface LaunchRouterOptions {
   now?: () => Date;
   /** Shared secret for SSO launch tokens. Without it, launches redirect plainly. */
   ssoSecret?: string;
+  /**
+   * DEMO MODE ONLY: allow any authenticated session to launch any launch-capable
+   * app, bypassing the per-app entitlement decision (still recorded in evidence).
+   * Never enable where real data is reachable.
+   */
+  demoAllowAllLaunches?: boolean;
 }
 
 export function isLaunchRoute(pathname: string): boolean {
@@ -78,7 +90,7 @@ export function isLaunchRoute(pathname: string): boolean {
 }
 
 export interface LaunchRouter {
-  handle: (request: Request, claims: PlatformClaims | null) => Promise<Response | null>;
+  handle: (request: Request, claims: PlatformClaims | null, username?: string) => Promise<Response | null>;
 }
 
 export function createLaunchRouter(options: LaunchRouterOptions = {}): LaunchRouter {
@@ -86,7 +98,11 @@ export function createLaunchRouter(options: LaunchRouterOptions = {}): LaunchRou
   const targets = options.targets ?? DEFAULT_LAUNCH_TARGETS;
   const now = options.now ?? (() => new Date());
 
-  const handle = async (request: Request, claims: PlatformClaims | null): Promise<Response | null> => {
+  const handle = async (
+    request: Request,
+    claims: PlatformClaims | null,
+    username?: string,
+  ): Promise<Response | null> => {
     const url = new URL(request.url);
     if (!isLaunchRoute(url.pathname)) {
       return null;
@@ -107,8 +123,18 @@ export function createLaunchRouter(options: LaunchRouterOptions = {}): LaunchRou
     const decision = launchRequest
       ? evaluateEntitlement(claims, { ...launchRequest, serverVerified: true }, { now: now() })
       : null;
-    const allowed = decision?.allowed === true && app.state !== "planned" && app.state !== "blocked";
-    const reason = decision ? decision.reason : "NO_ENTITLEMENT_REQUEST";
+    const launchCapable = app.state !== "planned" && app.state !== "blocked";
+    const allowed = options.demoAllowAllLaunches
+      ? launchCapable
+      : decision?.allowed === true && launchCapable;
+    const reason =
+      decision?.allowed === true
+        ? decision.reason
+        : options.demoAllowAllLaunches && launchCapable
+          ? "DEMO_LAUNCH_OVERRIDE"
+          : decision
+            ? decision.reason
+            : "NO_ENTITLEMENT_REQUEST";
 
     await options.evidenceSink?.append(
       launchDecisionEvidence({
@@ -140,7 +166,7 @@ export function createLaunchRouter(options: LaunchRouterOptions = {}): LaunchRou
     const ssoBuilder = SSO_REDIRECT_BUILDERS[slug];
     const location =
       options.ssoSecret && ssoBuilder
-        ? ssoBuilder(target, createSsoLaunchToken(claims, slug, options.ssoSecret, now().getTime()))
+        ? ssoBuilder(target, createSsoLaunchToken(claims, slug, options.ssoSecret, now().getTime(), username))
         : target;
     return new Response(null, { status: 302, headers: { location } });
   };

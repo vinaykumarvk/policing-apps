@@ -337,6 +337,18 @@ async function seed() {
     { username: "supervisor1", password: "password", fullName: "Supervisor One", userType: "OFFICER", roleMappings: ["SUPERVISOR"], unitId: hqUnitId },
   ];
 
+  // Platform SSO landing identity: matches the platform persona username so
+  // /api/v1/auth/platform-sso resolves the real user instead of the admin
+  // fallback. Shares the demo password of the seed users above.
+  users.push({
+    username: "intel.analyst",
+    password: users[0].password,
+    fullName: "Intelligence Analyst",
+    userType: "OFFICER",
+    roleMappings: ["INTELLIGENCE_ANALYST"],
+    unitId: hqUnitId,
+  });
+
   for (const u of users) {
     const hash = await hashPassword(u.password);
     const result = await query(

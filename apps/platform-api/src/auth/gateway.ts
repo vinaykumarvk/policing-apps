@@ -33,10 +33,18 @@ export interface AuthGatewayOptions {
    * record. Must never be enabled where real data is reachable.
    */
   allowPasswordOnly?: boolean;
+  /**
+   * DEMO MODE ONLY: a fixed authenticator code (e.g. "000000") accepted in place
+   * of a real TOTP for every user. Sessions still record mfa.methods ["totp"].
+   * Must never be enabled where real data is reachable.
+   */
+  demoTotpCode?: string;
   /** Destination URLs for /domains/<app> launch handoffs, keyed by launch slug. */
   launchTargets?: Readonly<Record<string, string>>;
   /** Shared secret for SSO launch tokens handed to destination apps. */
   ssoSecret?: string;
+  /** DEMO MODE ONLY: bypass per-app launch entitlement for any signed-in session. */
+  demoAllowAllLaunches?: boolean;
 }
 
 export interface AuthGateway {
@@ -61,6 +69,7 @@ export function createAuthGateway(options: AuthGatewayOptions): AuthGateway {
     targets: options.launchTargets,
     evidenceSink: options.evidenceSink,
     ssoSecret: options.ssoSecret,
+    demoAllowAllLaunches: options.demoAllowAllLaunches,
     now,
   });
 
@@ -72,7 +81,7 @@ export function createAuthGateway(options: AuthGatewayOptions): AuthGateway {
     return verifySessionToken(cookie, options.sessionSecret, now().getTime());
   };
 
-  const mintForSession = async (request: Request): Promise<PlatformClaims | null> => {
+  const sessionUserFor = async (request: Request) => {
     const session = readSession(request);
     if (!session) {
       return null;
@@ -81,16 +90,25 @@ export function createAuthGateway(options: AuthGatewayOptions): AuthGateway {
     if (!user || user.status !== "active") {
       return null;
     }
-    const entitlements = await options.store.getEntitlements(user.userId);
+    return { session, user };
+  };
+
+  const mintFor = async (found: NonNullable<Awaited<ReturnType<typeof sessionUserFor>>>): Promise<PlatformClaims> => {
+    const entitlements = await options.store.getEntitlements(found.user.userId);
     const current = now();
     return mintPlatformClaims({
-      user,
+      user: found.user,
       entitlements,
-      sessionId: session.sessionId,
+      sessionId: found.session.sessionId,
       mfaVerifiedAt: current.toISOString(),
-      authMethod: session.authMethod,
+      authMethod: found.session.authMethod,
       now: current,
     });
+  };
+
+  const mintForSession = async (request: Request): Promise<PlatformClaims | null> => {
+    const found = await sessionUserFor(request);
+    return found ? mintFor(found) : null;
   };
 
   const handleAuthRoute = async (request: Request): Promise<Response | null> => {
@@ -174,7 +192,17 @@ export function createAuthGateway(options: AuthGatewayOptions): AuthGateway {
 
     const user = await options.store.getUserByUsername(username);
     const passwordOk = user ? verifyPassword(password, user.passwordHash) : false;
-    const totpOk = passwordOnly ? true : user ? verifyTotp(user.totpSecret, totp, nowMs) : false;
+    const demoCodeOk =
+      typeof options.demoTotpCode === "string" &&
+      options.demoTotpCode.length > 0 &&
+      totp === options.demoTotpCode;
+    const totpOk = passwordOnly
+      ? true
+      : demoCodeOk
+        ? true
+        : user
+          ? verifyTotp(user.totpSecret, totp, nowMs)
+          : false;
     if (!user || user.status !== "active" || !passwordOk || !totpOk) {
       const next: FailureState = {
         count: (failure?.count ?? 0) + 1,
@@ -211,8 +239,9 @@ export function createAuthGateway(options: AuthGatewayOptions): AuthGateway {
     if (!isLaunchRoute(url.pathname)) {
       return null;
     }
-    const claims = await mintForSession(request).catch(() => null);
-    return launchRouter.handle(request, claims);
+    const found = await sessionUserFor(request).catch(() => null);
+    const claims = found ? await mintFor(found).catch(() => null) : null;
+    return launchRouter.handle(request, claims, found?.user.username);
   };
 
   const claimsHeadersFor = async (request: Request): Promise<Record<string, string> | null> => {
