@@ -39,6 +39,8 @@ CREATE INDEX IF NOT EXISTS idx_jurisdiction_location_active
   ON jurisdiction_location (is_active) WHERE is_active = TRUE;
 
 -- Add apify connector to source_connector seed
-INSERT INTO source_connector (platform, base_url, is_active, health_status)
-VALUES ('apify', 'https://api.apify.com/v2', TRUE, 'UNKNOWN')
+-- NOTE: source_connector has no base_url column; the endpoint lives in config_jsonb.
+-- connector_type is NOT NULL, so it must be provided.
+INSERT INTO source_connector (platform, connector_type, config_jsonb, is_active, health_status)
+VALUES ('apify', 'apify', '{"base_url":"https://api.apify.com/v2"}'::jsonb, TRUE, 'UNKNOWN')
 ON CONFLICT DO NOTHING;

@@ -3,6 +3,22 @@
 -- ENT-14: Extend legal_mapping with rule references and reviewer workflow
 -- ═══════════════════════════════════════════════════════════════════════════
 
+-- Reconcile legacy schema: 001_init created legal_mapping_rule with an unrelated
+-- keyword-pattern shape (statute/keyword_patterns/threat_categories) that no app
+-- code uses. The rule engine below is the authoritative schema. Drop the legacy
+-- table (and its unused dependent) ONLY when the old shape is present, so this is
+-- a safe no-op on any environment that already has the correct schema.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'legal_mapping_rule' AND column_name = 'keyword_patterns'
+  ) THEN
+    DROP TABLE IF EXISTS legal_mapping_result CASCADE; -- legacy, no app references
+    DROP TABLE legal_mapping_rule CASCADE;
+  END IF;
+END $$;
+
 -- ENT-13: Legal mapping rule definitions
 CREATE TABLE IF NOT EXISTS legal_mapping_rule (
   rule_id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),

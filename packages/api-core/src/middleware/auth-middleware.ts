@@ -20,6 +20,8 @@ const DEFAULT_PUBLIC_ROUTES = [
   "/api/v1/auth/login",
   "/api/v1/auth/ldap/login",
   "/api/v1/auth/logout",
+  // Platform SSO token exchange is pre-auth: it mints the local session.
+  "/api/v1/auth/platform-sso",
 ];
 
 const OIDC_PUBLIC_ROUTES = [
