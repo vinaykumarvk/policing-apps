@@ -16,9 +16,9 @@ export interface ModuleRouteRow {
 }
 
 export const SHELL_ROUTES: readonly ShellRoute[] = [
-  { id: "launcher", label: "Apps", path: "/" },
-  { id: "routes", label: "Routes", path: "/platform/routes" },
-  { id: "audit", label: "Audit", path: "/platform/audit" },
+  { id: "launcher", label: "Apps", path: "#apps" },
+  { id: "routes", label: "Routes", path: "#routes" },
+  { id: "audit", label: "Audit", path: "#audit" },
 ];
 
 export function moduleRouteRowsFromRegistry(apps: readonly PlatformAppView[]): ModuleRouteRow[] {
@@ -40,7 +40,7 @@ export function RouteTable({ apps }: { apps: readonly PlatformAppView[] }): JSX.
   const rows = moduleRouteRowsFromRegistry(apps);
 
   return (
-    <section className="surface-band" aria-labelledby="route-table-heading">
+    <section className="surface-band" id="routes" aria-labelledby="route-table-heading">
       <div className="surface-inner">
         <div className="section-heading">
           <p className="eyebrow">Route table</p>
@@ -60,7 +60,11 @@ export function RouteTable({ apps }: { apps: readonly PlatformAppView[] }): JSX.
               {rows.map((row) => (
                 <tr key={row.id} data-state={row.state}>
                   <th scope="row">{row.label}</th>
-                  <td>{stateLabel(row.state)}</td>
+                  <td>
+                    <span className="route-state" data-state={row.state}>
+                      {stateLabel(row.state)}
+                    </span>
+                  </td>
                   <td>
                     {row.routePath ? (
                       <a href={row.routePath} className="table-link">

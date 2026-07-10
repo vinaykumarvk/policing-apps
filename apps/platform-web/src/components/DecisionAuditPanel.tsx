@@ -10,7 +10,7 @@ export function DecisionAuditPanel({ apps, me, registryVersion }: DecisionAuditP
   const activeRoutes = apps.filter((app) => app.launch_url && app.state !== "planned" && app.state !== "blocked");
 
   return (
-    <section className="audit-panel" aria-labelledby="decision-audit-heading">
+    <section className="audit-panel" id="audit" aria-labelledby="decision-audit-heading">
       <div className="surface-inner">
         <div className="section-heading">
           <p className="eyebrow">Decision audit</p>

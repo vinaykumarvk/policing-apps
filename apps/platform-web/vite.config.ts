@@ -10,6 +10,13 @@ export default defineConfig({
         target: "http://localhost:8080",
         changeOrigin: true,
       },
+      // App-launch handoff: /domains/<app> is served by platform-api (the gateway),
+      // which validates the session + entitlement and 302-redirects to the target UI.
+      // Local dev replicates nginx.platform.conf's /domains/* routing.
+      "/domains": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
     },
   },
 });

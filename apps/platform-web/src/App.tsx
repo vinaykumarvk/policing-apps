@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AppLauncher } from "./components/AppLauncher";
 import { DecisionAuditPanel } from "./components/DecisionAuditPanel";
+import { GovBanner, StateEmblem } from "./components/GovBranding";
 import { LoginScreen } from "./components/LoginScreen";
 import { UsersPanel } from "./components/UsersPanel";
 import { RouteTable, SHELL_ROUTES } from "./routes";
@@ -86,29 +87,15 @@ export default function App(): JSX.Element {
     });
   }, []);
 
+  if (session.status === "signed-out") {
+    return <LoginScreen onSignedIn={handleSignedIn} />;
+  }
+
   return (
     <div className="app-shell">
-      <header className="platform-header">
-        <div>
-          <p className="eyebrow">Government of Kerala · Kerala Police</p>
-          <h1>Integrated Policing Platform</h1>
-        </div>
-        <nav aria-label="Platform shell">
-          {SHELL_ROUTES.map((route) => (
-            <a key={route.id} href={route.path}>
-              {route.label}
-            </a>
-          ))}
-          {session.status === "signed-in" ? (
-            <button type="button" className="sign-out" onClick={handleSignOut}>
-              Sign out
-            </button>
-          ) : null}
-        </nav>
-      </header>
+      {session.status === "signed-in" ? <ShellHeader user={session.user} onSignOut={handleSignOut} /> : <GovBanner />}
 
       {session.status === "checking" ? <StatusPanel title="Checking session" /> : null}
-      {session.status === "signed-out" ? <LoginScreen onSignedIn={handleSignedIn} /> : null}
       {session.status === "signed-in" ? (
         <>
           {loadState.status === "loading" ? <StatusPanel title="Loading registry data" /> : null}
@@ -120,6 +107,54 @@ export default function App(): JSX.Element {
   );
 }
 
+function ShellHeader({
+  user,
+  onSignOut,
+}: {
+  user: PlatformSessionUser;
+  onSignOut: () => void;
+}): JSX.Element {
+  const initials = user.display_name
+    .split(/\s+/)
+    .map((part) => part.charAt(0))
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  return (
+    <header className="app-bar">
+      <div className="app-bar__brand">
+        <StateEmblem size={40} />
+        <div className="app-bar__brand-text">
+          <strong>Integrated Policing Platform</strong>
+          <span>Kerala Police · Government of Kerala</span>
+        </div>
+      </div>
+      <nav className="app-bar__nav" aria-label="Platform shell">
+        {SHELL_ROUTES.map((route) => (
+          <a key={route.id} href={route.path}>
+            {route.label}
+          </a>
+        ))}
+      </nav>
+      <div className="app-bar__session">
+        <div className="session-chip">
+          <span className="session-chip__avatar" aria-hidden="true">
+            {initials}
+          </span>
+          <span className="session-chip__meta">
+            <strong>{user.display_name}</strong>
+            <span>{user.persona.replace(/[-_]/g, " ")}</span>
+          </span>
+        </div>
+        <button type="button" className="sign-out" onClick={onSignOut}>
+          Sign out
+        </button>
+      </div>
+    </header>
+  );
+}
+
 function ShellDashboard({ data }: { data: PlatformShellData }): JSX.Element {
   return (
     <main>
@@ -127,11 +162,14 @@ function ShellDashboard({ data }: { data: PlatformShellData }): JSX.Element {
         <div className="surface-inner hero-content">
           <div>
             <p className="eyebrow">Signed in</p>
-            <h2 id="dashboard-heading">{data.me.subject.display_name}</h2>
-            <p>
-              {data.me.subject.org_id} · MFA {data.me.mfa_verified ? "verified" : "not verified"} · Claims expire{" "}
-              {formatDateTime(data.me.expires_at)}
-            </p>
+            <h2 id="dashboard-heading">Welcome, {data.me.subject.display_name}</h2>
+            <ul className="hero-meta">
+              <li>{data.me.subject.org_id}</li>
+              <li className={data.me.mfa_verified ? "hero-meta--verified" : undefined}>
+                {data.me.mfa_verified ? "MFA verified" : "MFA not verified"}
+              </li>
+              <li>Claims expire {formatDateTime(data.me.expires_at)}</li>
+            </ul>
           </div>
           <div className="hero-stat" aria-label="Registry total modules">
             <span>{data.registry.pagination.total}</span>
@@ -156,6 +194,7 @@ function StatusPanel({ title }: { title: string }): JSX.Element {
   return (
     <main className="status-page" aria-live="polite">
       <div className="status-panel">
+        <span className="status-spinner" aria-hidden="true" />
         <p className="eyebrow">Platform API</p>
         <h2>{title}</h2>
       </div>
@@ -167,6 +206,9 @@ function FailureState({ reason }: { reason: string }): JSX.Element {
   return (
     <main className="status-page" role="alert">
       <div className="status-panel status-panel--error">
+        <span className="status-error-icon" aria-hidden="true">
+          !
+        </span>
         <p className="eyebrow">Platform API</p>
         <h2>Registry unavailable</h2>
         <p>{reason}</p>
