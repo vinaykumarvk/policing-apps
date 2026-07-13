@@ -55,15 +55,23 @@ export function useOfficerAuth() {
     return { headers: { "Content-Type": "application/json" }, credentials: "include" };
   }, []);
 
-  // Verify session on mount via HttpOnly cookie
+  // Verify session on mount via HttpOnly cookie. A cookie can be established
+  // without a matching localStorage entry (e.g. the platform SSO handoff sets
+  // it via a top-level redirect, bypassing login()), so a successful check
+  // must populate auth from the response, not just clear on failure.
   useEffect(() => {
     fetch(`${apiBaseUrl}/api/v1/auth/me`, { credentials: "include" })
-      .then((res) => {
+      .then(async (res) => {
         if (!res.ok) {
           setAuth(null);
           setPostings([]);
           localStorage.removeItem(STORAGE_USER);
+          return;
         }
+        const data = await res.json();
+        const newAuth: OfficerAuth = { user: data.user };
+        setAuth(newAuth);
+        localStorage.setItem(STORAGE_USER, JSON.stringify(data.user));
       })
       .catch(() => { /* Session verify failed — treated as logged out */ });
   }, []);

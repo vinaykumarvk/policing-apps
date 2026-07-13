@@ -10,6 +10,10 @@ services:
       - |
         npm ci --include-workspace-root
         npm --workspace packages/authz run build
+        npm --workspace packages/api-core run build
+        npm --workspace packages/api-integrations run build
+        npm --workspace packages/workflow-engine run build
+        npm --workspace packages/shared run build
     volumes:
       - ../..:/workspace
       - platform_node_modules:/workspace/node_modules
@@ -62,53 +66,22 @@ services:
     working_dir: /workspace
     environment:
       PORT: "8080"
-      PLATFORM_LOCAL_NOW: "2026-07-01T18:45:00Z"
       DATABASE_URL: postgres://policing:policing-local-only@postgres:5432/policing_platform
       REDIS_URL: redis://redis-queue:6379/0
       OBJECT_STORAGE_ENDPOINT: http://object-storage:9000
+      # DEMO MODE ONLY — pilot-local secrets/credentials, never used against real data.
+      PLATFORM_SESSION_SECRET: platform-session-pilot-dev-secret-0001
+      PLATFORM_DEMO_TOTP_CODE: "000000"
+      PLATFORM_DEMO_ADMIN_PASSWORD: password123
+      PLATFORM_PROJECTION_TTL_SECONDS: "31536000"
+      PLATFORM_SSO_SECRET: platform-sso-pilot-dev-secret-0001
+      PLATFORM_LAUNCH_TARGETS: '{"dopams":"http://localhost:5175","forensic":"http://localhost:5178","social-media":"http://localhost:5177","knowledge":"https://police-case-history.adssoftek.com","iqw":"http://localhost:3013"}'
     command:
       - sh
       - -lc
       - |
-        cat > /tmp/platform-api-local.ts <<'TS'
-        import { createServer } from "node:http";
-        import { createPlatformApp } from "/workspace/apps/platform-api/src/app";
-
-        const app = createPlatformApp({
-          now: () => new Date(process.env.PLATFORM_LOCAL_NOW ?? "2026-07-01T18:45:00Z"),
-        });
-        const port = Number(process.env.PORT ?? 8080);
-
-        createServer(async (req, res) => {
-          try {
-            const chunks: Buffer[] = [];
-            for await (const chunk of req) {
-              chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-            }
-            const method = req.method ?? "GET";
-            const body = method === "GET" || method === "HEAD" ? undefined : Buffer.concat(chunks);
-            const protocol = req.headers["x-forwarded-proto"] ?? "http";
-            const host = req.headers.host ?? "platform-api:" + port;
-            const request = new Request(String(protocol) + "://" + host + (req.url ?? "/"), {
-              method,
-              headers: req.headers as HeadersInit,
-              body,
-            });
-            const response = await app.fetch(request);
-            res.statusCode = response.status;
-            response.headers.forEach((value, key) => res.setHeader(key, value));
-            const responseBody = Buffer.from(await response.arrayBuffer());
-            res.end(responseBody);
-          } catch {
-            res.statusCode = 500;
-            res.setHeader("content-type", "application/json");
-            res.end(JSON.stringify({ error: { code: "LOCAL_PLATFORM_API_FAILED" } }));
-          }
-        }).listen(port, "0.0.0.0", () => {
-          console.log("platform-api local wrapper listening on " + port);
-        });
-        TS
-        npx tsx /tmp/platform-api-local.ts
+        npx tsx apps/platform-api/src/migrate-runner.ts
+        exec npx tsx apps/platform-api/src/server.ts
     volumes:
       - ../..:/workspace
       - platform_node_modules:/workspace/node_modules
@@ -165,61 +138,17 @@ services:
 
   dopams-api:
     image: node:22-alpine
-    working_dir: /workspace
+    working_dir: /workspace/apps/dopams-api
     environment:
       PORT: "8080"
-      PLATFORM_LOCAL_NOW: "2026-07-01T18:45:00Z"
-      DOPAMS_DATABASE_URL: postgres://policing:policing-local-only@postgres:5432/policing_platform
-    command:
-      - sh
-      - -lc
-      - |
-        cat > /tmp/dopams-platform-gate.ts <<'TS'
-        import { createServer } from "node:http";
-        import { evaluateDopamsPlatformAuth } from "/workspace/apps/dopams-api/src/middleware/platform-auth";
-
-        const port = Number(process.env.PORT ?? 8080);
-        const now = () => new Date(process.env.PLATFORM_LOCAL_NOW ?? "2026-07-01T18:45:00Z");
-
-        createServer(async (req, res) => {
-          const claimsHeader = Array.isArray(req.headers["x-platform-claims"])
-            ? req.headers["x-platform-claims"][0]
-            : req.headers["x-platform-claims"];
-          let claims: unknown = undefined;
-          let claimsParseError: string | undefined;
-          if (claimsHeader) {
-            try {
-              claims = JSON.parse(claimsHeader);
-            } catch {
-              claimsParseError = "x-platform-claims must be valid JSON";
-            }
-          }
-          const decision = evaluateDopamsPlatformAuth(
-            {
-              claims,
-              claimsParseError,
-              serverVerified: req.headers["x-platform-claims-verified"] === "true",
-              servicePath: req.url ?? "/domains/dopams",
-              correlationId:
-                String(req.headers["x-correlation-id"] ?? req.headers["x-request-id"] ?? "dopams-local-smoke"),
-            },
-            { now },
-          );
-          res.statusCode = decision.allowed ? 200 : 403;
-          res.setHeader("content-type", "application/json");
-          res.end(
-            JSON.stringify({
-              service: "dopams-api",
-              profile: "platform-pilot-local",
-              gate_evidence_ref: decision.evidence.gate_evidence_ref,
-              platform_auth: decision.evidence,
-            }),
-          );
-        }).listen(port, "0.0.0.0", () => {
-          console.log("dopams-api platform gate harness listening on " + port);
-        });
-        TS
-        npx tsx /tmp/dopams-platform-gate.ts
+      NODE_ENV: "development"
+      DATABASE_SSL: "false"
+      DOPAMS_DATABASE_URL: postgres://policing:policing-local-only@postgres:5432/dopams
+      JWT_SECRET: dopams-local-dev-secret
+      ALLOWED_ORIGINS: http://localhost:5175
+      PLATFORM_SSO_SECRET: platform-sso-pilot-dev-secret-0001
+      PLATFORM_SSO_FALLBACK_USER: admin
+    command: ["npx", "tsx", "src/index.ts"]
     volumes:
       - ../..:/workspace
       - platform_node_modules:/workspace/node_modules
@@ -232,71 +161,60 @@ services:
       test:
         [
           "CMD-SHELL",
-          "node -e \"fetch('http://127.0.0.1:8080/health').then(r=>{if(r.status!==403)throw r.status}).catch(()=>process.exit(1))\"",
+          "node -e \"fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)throw r.status}).catch(()=>process.exit(1))\"",
         ]
       interval: 5s
       timeout: 5s
       retries: 24
     networks:
       - pilot-private
+      - pilot-public
+    ports:
+      - "3011:8080"
+
+  dopams-ui:
+    image: node:22-alpine
+    working_dir: /workspace/apps/dopams-ui
+    environment:
+      VITE_API_BASE_URL: http://localhost:3011
+      CHOKIDAR_USEPOLLING: "true"
+    command: ["npx", "vite", "--host", "0.0.0.0", "--port", "5175", "--strictPort"]
+    volumes:
+      - ../..:/workspace
+      - platform_node_modules:/workspace/node_modules
+    depends_on:
+      node-deps:
+        condition: service_completed_successfully
+      dopams-api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:5175/').then(r=>{if(!r.ok)throw r.status}).catch(()=>process.exit(1))\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    networks:
+      - pilot-private
+      - pilot-public
+    ports:
+      - "5175:5175"
 
   forensic-api:
     image: node:22-alpine
-    working_dir: /workspace
+    working_dir: /workspace/apps/forensic-api
     environment:
       PORT: "8080"
-      PLATFORM_LOCAL_NOW: "2026-07-01T18:45:00Z"
-      FORENSIC_DATABASE_URL: postgres://policing:policing-local-only@postgres:5432/policing_platform
-    command:
-      - sh
-      - -lc
-      - |
-        cat > /tmp/forensic-platform-gate.ts <<'TS'
-        import { createServer } from "node:http";
-        import { evaluateForensicPlatformAuth } from "/workspace/apps/forensic-api/src/middleware/platform-auth";
-
-        const port = Number(process.env.PORT ?? 8080);
-        const now = () => new Date(process.env.PLATFORM_LOCAL_NOW ?? "2026-07-01T18:45:00Z");
-
-        createServer(async (req, res) => {
-          const claimsHeader = Array.isArray(req.headers["x-platform-claims"])
-            ? req.headers["x-platform-claims"][0]
-            : req.headers["x-platform-claims"];
-          let claims: unknown = undefined;
-          let claimsParseError: string | undefined;
-          if (claimsHeader) {
-            try {
-              claims = JSON.parse(claimsHeader);
-            } catch {
-              claimsParseError = "x-platform-claims must be valid JSON";
-            }
-          }
-          const decision = evaluateForensicPlatformAuth(
-            {
-              claims,
-              claimsParseError,
-              serverVerified: req.headers["x-platform-claims-verified"] === "true",
-              servicePath: req.url ?? "/domains/forensic",
-              correlationId:
-                String(req.headers["x-correlation-id"] ?? req.headers["x-request-id"] ?? "forensic-local-smoke"),
-            },
-            { now },
-          );
-          res.statusCode = decision.allowed ? 200 : 403;
-          res.setHeader("content-type", "application/json");
-          res.end(
-            JSON.stringify({
-              service: "forensic-api",
-              profile: "platform-pilot-local",
-              gate_evidence_ref: decision.evidence.gate_evidence_ref,
-              platform_auth: decision.evidence,
-            }),
-          );
-        }).listen(port, "0.0.0.0", () => {
-          console.log("forensic-api platform gate harness listening on " + port);
-        });
-        TS
-        npx tsx /tmp/forensic-platform-gate.ts
+      NODE_ENV: "development"
+      DATABASE_SSL: "false"
+      FORENSIC_DATABASE_URL: postgres://policing:policing-local-only@postgres:5432/forensic
+      JWT_SECRET: forensic-local-dev-secret
+      ALLOWED_ORIGINS: http://localhost:5178
+      PLATFORM_SSO_SECRET: platform-sso-pilot-dev-secret-0001
+      PLATFORM_SSO_FALLBACK_USER: admin
+    command: ["npx", "tsx", "src/index.ts"]
     volumes:
       - ../..:/workspace
       - platform_node_modules:/workspace/node_modules
@@ -309,87 +227,112 @@ services:
       test:
         [
           "CMD-SHELL",
-          "node -e \"fetch('http://127.0.0.1:8080/health').then(r=>{if(r.status!==403)throw r.status}).catch(()=>process.exit(1))\"",
+          "node -e \"fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)throw r.status}).catch(()=>process.exit(1))\"",
         ]
       interval: 5s
       timeout: 5s
       retries: 24
     networks:
       - pilot-private
+      - pilot-public
+    ports:
+      - "3012:8080"
 
-  social-media-api:
+  forensic-ui:
     image: node:22-alpine
-    working_dir: /workspace
+    working_dir: /workspace/apps/forensic-ui
     environment:
-      PORT: "8080"
-      PLATFORM_LOCAL_NOW: "2026-07-01T18:45:00Z"
-    command:
-      - sh
-      - -lc
-      - |
-        cat > /tmp/social-media-platform-gate.ts <<'TS'
-        import { createServer } from "node:http";
-        import { evaluateSocialMediaPlatformAuth } from "/workspace/apps/social-media-api/src/middleware/platform-auth";
-
-        const port = Number(process.env.PORT ?? 8080);
-        const now = () => new Date(process.env.PLATFORM_LOCAL_NOW ?? "2026-07-01T18:45:00Z");
-
-        createServer(async (req, res) => {
-          const claimsHeader = Array.isArray(req.headers["x-platform-claims"])
-            ? req.headers["x-platform-claims"][0]
-            : req.headers["x-platform-claims"];
-          let claims: unknown = undefined;
-          let claimsParseError: string | undefined;
-          if (claimsHeader) {
-            try {
-              claims = JSON.parse(claimsHeader);
-            } catch {
-              claimsParseError = "x-platform-claims must be valid JSON";
-            }
-          }
-          const decision = evaluateSocialMediaPlatformAuth(
-            {
-              claims,
-              claimsParseError,
-              serverVerified: req.headers["x-platform-claims-verified"] === "true",
-              servicePath: req.url ?? "/domains/social-media",
-              correlationId:
-                String(req.headers["x-correlation-id"] ?? req.headers["x-request-id"] ?? "social-media-local-smoke"),
-            },
-            { now },
-          );
-          res.statusCode = decision.allowed ? 200 : 403;
-          res.setHeader("content-type", "application/json");
-          res.end(
-            JSON.stringify({
-              service: "social-media-api",
-              profile: "platform-pilot-local",
-              gate_evidence_ref: decision.evidence.gate_evidence_ref,
-              platform_auth: decision.evidence,
-            }),
-          );
-        }).listen(port, "0.0.0.0", () => {
-          console.log("social-media-api platform gate harness listening on " + port);
-        });
-        TS
-        npx tsx /tmp/social-media-platform-gate.ts
+      VITE_API_BASE_URL: http://localhost:3012
+      CHOKIDAR_USEPOLLING: "true"
+    command: ["npx", "vite", "--host", "0.0.0.0", "--port", "5178", "--strictPort"]
     volumes:
       - ../..:/workspace
       - platform_node_modules:/workspace/node_modules
     depends_on:
       node-deps:
         condition: service_completed_successfully
+      forensic-api:
+        condition: service_healthy
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "node -e \"fetch('http://127.0.0.1:8080/health').then(r=>{if(r.status!==403)throw r.status}).catch(()=>process.exit(1))\"",
+          "node -e \"fetch('http://127.0.0.1:5178/').then(r=>{if(!r.ok)throw r.status}).catch(()=>process.exit(1))\"",
         ]
       interval: 5s
       timeout: 5s
       retries: 24
     networks:
       - pilot-private
+      - pilot-public
+    ports:
+      - "5178:5178"
+
+  social-media-api:
+    image: node:22-alpine
+    working_dir: /workspace/apps/social-media-api
+    environment:
+      PORT: "8080"
+      NODE_ENV: "development"
+      DATABASE_SSL: "false"
+      SM_DATABASE_URL: postgres://policing:policing-local-only@postgres:5432/social_media
+      JWT_SECRET: sm-local-dev-secret
+      ALLOWED_ORIGINS: http://localhost:5177
+      PLATFORM_SSO_SECRET: platform-sso-pilot-dev-secret-0001
+      PLATFORM_SSO_FALLBACK_USER: admin
+    command: ["npx", "tsx", "src/index.ts"]
+    volumes:
+      - ../..:/workspace
+      - platform_node_modules:/workspace/node_modules
+    depends_on:
+      node-deps:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)throw r.status}).catch(()=>process.exit(1))\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    networks:
+      - pilot-private
+      - pilot-public
+    ports:
+      - "3004:8080"
+
+  social-media-ui:
+    image: node:22-alpine
+    working_dir: /workspace/apps/social-media-ui
+    environment:
+      VITE_API_BASE_URL: http://localhost:3004
+      CHOKIDAR_USEPOLLING: "true"
+    command: ["npx", "vite", "--host", "0.0.0.0", "--port", "5177", "--strictPort"]
+    volumes:
+      - ../..:/workspace
+      - platform_node_modules:/workspace/node_modules
+    depends_on:
+      node-deps:
+        condition: service_completed_successfully
+      social-media-api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:5177/').then(r=>{if(!r.ok)throw r.status}).catch(()=>process.exit(1))\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    networks:
+      - pilot-private
+      - pilot-public
+    ports:
+      - "5177:5177"
 
   knowledge-api:
     image: node:22-alpine
@@ -538,6 +481,73 @@ services:
       retries: 24
     networks:
       - pilot-private
+
+  officer-api:
+    image: node:22-alpine
+    working_dir: /workspace/apps/api
+    environment:
+      PORT: "3001"
+      NODE_ENV: "development"
+      DATABASE_SSL: "false"
+      DATABASE_URL: postgres://policing:policing-local-only@postgres:5432/officer
+      JWT_SECRET: officer-local-dev-secret
+      ALLOWED_ORIGINS: http://localhost:5174
+      PLATFORM_SSO_SECRET: platform-sso-pilot-dev-secret-0001
+      PLATFORM_SSO_FALLBACK_USER: officer1
+      PLATFORM_SSO_IQW_UI_URL: http://localhost:5174/
+    command: ["npx", "tsx", "src/index.ts"]
+    volumes:
+      - ../..:/workspace
+      - platform_node_modules:/workspace/node_modules
+    depends_on:
+      node-deps:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3001/health').then(r=>{if(!r.ok)throw r.status}).catch(()=>process.exit(1))\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    networks:
+      - pilot-private
+      - pilot-public
+    ports:
+      - "3013:3001"
+
+  officer-ui:
+    image: node:22-alpine
+    working_dir: /workspace/apps/officer
+    environment:
+      VITE_API_BASE_URL: http://localhost:3013
+      CHOKIDAR_USEPOLLING: "true"
+    command: ["npx", "vite", "--host", "0.0.0.0", "--port", "5174", "--strictPort"]
+    volumes:
+      - ../..:/workspace
+      - platform_node_modules:/workspace/node_modules
+    depends_on:
+      node-deps:
+        condition: service_completed_successfully
+      officer-api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:5174/').then(r=>{if(!r.ok)throw r.status}).catch(()=>process.exit(1))\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    networks:
+      - pilot-private
+      - pilot-public
+    ports:
+      - "5174:5174"
 
   platform-proxy:
     image: nginx:1.27-alpine

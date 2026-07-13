@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { FastifyInstance, FastifyReply } from "fastify";
 import * as auth from "../auth";
 import { generateToken } from "../middleware/auth";
@@ -159,7 +159,62 @@ async function createAuthAuditEvent(input: {
   );
 }
 
+interface PlatformSsoPayload {
+  u: string;
+  d: string;
+  p: string;
+  t: string;
+  a: string;
+  e: number;
+}
+
+/** Verifies a platform launch token (HMAC-SHA256, audience "iqw"). */
+function verifyPlatformSsoToken(token: string, secret: string): PlatformSsoPayload | null {
+  const dot = token.lastIndexOf(".");
+  if (dot <= 0) return null;
+  const payload = token.slice(0, dot);
+  const signature = Buffer.from(token.slice(dot + 1));
+  const expected = Buffer.from(createHmac("sha256", secret).update(payload).digest("base64url"));
+  if (signature.length !== expected.length || !timingSafeEqual(signature, expected)) return null;
+  let parsed: PlatformSsoPayload;
+  try {
+    parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+  if (parsed.a !== "iqw" || typeof parsed.e !== "number" || parsed.e <= Date.now()) return null;
+  if (typeof parsed.u !== "string" || !parsed.u) return null;
+  return parsed;
+}
+
 export async function registerAuthRoutes(app: FastifyInstance) {
+  // Platform SSO: the policing platform's launch handoff for IQW establishes a
+  // server-side session directly here and redirects, rather than the
+  // POST-token-exchange pattern other apps use. Maps the platform subject to a
+  // local officer account (by login, falling back to PLATFORM_SSO_FALLBACK_USER
+  // for pilot users that have no dedicated IQW account yet).
+  app.get("/sso", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request, reply) => {
+    const redirectTarget = process.env.PLATFORM_SSO_IQW_UI_URL || "/";
+    const secret = process.env.PLATFORM_SSO_SECRET;
+    const token = (request.query as { token?: string }).token;
+    if (!secret || !token) {
+      return reply.redirect(redirectTarget);
+    }
+    const payload = verifyPlatformSsoToken(token, secret);
+    if (!payload) {
+      return reply.redirect(redirectTarget);
+    }
+    const fallback = process.env.PLATFORM_SSO_FALLBACK_USER || "officer1";
+    const user = (await auth.getUserByLogin(payload.u)) ?? (await auth.getUserByLogin(fallback));
+    if (!user || user.user_type !== "OFFICER") {
+      return reply.redirect(redirectTarget);
+    }
+    const localToken = generateToken(user);
+    setAuthCookie(reply, localToken);
+    request.log.info({ platformSubject: payload.u, mappedUser: user.login }, "platform SSO login (iqw)");
+    return reply.redirect(redirectTarget);
+  });
+
   app.post("/api/v1/auth/login", { schema: loginSchema, config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = request.body as { login: string; password: string };
     const user = await auth.authenticate(body.login, body.password);
