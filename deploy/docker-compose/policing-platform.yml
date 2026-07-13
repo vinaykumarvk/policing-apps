@@ -72,7 +72,7 @@ services:
       - |
         cat > /tmp/platform-api-local.ts <<'TS'
         import { createServer } from "node:http";
-        import { createPlatformApp } from "./apps/platform-api/src/app";
+        import { createPlatformApp } from "/workspace/apps/platform-api/src/app";
 
         const app = createPlatformApp({
           now: () => new Date(process.env.PLATFORM_LOCAL_NOW ?? "2026-07-01T18:45:00Z"),
@@ -176,7 +176,7 @@ services:
       - |
         cat > /tmp/dopams-platform-gate.ts <<'TS'
         import { createServer } from "node:http";
-        import { evaluateDopamsPlatformAuth } from "./apps/dopams-api/src/middleware/platform-auth";
+        import { evaluateDopamsPlatformAuth } from "/workspace/apps/dopams-api/src/middleware/platform-auth";
 
         const port = Number(process.env.PORT ?? 8080);
         const now = () => new Date(process.env.PLATFORM_LOCAL_NOW ?? "2026-07-01T18:45:00Z");
@@ -253,7 +253,7 @@ services:
       - |
         cat > /tmp/forensic-platform-gate.ts <<'TS'
         import { createServer } from "node:http";
-        import { evaluateForensicPlatformAuth } from "./apps/forensic-api/src/middleware/platform-auth";
+        import { evaluateForensicPlatformAuth } from "/workspace/apps/forensic-api/src/middleware/platform-auth";
 
         const port = Number(process.env.PORT ?? 8080);
         const now = () => new Date(process.env.PLATFORM_LOCAL_NOW ?? "2026-07-01T18:45:00Z");
@@ -329,7 +329,7 @@ services:
       - |
         cat > /tmp/social-media-platform-gate.ts <<'TS'
         import { createServer } from "node:http";
-        import { evaluateSocialMediaPlatformAuth } from "./apps/social-media-api/src/middleware/platform-auth";
+        import { evaluateSocialMediaPlatformAuth } from "/workspace/apps/social-media-api/src/middleware/platform-auth";
 
         const port = Number(process.env.PORT ?? 8080);
         const now = () => new Date(process.env.PLATFORM_LOCAL_NOW ?? "2026-07-01T18:45:00Z");
@@ -403,7 +403,7 @@ services:
       - |
         cat > /tmp/knowledge-platform-gate.ts <<'TS'
         import { createServer } from "node:http";
-        import { evaluateKnowledgePlatformAuth } from "./domains/knowledge/api/src/platform-auth";
+        import { evaluateKnowledgePlatformAuth } from "/workspace/domains/knowledge/api/src/platform-auth";
 
         const port = Number(process.env.PORT ?? 8080);
         const now = () => new Date(process.env.PLATFORM_LOCAL_NOW ?? "2026-07-01T18:45:00Z");
