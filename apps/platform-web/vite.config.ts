@@ -14,7 +14,7 @@ export default defineConfig({
       // which validates the session + entitlement and 302-redirects to the target UI.
       // Local dev replicates nginx.platform.conf's /domains/* routing.
       "/domains": {
-        target: "http://localhost:8080",
+        target: process.env.VITE_PLATFORM_API_PROXY_TARGET ?? "http://localhost:8080",
         changeOrigin: true,
       },
     },
